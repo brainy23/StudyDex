@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import Pokebuddy from '@/components/pokebuddy/pokebuddy.vue'
+import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 
 
 const router = createRouter({

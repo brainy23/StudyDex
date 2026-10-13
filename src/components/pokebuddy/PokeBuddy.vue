@@ -246,10 +246,10 @@ onMounted(() => {
         <div class="container content">
             <div class="main-content" style="text-align:center">
                 <div class="avatar">
-                  <p style="font-weight: bold; font-size: 1.5rem;">{{ user.name }}'s Avatar</p>
+                  <p style="font-weight: bold; font-size: 1.5rem; ">{{ user.name }}'s Avatar</p>
                   Selected Style: {{ user.avatar_gender }}
 
-                  <img :src="user.avatar_img" style="display:block; margin: auto;">
+                  <img :src="user.avatar_img" style="display:block; margin: auto; image-rendering: pixelated;">
 
                     <button @click="avatar_click('female')">Female</button>
                     <button @click="avatar_click('male')">Male</button>
@@ -257,7 +257,7 @@ onMounted(() => {
 
                 <div class="pokemon-div">
                   <p style="font-weight: bold; font-size: 1.5rem;">Your Battle Buddy</p>
-                  <img v-if="pokemon" :src="pokemon.image" alt="" style="width: 300px;">
+                  <img v-if="pokemon" :src="pokemon.image" alt="" style="width: 300px; image-rendering: pixelated;">
 
                    <div class="xp-section" v-if="activePokemon">
                     <p>XP Progress</p>
@@ -292,6 +292,7 @@ onMounted(() => {
                       v-if="bagImages[poke.species]"
                       :src="bagImages[poke.species]"
                       :alt="poke.name"
+                      style="image-rendering: pixelated;"
                     >
 
                   <p>{{ poke.name }}</p>
