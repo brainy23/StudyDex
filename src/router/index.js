@@ -7,6 +7,7 @@ import RegisterView from '../views/RegisterView.vue'
 import LoginView from '../views/LoginView.vue'
 import AccountView from '../views/AccountView.vue'
 import { getSupabase } from '../lib/supabase'
+import TimerView from '../views/timerView.vue'
 
 export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
   const router = createRouter({
@@ -55,6 +56,11 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         path: '/landing-info',
         name: 'landing-info',
         component: Landinginfo,
+      },
+      {
+        path: '/timer',
+        name: 'timer',
+        component: TimerView,
       },
     ],
   })
