@@ -7,28 +7,30 @@
 </script>
 <template>
   <main>
-    <div class="container">
-      <div class="input-container">
-        <input v-model="user_id_input" @input="console.log(user_id_input)" type="text" name="" id="username-input" placeholder="Breeder ID"><br>
-        <input v-model="password_input" type="password" name="" id="password-input" placeholder="Password">
-      </div>
-      <div class="button-container">
-        <button id="loginButton">Login</button>
-        <button id="registerButton">Become Breeder</button>
+    <div class="login-bg">
+      <div class="container">
+        <div class="input-container">
+          <input v-model="user_id_input" @input="console.log(user_id_input)" type="text" name="" id="username-input" placeholder="Breeder ID"><br>
+          <input v-model="password_input" type="password" name="" id="password-input" placeholder="Password">
+        </div>
+        <div class="button-container">
+          <button id="loginButton">Login</button>
+          <button id="registerButton">Become Breeder</button>
+        </div>
       </div>
     </div>
   </main>
 </template>
-<style>
-  body {
-    background-image: url('./backgrounds/StudyDex.png'); 
+<style scoped>
+  .login-bg {
+    background: url('./backgrounds/StudyDex.png'); 
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
     background-attachment: fixed;
     min-height: 100vh;
-    margin: 0;
-    
+    margin-top: 0px;
+    display: flow-root;
   }
 
   .container {
