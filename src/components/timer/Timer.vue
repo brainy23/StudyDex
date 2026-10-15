@@ -12,6 +12,7 @@ const status = [
 const mode = ref('pomodoro')
 const secondsLeft = ref(modes[0].seconds)
 const running = ref(false)
+const finished = computed(() => secondsLeft.value === 0)
 let interval = null
 let endTime = 0
 
@@ -36,12 +37,17 @@ function pause() {
 }
 
 function toggle() {
+    if (finished.value) return reset()
     running.value ? pause() : start()
 }
 
+function reset() {
+  pause()
+  secondsLeft.value = modes.find((m) => m.id === mode.value).seconds
+}
+
 watch(mode, (id) => {
-    pause()
-    secondsLeft.value = modes.find((m) => m.id === id).seconds
+    reset()
 })
 
 onUnmounted(() => clearInterval(interval))
@@ -67,7 +73,7 @@ onUnmounted(() => clearInterval(interval))
                 {{ display }}
             </div>
         <div class="status">
-            <button @click="toggle">{{ running ? 'PAUSE' : 'START' }}</button>
+            <button @click="toggle">{{ finished ? 'RESET' : running ? 'PAUSE' : 'START' }}</button>
         </div>
         </div>
     </main>
