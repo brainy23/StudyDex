@@ -1,9 +1,16 @@
+<script setup>
+  import { ref } from 'vue';
+
+  const user_id_input = ref('');
+  const password_input = ref('');
+
+</script>
 <template>
   <main>
     <div class="container">
       <div class="input-container">
-        <input type="text" name="" id="username-input" placeholder="Breeder ID"><br>
-        <input type="password" name="" id="password-input" placeholder="Password">
+        <input v-model="user_id_input" @input="console.log(user_id_input)" type="text" name="" id="username-input" placeholder="Breeder ID"><br>
+        <input v-model="password_input" type="password" name="" id="password-input" placeholder="Password">
       </div>
       <div class="button-container">
         <button id="loginButton">Login</button>
