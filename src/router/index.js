@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
+import TimerView from '../views/timerView.vue'
 
 
 const router = createRouter({
@@ -17,6 +18,11 @@ const router = createRouter({
       name: 'pokebuddy',
       component: Pokebuddy,
     },
+    {
+      path: '/timer',
+      name: 'timer',
+      component: TimerView,
+    }
 
   ],
 })
