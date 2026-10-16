@@ -312,6 +312,14 @@ const rainDrops = Array.from({ length: 90 }, (_, id) => ({
         alt="StudyDex world with an arena, laboratory and trainer house"
       />
 
+      <!-- Building lights -->
+      <img
+        class="layer building-lights"
+        :src="asset + 'bg_buildinglights.png'"
+        :style="{ opacity: lighting.lights * 0.45 }"
+        alt=""
+      />
+
 
 
       <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.fireflies }">
