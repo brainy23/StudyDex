@@ -1,6 +1,8 @@
 <script setup>
+import axios from 'axios'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+
 const router = useRouter()
 
 const asset = '/home/'
@@ -85,14 +87,80 @@ function toggleAutoPreview() {
   }
 }
 
+// Weather data
+const temperature = ref(null)
+const weatherCode = ref(null)
+const isDay = ref(true)
+
+let weatherInterval
+
+const weather_API_URL = 'https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.8198&current=temperature_2m,weather_code,is_day&timezone=Asia%2FSingapore'
+
+// Fetch weather from Open-Meteo
+const fetchWeather = async () => {
+ try {
+   const response = await axios.get(weather_API_URL)
+   console.log(response.data.current)
+
+   temperature.value = response.data.current.temperature_2m
+   weatherCode.value = response.data.current.weather_code
+   isDay.value = response.data.current.is_day === 1
+
+ } catch (error) {
+   console.error('Error fetching weather:', error)
+ }
+}
+
+const weatherImg = computed(() => {
+ const code = weatherCode.value
+ if (code === null) return null
+
+ // Rain / Thunderstorm (day or night)
+ if (
+   (code >= 51 && code <= 67) ||
+   (code >= 80 && code <= 82) ||
+   (code >= 95 && code <= 99)
+ ) {
+   return '/assets/rain.png'
+ }
+
+ // Nighttime
+ if (!isDay.value) {
+   return '/assets/moon.png'
+ }
+
+ // Overcast / Fog
+ if (code === 3 || code === 45 || code === 48) {
+   return '/assets/cloud.png'
+ }
+
+ // Partly cloudy
+ if (code === 1 || code === 2) {
+   return '/assets/suncloud.png'
+ }
+
+ // Clear daytime
+ return '/assets/sun.png'
+})
+
+
+
 onMounted(() => {
   clockInterval = setInterval(() => {
     currentTime.value = new Date()
   }, 1000)
+
+  fetchWeather()
+ // Refresh weather every 10 minutes
+ weatherInterval = setInterval(fetchWeather, 600000)
+
+ getPokeBall()
+
 })
 
 onUnmounted(() => {
   clearInterval(clockInterval)
+  clearInterval(weatherInterval)
   stopAutoPreview()
 })
 
@@ -447,6 +515,15 @@ watch(
   { immediate: true }
 )
 
+const pokeball = ref(null)
+async function getPokeBall(){
+
+  const response = await axios.get('https://pokeapi.co/api/v2/item/poke-ball/')
+
+  pokeball.value = response.data.sprites.default
+}
+
+
 // Call this when a Pokémon is selected as the active buddy.
 function setActiveBuddy(pokemon) {
   activeBuddy.value = {
@@ -464,6 +541,29 @@ function setActiveBuddy(pokemon) {
   }
 }
 
+// Sleep from 10 PM until 6 AM.
+// Uses your existing clock, including the time preview.
+const buddySleeping = computed(() =>
+  hour.value >= 22 || hour.value < 6
+)
+
+const ballShaking = ref(false)
+
+function shakePokeball() {
+  if (!buddySleeping.value || !pokeball.value) return
+
+  ballShaking.value = true
+}
+
+const townBuddyImage = computed(() => {
+  const sprites = buddyData.value?.sprites
+
+  if (buddySleeping.value) {
+    return pokeball.value || sprites?.front_default || ''
+  }
+
+  return activeBuddyImage.value
+})
 // Sample count — connect this to the user's inventory later.
 const unopenedPackCount = ref(3)
 
@@ -554,7 +654,7 @@ function selectProfileAction(action) {
 
 <template>
   <div class="world-page">
-    
+
     <!-- STUDYDEX LOGO AND CLOCK -->
 <header class="sd-hud">
   <img
@@ -564,37 +664,7 @@ function selectProfileAction(action) {
   />
 
   <div class="sd-clock" aria-label="Town time">
-    <!-- Sun during daytime; moon at night -->
-    <svg
-      v-if="hour >= 6 && hour < 19"
-      class="sd-clock-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="4" />
-      <path
-        d="M12 2v2m0 16v2M2 12h2m16 0h2
-           M5 5l1.5 1.5m11 11L19 19
-           M5 19l1.5-1.5m11-11L19 5"
-      />
-    </svg>
-
-    <svg
-      v-else
-      class="sd-clock-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M20.5 14A8.5 8.5 0 0 1 10 3.5 8.5 8.5 0 1 0 20.5 14Z" />
-    </svg>
+    <img v-if="weatherImg" :src="weatherImg" alt="" style="width:40px;">
 
     <span class="sd-clock-time">{{ displayTime }}</span>
 
@@ -992,7 +1062,7 @@ function selectProfileAction(action) {
       <img
         class="layer building-lights"
         :src="asset + 'bg_buildinglights.png'"
-        :style="{ opacity: lighting.lights * 0.45 }"
+        :style="{ opacity: buddySleeping ? 0 : lighting.lights * 0.45 }"
         alt=""
       />
 
@@ -1027,7 +1097,7 @@ function selectProfileAction(action) {
       </div>
 
       <!-- ACTIVE BUDDY — LOADED FROM POKÉAPI -->
-      <div class="town-buddy">
+      <!-- <div class="town-buddy">
         <div class="buddy-speech">
           <span class="buddy-speaker">
             {{ activeBuddy.name }}
@@ -1063,6 +1133,64 @@ function selectProfileAction(action) {
             />
           </template>
         </div>
+      </div> -->
+
+      <div
+        class="town-buddy"
+        :class="{ 'is-sleeping': buddySleeping }"
+      >
+        <div class="buddy-speech">
+          <span class="buddy-speaker">
+            {{ activeBuddy.name }}
+          </span>
+
+          <p v-if="buddyLoading" role="status">
+            Your buddy is on the way…
+          </p>
+
+          <p v-else-if="buddyError" role="status">
+            {{ buddyError }}
+          </p>
+
+          <p v-else-if="buddySleeping">
+            Zzz… Time to recharge.
+          </p>
+
+          <p v-else>
+            What are we going to do today?
+          </p>
+        </div>
+
+        <div class="buddy-character">
+          <template v-if="townBuddyImage && !buddyError">
+            <span
+              class="buddy-ground-shadow"
+              aria-hidden="true"
+            ></span>
+
+            <img
+              :key="activeBuddy.id"
+              class="buddy-image"
+              :class="{ 'is-shaking': ballShaking }"
+              :src="townBuddyImage"
+              :alt="`${activeBuddy.name}, ${buddySleeping ? 'resting' : 'your active study buddy'}`"
+              draggable="false"
+              @click="shakePokeball"
+              @animationend="ballShaking = false"
+              @error="buddyError = 'Your buddy’s image could not load.'"
+            />
+
+            <div
+              v-if="buddySleeping"
+              class="buddy-zzz"
+              aria-hidden="true"
+            >
+              <span>z</span>
+              <span>z</span>
+              <span>Z</span>
+            </div>
+          </template>
+        </div>
       </div>
 
 
@@ -1078,6 +1206,8 @@ function selectProfileAction(action) {
             left: building.left,
             top: building.top,
           }"
+
+          :disabled="buddySleeping && building.id !== 'trainer'"
           @click="selectBuilding(building)"
         >
 
@@ -1106,7 +1236,7 @@ function selectProfileAction(action) {
 <nav class="sd-navbar" aria-label="Main navigation">
 
   <!-- STUDY -->
-  <button type="button" class="sd-nav-button">
+  <button type="button" class="sd-nav-button" :disabled="buddySleeping">
     <span class="sd-icon-tile sd-icon-study">
       <svg viewBox="0 0 32 32" aria-hidden="true">
         <path
@@ -1121,7 +1251,7 @@ function selectProfileAction(action) {
   </button>
 
   <!-- QUIZ -->
-  <button type="button" class="sd-nav-button">
+  <button type="button" class="sd-nav-button" :disabled="buddySleeping">
     <span class="sd-icon-tile sd-icon-quiz">
       <svg viewBox="0 0 32 32" aria-hidden="true">
         <path
@@ -1149,7 +1279,7 @@ function selectProfileAction(action) {
   </button>
 
   <!-- POKÉMON -->
-  <button type="button" class="sd-nav-button">
+  <button type="button" class="sd-nav-button" :disabled="buddySleeping">
     <span class="sd-icon-tile sd-icon-pokemon">
       <svg viewBox="0 0 32 32" aria-hidden="true">
         <rect x="6" y="3" width="20" height="26" rx="4" fill="#ff7382" />
@@ -1172,6 +1302,8 @@ function selectProfileAction(action) {
         ? `Bag, ${unopenedPackCount} unopened packs`
         : 'Bag, no unopened packs'
     "
+
+    :disabled="buddySleeping"
   >
     <span class="sd-icon-tile sd-icon-bag">
       <svg viewBox="0 0 32 32" aria-hidden="true">
@@ -1305,7 +1437,7 @@ function selectProfileAction(action) {
 .world-scene {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: 100vh;
   overflow: hidden;
   isolation: isolate;
 }
@@ -1402,9 +1534,12 @@ img.layer {
   position: absolute;
   inset: 0;
   z-index: 20;
+
+  pointer-events: none;
 }
 
 .building-button {
+  pointer-events: auto;
 
   position: absolute;
   transform: translate(-50%, -100%);
@@ -1475,7 +1610,7 @@ img.layer {
   line-height: 1.2;
 }
 
-.building-button:hover {
+.building-button:not(:disabled):hover {
   transform: translate(-50%, calc(-100% - 5px));
   background: #fff;
   box-shadow: 0 0 12px 3px rgba(255, 213, 45, 0.7);
@@ -1488,6 +1623,11 @@ img.layer {
 .building-button:focus-visible {
   outline: 3px solid #ffdc5e;
   outline-offset: 4px;
+}
+.building-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  box-shadow: none;
 }
 
 @media (max-width: 600px) {
@@ -1599,6 +1739,14 @@ img.layer {
 .sd-hud *,
 .sd-navbar * {
   box-sizing: border-box;
+}
+
+.sd-nav-button:disabled {
+  opacity: 0.45;
+  filter: grayscale(100%);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* LOGO AND CLOCK */
@@ -1877,8 +2025,7 @@ img.layer {
 
 /* INTERACTION */
 
-@media (hover: hover) {
-  .sd-nav-button:hover {
+  .sd-nav-button:not(:disabled):hover {
     transform: translateY(-3px);
     background-color: rgba(255, 255, 255, 0.14);
   }
@@ -1890,7 +2037,7 @@ img.layer {
       0 12px 22px rgba(7, 20, 45, 0.3),
       0 0 16px rgba(255, 219, 103, 0.35);
   }
-}
+
 
 .sd-nav-button:active {
   transform: translateY(2px) scale(0.96);
@@ -2691,10 +2838,11 @@ img.layer {
   transform: translate(-50%, -100%);
   z-index: 15;
 
-  width: clamp(70px, 9vw, 155px);
+  width: clamp(115px, 4vw, 150px);
 
   pointer-events: none;
   user-select: none;
+
 
   font-family:
     ui-rounded,
@@ -2773,7 +2921,6 @@ img.layer {
 
 .buddy-image {
   position: relative;
-  z-index: 1;
 
   display: block;
   width: 100%;
@@ -2840,31 +2987,7 @@ img.layer {
   }
 }
 
-/* =========================================
-   POKÉMON BUDDY ON THE CENTRAL GRASS
-   ========================================= */
 
-.town-buddy {
-  position: absolute;
-
-  /* Position of the Pokémon's feet */
-  left: 52%;
-  top: 81%;
-
-  transform: translate(-50%, -100%);
-  z-index: 15;
-
-  width: clamp(70px, 9vw, 155px);
-
-  pointer-events: none;
-  user-select: none;
-
-  font-family:
-    ui-rounded,
-    "Arial Rounded MT Bold",
-    system-ui,
-    sans-serif;
-}
 
 /* SPEECH BUBBLE */
 
@@ -3537,4 +3660,115 @@ img.layer {
     transition: none;
   }
 }
+
+
+/* Slow breathing with a slight resting tilt */
+.town-buddy.is-sleeping .buddy-image {
+  transform-origin: 50% 85%;
+  animation: buddy-sleep 3s ease-in-out infinite;
+}
+
+@keyframes buddy-sleep {
+  0%, 100% {
+    transform: rotate(-8deg) scale(1, 0.94);
+  }
+
+  50% {
+    transform: rotate(-8deg) scale(1.025, 0.98);
+  }
+}
+
+
+
+/* Floating sleep letters */
+.buddy-zzz {
+  position: absolute;
+  top: 15%;
+  right: 12%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.buddy-zzz span {
+  position: absolute;
+  color: #e3edff;
+  font-size: 20px;
+  font-weight: 900;
+  text-shadow: 1px 2px 2px #344f78;
+  opacity: 0;
+  animation: sleep-zzz 3s linear infinite;
+}
+
+.buddy-zzz span:nth-child(2) {
+  animation-delay: 1s;
+}
+
+.buddy-zzz span:nth-child(3) {
+  animation-delay: 2s;
+}
+
+@keyframes sleep-zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.6);
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translate(25px, -45px) scale(1.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-buddy.is-sleeping .buddy-image,
+  .buddy-zzz span {
+    animation: none;
+  }
+
+  .buddy-zzz span:first-child {
+    opacity: 1;
+  }
+}
+/* Keep the Poké Ball still until clicked */
+.town-buddy.is-sleeping .buddy-image {
+  animation: none;
+  transform: none;
+}
+
+/* Shake once per click */
+.town-buddy.is-sleeping .buddy-image.is-shaking {
+  transform-origin: 50% 80%;
+  animation: pokeball-shake 0.6s ease-in-out;
+}
+
+@keyframes pokeball-shake {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+
+  20%, 60% {
+    transform: translateX(-5px) rotate(-15deg);
+  }
+
+  40%, 80% {
+    transform: translateX(5px) rotate(15deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .town-buddy.is-sleeping .buddy-image.is-shaking {
+    animation-duration: 1ms;
+  }
+}
+
+/* Allow clicking the sleeping Poké Ball */
+.town-buddy.is-sleeping .buddy-image {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
 </style>
