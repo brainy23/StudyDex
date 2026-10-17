@@ -8,6 +8,7 @@ import LoginView from '../views/LoginView.vue'
 import AccountView from '../views/AccountView.vue'
 import { getSupabase } from '../lib/supabase'
 import TimerView from '../views/timerView.vue'
+import RewardsView from '../views/rewardsView.vue'
 
 export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
   const router = createRouter({
@@ -61,6 +62,11 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         path: '/timer',
         name: 'timer',
         component: TimerView,
+      },
+      {
+        path: '/rewards',
+        name: 'rewards',
+        component: RewardsView,
       },
     ],
   })

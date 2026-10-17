@@ -80,7 +80,7 @@ onUnmounted(() => clearInterval(interval))
 </template>
 
 
-<style>
+<style scoped>
     main {
         font-family:Verdana, Geneva, Tahoma, sans-serif;
         color: white;
