@@ -2,6 +2,65 @@
   import { ref, computed } from 'vue';
   const question_no = ref(1);
 
+  const password_field = ref('');
+  const email_field = ref('');
+  const username_field = ref('');
+  const level_selector = ref('default');
+  const confirmPassword_field = ref('');
+  const locked = ref(false);
+
+  // const password_reminder = ref(['Password must have at least 8 characters', 'Password must have at least 1 number', 'Password must have at least 1 alphabet']);
+  // const current_password_reminder = ref([]);
+  
+  const checkPW = computed(() => {
+    if (!email_field.value.includes('@') || !email_field.value.includes('.com')){
+      locked.value = true;
+      return true;
+    } else {
+      locked.value = false;
+      return false;
+    }
+  })
+
+  const checkUsername = computed(() => {
+    if (username_field.value.trim() == ''){
+      locked.value = true;
+      return true
+    } else {
+      locked.value = false;
+      return false;
+    }
+  })
+
+  const checkLevel = computed(()=>{
+    if (level_selector.value == 'default'){
+      locked.value = true;
+      return true
+    } else {
+      locked.value = false;
+      return false;
+    }
+  })
+
+  const passed_password_check = computed(() => {
+    let inputPW = password_field.value;
+
+    if (inputPW.length >= 8 && /\d/.test(inputPW) && /[a-zA-Z]/.test(inputPW)){
+      return true;
+    }
+    return false;
+  })
+
+  const checkIfPasswordsMismatch = computed(()=>{
+    if (password_field.value.trim() === confirmPassword_field.value.trim()){
+      locked.value = false
+      return false;
+    } else {
+      locked.value = true;
+      return true;
+    }
+  })
+
 </script>
 <template>
   <main>
@@ -13,54 +72,61 @@
         <p class="question-prompt" v-if="question_no == 4">Enter a Password</p>
 
         <div class="input-container" v-if="question_no == 1">
-          <input type="text" name="" id="email-input" placeholder="Enter Email"><br>
-          <!-- <input v-model="password_input" type="password" name="" id="password-input" placeholder="Enter Password">
-          <input  type="password" name="" id="confirm-password-input" placeholder="Confirm Password"> -->
+          <input v-model="email_field" type="email" name="" id="email-input" placeholder="Enter Email"><br>
+          <p class="pw-not-fulfilled" v-if="checkPW">Pokemon is waiting for a valid email address</p>
         </div>
 
         <div class="input-container" v-if="question_no == 2">
-          <input v-model="user_id_input" @input="console.log(user_id_input)" type="text" name="" id="username-input" placeholder="Enter Username"><br>
+          <input v-model="username_field" type="text" name="" id="username-input" placeholder="Enter Username"><br>
+          <p class="pw-not-fulfilled" v-if="checkUsername">Username cannot be empty!</p>
           <!-- <input v-model="password_input" type="password" name="" id="password-input" placeholder="Enter Password">
           <input  type="password" name="" id="confirm-password-input" placeholder="Confirm Password"> -->
         </div>
         <div class="select-container" v-if="question_no == 3">
-          <select name="" id="level-selector">
-            <option value="">Select Level</option>
-            <option value="">Primary 1</option>
-            <option value="">Primary 2</option>
-            <option value="">Primary 3</option>
-            <option value="">Primary 4</option>
-            <option value="">Primary 5</option>
-            <option value="">Primary 6</option>
+          <select name="" id="level-selector" v-model="level_selector">
+            <option value="default">Select Level</option>
+            <option value="p1">Primary 1</option>
+            <option value="p2">Primary 2</option>
+            <option value="p3">Primary 3</option>
+            <option value="p4">Primary 4</option>
+            <option value="p5">Primary 5</option>
+            <option value="p6">Primary 6</option>
           </select>
+          <div>
+            <p class="pw-not-fulfilled" v-if="checkLevel">Please select your level</p>
+          </div>
         </div>
 
 
         <div class="input-container" v-if="question_no == 4">
-          <input type="password" name="" id="username-input" placeholder="Password"><br>
-          <!-- <input v-model="password_input" type="password" name="" id="password-input" placeholder="Enter Password">
-          <input  type="password" name="" id="confirm-password-input" placeholder="Confirm Password"> -->
+          <input type="password" name="" id="username-input" placeholder="Password" @input="console.log(password_field)" v-model="password_field"><br>
+
+          <ul v-if="!passed_password_check">
+            <li :class="password_field.trim().length >= 8?'pw-fulfilled':'pw-not-fulfilled'">Password must have at least 8 characters</li>
+            <li :class="/[a-zA-Z]/.test(password_field.trim())?'pw-fulfilled':'pw-not-fulfilled'">Password must have at least 1 alphabet</li>
+            <li :class="/\d/.test(password_field.trim())?'pw-fulfilled':'pw-not-fulfilled'">Password must have at least 1 number</li>
+          </ul>
         </div>
 
-        <div class="input-container" style="margin-top: -30px;" v-if="question_no == 4">
+        <div class="input-container" style="margin-top: -30px;" v-if="question_no == 4 && passed_password_check">
           <p class="question-prompt">Confirm Password</p>
-          <input type="password" name="" id="username-input" placeholder="Password" style="margin-top: -20px;"><br>
-          <!-- <input v-model="password_input" type="password" name="" id="password-input" placeholder="Enter Password">
-          <input  type="password" name="" id="confirm-password-input" placeholder="Confirm Password"> -->
+          <input type="password" v-model="confirmPassword_field" id="username-input" placeholder="Re-type Password" style="margin-top: -20px;"><br>
+          <p class="pw-not-fulfilled" v-if="checkIfPasswordsMismatch" style="margin-top: -20px;">Passwords do not match</p>
         </div>
 
 
         <div class="button-container">
-          <button id="prevButton" @click="(question_no == 1?question_no = 1:question_no -= 1)">< Prev Question</button>
-          <button id="nextButton" @click="(question_no == 4?question_no = 4:question_no += 1)">Next Question ></button>
+          <button id="prevButton" @click="(question_no == 1 || locked ?question_no = question_no:question_no -= 1)">< Prev Question</button>
+          <button id="nextButton" @click="(question_no == 4 || locked ?question_no = question_no:question_no += 1)">Next Question ></button>
         </div>   
       </div>
-      <p class="link-to-sign-in">Already a breeder? <a href="/login" class="link-to-sign-in" style="color: #ffd117;">Sign In</a></p>
+      <div class="link-to-sign-in"><p>Already a breeder? <a href="/login" style="color: #ffd117;">Sign In</a></p></div>
     </div>
   </main>
 </template>
 <style scoped>
   .register-bg {
+    position: relative;
     background: url('./backgrounds/StudyDex.png'); 
     background-size: cover;
     background-position: center;
@@ -109,7 +175,9 @@
 
   .select-container {
     display: flex;
+    flex-direction: column;
     justify-content: center;
+    justify-self: center;
 
     padding: 43px;
   }
@@ -180,11 +248,12 @@
     to { --angle: 360deg; }
   }
 
-  #username-input:hover, #prevButton:hover, #nextButton:hover {
+  #username-input:hover, #email-input:hover, #prevButton:hover, #nextButton:hover {
     transform: scale(1.1);
   }
 
   #level-selector {
+    display: block;
     appearance: none;
 
     width: 205px;
@@ -229,12 +298,32 @@
   }
 
   .link-to-sign-in {
-    margin-top: 180px;
+    position: absolute;
+
+    bottom: 0.5%;
+    left: 0;
+    right: 0;
+    text-align: center;
     color: white;
     font-size: 28px;
     -webkit-text-stroke: 4px black;
     paint-order: stroke fill;
-    text-align: center;
+
+  }
+
+  .pw-not-fulfilled {
+;
+    color: rgb(234, 75, 75);
+    font-size: 24px;
+    -webkit-text-stroke: 4px black;
+    paint-order: stroke fill;
+  }
+
+  .pw-fulfilled {
+    color: rgb(17, 224, 76);
+    font-size: 24px;
+    -webkit-text-stroke: 4px black;
+    paint-order: stroke fill;
   }
 
 </style>
