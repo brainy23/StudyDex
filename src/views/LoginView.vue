@@ -10,13 +10,15 @@
     <div class="login-bg">
       <div class="container">
         <div class="input-container">
-          <input v-model="user_id_input" @input="console.log(user_id_input)" type="text" name="" id="username-input" placeholder="Breeder ID"><br>
+          <input v-model="user_id_input" type="text" name="" id="username-input" placeholder="Breeder ID"><br>
           <input v-model="password_input" type="password" name="" id="password-input" placeholder="Password">
         </div>
+        <p v-if="user_id_input.trim() == ''" class="reminder">Username cannot be empty</p>
         <div class="button-container">
           <button id="loginButton">Login</button>
           <button id="registerButton">Become Breeder</button>
         </div>
+        <div class="link-to-sign-up"><p>Not a breeder? <a href="/register" style="color: #ffd117;">Sign Up</a></p></div>
       </div>
     </div>
   </main>
@@ -133,5 +135,27 @@
     transform: scale(1.1);
   }
 
+  .reminder {
+    text-align: center;
+    color: rgb(215, 65, 65);
+    font-size: 26px;
+    -webkit-text-stroke: 4px black;
+    paint-order: stroke fill;
+    font-family: "Handjet", sans-serif;
+  }
 
+  .link-to-sign-up {
+    position: absolute;
+
+    bottom: 0.5%;
+    left: 0;
+    right: 0;
+    text-align: center;
+    color: white;
+    font-size: 28px;
+    -webkit-text-stroke: 4px black;
+    paint-order: stroke fill;
+    font-family: "Handjet", sans-serif;
+
+  }
 </style>
