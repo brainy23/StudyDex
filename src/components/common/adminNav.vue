@@ -25,7 +25,7 @@ const route = useRoute()
         class="nav-item"
         :class="{ active: route.path === '/admin-home' }"
       >
-        Home
+        Dashboard
       </RouterLink>
 
       <RouterLink
@@ -33,7 +33,7 @@ const route = useRoute()
         class="nav-item"
         :class="{ active: route.path === '/admin-users' }"
       >
-        Users
+        Manage Students
       </RouterLink>
 
       <RouterLink
@@ -41,7 +41,29 @@ const route = useRoute()
         class="nav-item"
         :class="{ active: route.path === '/admin-education' }"
       >
-        Education
+        Manage Study Decks
+      </RouterLink>
+
+       <RouterLink
+        to="/admin-quiz"
+        class="nav-item"
+        :class="{ active: route.path === '/admin-quiz' }"
+      >
+        Manage Quizzes
+      </RouterLink>
+      <RouterLink
+        to="/admin-rewards"
+        class="nav-item"
+        :class="{ active: route.path === '/admin-rewards' }"
+      >
+        Manage Rewards
+      </RouterLink>
+      <RouterLink
+        to="/admin-feedback"
+        class="nav-item"
+        :class="{ active: route.path === '/admin-feedback' }"
+      >
+        Reports and Feedback
       </RouterLink>
 
     </nav>
@@ -89,9 +111,9 @@ const route = useRoute()
 .nav-item {
   text-decoration: none;
   color: #30304b;
-  font-size: 24px;
+  font-size: 15px;
   font-weight: bold;
-  text-align: center;
+  text-align: left;
 
   width: 100%;
   padding: 5px 10px;

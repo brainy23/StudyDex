@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import AdminHome from '@/components/admin/AdminHome.vue'
 import AdminUsers from '@/components/admin/AdminUsers.vue'
 import AdminEducation from '@/components/admin/AdminEducation.vue'
+import AdminQuiz from '@/components/admin/AdminQuiz.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -28,6 +29,11 @@ const router = createRouter({
       path: '/admin-education',
       name: 'adminEducation',
       component: AdminEducation
+    },
+     {
+      path: '/admin-quiz',
+      name: 'adminQuiz',
+      component: AdminQuiz
     }
 
   ],
