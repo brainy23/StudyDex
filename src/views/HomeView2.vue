@@ -1,4 +1,7 @@
 <script setup>
+// =====================================================
+// STUDYDEX HOME — STATE, API CALLS, AND INTERACTIONS
+// =====================================================
 import axios from 'axios'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -653,6 +656,9 @@ function selectProfileAction(action) {
 </script>
 
 <template>
+  <!-- =================================================
+       STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
+       ================================================= -->
   <div class="world-page">
 
     <!-- STUDYDEX LOGO AND CLOCK -->
@@ -1096,45 +1102,7 @@ function selectProfileAction(action) {
         ></span>
       </div>
 
-      <!-- ACTIVE BUDDY — LOADED FROM POKÉAPI -->
-      <!-- <div class="town-buddy">
-        <div class="buddy-speech">
-          <span class="buddy-speaker">
-            {{ activeBuddy.name }}
-          </span>
-
-          <p v-if="buddyLoading" role="status">
-            Your buddy is on the way…
-          </p>
-
-          <p v-else-if="buddyError" role="status">
-            {{ buddyError }}
-          </p>
-
-          <p v-else>
-            What are we going to do today?
-          </p>
-        </div>
-
-        <div class="buddy-character">
-          <template v-if="activeBuddyImage && !buddyError">
-            <span
-              class="buddy-ground-shadow"
-              aria-hidden="true"
-            ></span>
-
-            <img
-              :key="activeBuddy.id"
-              class="buddy-image"
-              :src="activeBuddyImage"
-              :alt="`${activeBuddy.name}, your active study buddy`"
-              draggable="false"
-              @error="buddyError = 'Your buddy’s image could not load.'"
-            />
-          </template>
-        </div>
-      </div> -->
-
+      <!-- ACTIVE BUDDY: speech, sprite, sleeping Poké Ball -->
       <div
         class="town-buddy"
         :class="{ 'is-sleeping': buddySleeping }"
@@ -1168,17 +1136,19 @@ function selectProfileAction(action) {
               aria-hidden="true"
             ></span>
 
-            <img
-              :key="activeBuddy.id"
-              class="buddy-image"
-              :class="{ 'is-shaking': ballShaking }"
-              :src="townBuddyImage"
-              :alt="`${activeBuddy.name}, ${buddySleeping ? 'resting' : 'your active study buddy'}`"
-              draggable="false"
-              @click="shakePokeball"
-              @animationend="ballShaking = false"
-              @error="buddyError = 'Your buddy’s image could not load.'"
-            />
+            <Transition name="buddy-swap" mode="out-in" type="transition">
+              <img
+                :key="townBuddyImage"
+                class="buddy-image"
+                :class="{ 'is-shaking': ballShaking }"
+                :src="townBuddyImage"
+                :alt="`${activeBuddy.name}, ${buddySleeping ? 'resting' : 'your active study buddy'}`"
+                draggable="false"
+                @click="shakePokeball"
+                @animationend="ballShaking = false"
+                @error="buddyError = 'Your buddy’s image could not load.'"
+              />
+            </Transition>
 
             <div
               v-if="buddySleeping"
@@ -1429,7 +1399,11 @@ function selectProfileAction(action) {
 </template>
 
 <style scoped>
+/* =====================================================
+   01. WORLD SCENE — BASE, LIGHTING, SKY, CLOUDS
+   ===================================================== */
 .world-page {
+  position: relative;
   width: 100%;
   background: #071024;
 }
@@ -1492,20 +1466,6 @@ img.layer {
   animation: firefly-float 5s ease-in-out infinite alternate;
 }
 
-@keyframes cloud-drift {
-  from { transform: translateX(-2%); }
-  to { transform: translateX(2%); }
-}
-@keyframes twinkle {
-  from { opacity: 0.65; }
-  to { opacity: 1; }
-}
-
-@keyframes firefly-float {
-  from { transform: translateY(0); opacity: 0.55; }
-  to { transform: translateY(-0.8%); opacity: 1; }
-}
-
 .preview-controls {
   display: flex;
   align-items: center;
@@ -1529,7 +1489,24 @@ img.layer {
   }
 }
 
-/* NAVIGATION BUTTONS */
+@keyframes cloud-drift {
+  from { transform: translateX(-2%); }
+  to { transform: translateX(2%); }
+}
+@keyframes twinkle {
+  from { opacity: 0.65; }
+  to { opacity: 1; }
+}
+
+@keyframes firefly-float {
+  from { transform: translateY(0); opacity: 0.55; }
+  to { transform: translateY(-0.8%); opacity: 1; }
+}
+
+
+/* =========================================
+   02. BUILDING NAVIGATION — BUTTONS + RESPONSIVE
+   ========================================= */
 .building-navigation {
   position: absolute;
   inset: 0;
@@ -1660,7 +1637,9 @@ img.layer {
 }
 
 
-/* RAIN */
+/* =========================================
+   03. RAIN — OVERLAY + ANIMATION
+   ========================================= */
 .rain-shade {
   z-index: 6;
   background: rgba(27, 40, 61, 0.3);
@@ -1701,6 +1680,12 @@ img.layer {
   animation-play-state: running;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .rain-drop {
+    display: none;
+  }
+}
+
 @keyframes rainfall {
   from {
     transform: translate(0, 0) rotate(12deg);
@@ -1711,24 +1696,10 @@ img.layer {
   }
 }
 
-/* Keep navigation above the weather */
-.building-navigation {
-  z-index: 20;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rain-drop {
-    display: none;
-  }
-}
 
 /* =========================================
-   STUDYDEX GAME UI
+   STUDYDEX GAME UI — HUD AND NAVBAR
    ========================================= */
-
-.world-page {
-  position: relative;
-}
 
 .sd-hud,
 .sd-navbar {
@@ -2158,33 +2129,6 @@ img.layer {
 .quest-dock,
 .quest-dock * {
   box-sizing: border-box;
-}
-
-/* RED DEVICE SHELL */
-
-.quest-phone {
-  display: flex;
-  flex-direction: column;
-
-  width: min(338px, calc(100vw - 24px));
-  max-height: calc(100dvh - 110px);
-  padding: 10px 9px 8px;
-
-  border: 2px solid #9e2e43;
-  border-radius: 34px;
-
-  background: linear-gradient(
-    145deg,
-    #ff7d87 0%,
-    #ec4e65 35%,
-    #cc354e 100%
-  );
-
-  box-shadow:
-    0 18px 45px rgba(13, 28, 54, 0.32),
-    0 5px 0 #902b40,
-    inset 0 2px 0 rgba(255, 255, 255, 0.6),
-    inset -3px 0 0 rgba(129, 28, 48, 0.15);
 }
 
 .quest-device-top {
@@ -2661,8 +2605,7 @@ img.layer {
 
 
 /* =========================================
-   IMAGE-BASED POKÉDEX FRAME
-   Add AFTER the previous quest styles
+   POKÉDEX — IMAGE FRAME + ON-SCREEN LAYOUT
    ========================================= */
 
 .quest-phone {
@@ -2824,8 +2767,10 @@ img.layer {
   .quest-heading h2 {
     font-size: 20px;
   }
-}/* =========================================
-   POKÉMON BUDDY ON THE CENTRAL GRASS
+}
+
+/* =========================================
+   POKÉMON BUDDY — POSITION IN THE WORLD
    ========================================= */
 
 .town-buddy {
@@ -2851,8 +2796,11 @@ img.layer {
     sans-serif;
 }
 
-/* SPEECH BUBBLE */
+/* =========================================
+   POKÉMON BUDDY — SPEECH, SPRITE, SHADOW
+   ========================================= */
 
+/* Speech bubble */
 .buddy-speech {
   position: absolute;
   left: 50%;
@@ -2901,144 +2849,7 @@ img.layer {
   font-size: 9px;
   font-weight: 900;
   letter-spacing: 1.5px;
-}
-
-.buddy-speech p {
-  margin: 0;
-
-  font-size: 13px;
-  font-weight: 800;
-  line-height: 1.4;
-}
-
-/* CHARACTER */
-
-.buddy-character {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1;
-}
-
-.buddy-image {
-  position: relative;
-
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-
-  transform-origin: 50% 90%;
-  animation: buddy-idle 3.5s ease-in-out infinite;
-}
-
-/* Ground shadow helps the Pokémon sit in the scene */
-
-.buddy-ground-shadow {
-  position: absolute;
-  left: 50%;
-  bottom: 3%;
-
-  width: 62%;
-  height: 12%;
-
-  transform: translateX(-50%);
-  border-radius: 50%;
-
-  background: rgba(25, 48, 28, 0.28);
-  filter: blur(3px);
-}
-
-/* Gentle breathing motion without lifting the feet */
-
-@keyframes buddy-idle {
-  0%, 100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.018, 0.985);
-  }
-}
-
-@media (max-width: 600px) {
-  .town-buddy {
-    width: clamp(44px, 12vw, 70px);
-  }
-
-  .buddy-speech {
-    width: 155px;
-    padding: 7px 9px;
-    border-radius: 13px;
-  }
-
-  .buddy-speaker {
-    font-size: 7px;
-    margin-bottom: 2px;
-  }
-
-  .buddy-speech p {
-    font-size: 10px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .buddy-image {
-    animation: none;
-  }
-}
-
-
-
-/* SPEECH BUBBLE */
-
-.buddy-speech {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-
-  width: 220px;
-  padding: 11px 15px;
-
-  border: 2px solid #344f78;
-  border-radius: 18px;
-
-  background: #fffdf3;
-  color: #2b4162;
-  text-align: center;
-
-  box-shadow:
-    0 4px 0 rgba(35, 57, 90, 0.18),
-    0 8px 18px rgba(22, 42, 65, 0.14);
-}
-
-/* Bubble tail */
-
-.buddy-speech::after {
-  content: "";
-
-  position: absolute;
-  left: 50%;
-  bottom: -8px;
-
-  width: 13px;
-  height: 13px;
-
-  background: #fffdf3;
-  border-right: 2px solid #344f78;
-  border-bottom: 2px solid #344f78;
-
-  transform: translateX(-50%) rotate(45deg);
-}
-
-.buddy-speaker {
-  display: block;
-  margin-bottom: 4px;
-
-  color: #886317;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 1.5px;
+  text-transform: uppercase;
 }
 
 .buddy-speech p {
@@ -3066,8 +2877,10 @@ img.layer {
   height: 100%;
   object-fit: contain;
 
+  /* Static sprite while awake; sleeping animation is defined below */
+  image-rendering: pixelated;
   transform-origin: 50% 90%;
-  animation: buddy-idle 3.5s ease-in-out infinite;
+  animation: none;
 }
 
 /* Ground shadow helps the Pokémon sit in the scene */
@@ -3085,18 +2898,6 @@ img.layer {
 
   background: rgba(25, 48, 28, 0.28);
   filter: blur(3px);
-}
-
-/* Gentle breathing motion without lifting the feet */
-
-@keyframes buddy-idle {
-  0%, 100% {
-    transform: scale(1);
-  }
-
-  50% {
-    transform: scale(1.018, 0.985);
-  }
 }
 
 @media (max-width: 600px) {
@@ -3126,23 +2927,92 @@ img.layer {
   }
 }
 
-.buddy-speaker {
-  text-transform: uppercase;
+
+/* -----------------------------------------------------
+   BUDDY — SLEEPING POKÉ BALL + CLICK-TO-SHAKE
+   The sway plays while asleep. Clicking briefly replaces
+   it with the stronger shake, then resumes the sway.
+   ----------------------------------------------------- */
+.town-buddy.is-sleeping .buddy-image {
+  pointer-events: auto;
+  cursor: pointer;
+  transform-origin: 50% 80%;
+  animation: pokeball-sway 2.4s ease-in-out infinite;
 }
 
-.buddy-speaker {
-  text-transform: uppercase;
+.town-buddy.is-sleeping .buddy-image.is-shaking {
+  animation: pokeball-shake 0.6s ease-in-out;
 }
 
-.buddy-image {
-  /* Keeps small game sprites crisp when enlarged */
-  image-rendering: pixelated;
-
-  /* The animated sprite already has its own movement */
-  animation: none;
+/* Floating sleeping letters */
+.buddy-zzz {
+  position: absolute;
+  top: 15%;
+  right: 12%;
+  z-index: 2;
+  pointer-events: none;
 }
 
-/* UNOPENED PACK BADGE */
+.buddy-zzz span {
+  position: absolute;
+  color: #e3edff;
+  font-size: 20px;
+  font-weight: 900;
+  text-shadow: 1px 2px 2px #344f78;
+  opacity: 0;
+  animation: sleep-zzz 3s linear infinite;
+}
+
+.buddy-zzz span:nth-child(2) { animation-delay: 1s; }
+.buddy-zzz span:nth-child(3) { animation-delay: 2s; }
+
+/* Image fade when the Pokémon becomes a Poké Ball */
+.buddy-swap-enter-active,
+.buddy-swap-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.buddy-swap-enter-from,
+.buddy-swap-leave-to {
+  opacity: 0;
+}
+
+/* Responsive and accessibility rules live with this feature */
+@media (prefers-reduced-motion: reduce) {
+  .town-buddy.is-sleeping .buddy-image,
+  .town-buddy.is-sleeping .buddy-image.is-shaking,
+  .buddy-zzz span {
+    animation: none;
+  }
+
+  .buddy-zzz span:first-child { opacity: 1; }
+
+  .buddy-swap-enter-active,
+  .buddy-swap-leave-active { transition: none; }
+}
+
+@keyframes pokeball-sway {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  25% { transform: translateX(-2px) rotate(-4deg); }
+  50% { transform: translateX(0) rotate(0deg); }
+  75% { transform: translateX(2px) rotate(4deg); }
+}
+
+@keyframes pokeball-shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  20%, 60% { transform: translateX(-5px) rotate(-15deg); }
+  40%, 80% { transform: translateX(5px) rotate(15deg); }
+}
+
+@keyframes sleep-zzz {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  20% { opacity: 1; }
+  100% { opacity: 0; transform: translate(25px, -45px) scale(1.2); }
+}
+
+/* =========================================
+   UNOPENED PACK BADGE
+   ========================================= */
 
 .sd-icon-bag {
   position: relative;
@@ -3662,113 +3532,5 @@ img.layer {
 }
 
 
-/* Slow breathing with a slight resting tilt */
-.town-buddy.is-sleeping .buddy-image {
-  transform-origin: 50% 85%;
-  animation: buddy-sleep 3s ease-in-out infinite;
-}
-
-@keyframes buddy-sleep {
-  0%, 100% {
-    transform: rotate(-8deg) scale(1, 0.94);
-  }
-
-  50% {
-    transform: rotate(-8deg) scale(1.025, 0.98);
-  }
-}
-
-
-
-/* Floating sleep letters */
-.buddy-zzz {
-  position: absolute;
-  top: 15%;
-  right: 12%;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.buddy-zzz span {
-  position: absolute;
-  color: #e3edff;
-  font-size: 20px;
-  font-weight: 900;
-  text-shadow: 1px 2px 2px #344f78;
-  opacity: 0;
-  animation: sleep-zzz 3s linear infinite;
-}
-
-.buddy-zzz span:nth-child(2) {
-  animation-delay: 1s;
-}
-
-.buddy-zzz span:nth-child(3) {
-  animation-delay: 2s;
-}
-
-@keyframes sleep-zzz {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0) scale(0.6);
-  }
-
-  20% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translate(25px, -45px) scale(1.2);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .town-buddy.is-sleeping .buddy-image,
-  .buddy-zzz span {
-    animation: none;
-  }
-
-  .buddy-zzz span:first-child {
-    opacity: 1;
-  }
-}
-/* Keep the Poké Ball still until clicked */
-.town-buddy.is-sleeping .buddy-image {
-  animation: none;
-  transform: none;
-}
-
-/* Shake once per click */
-.town-buddy.is-sleeping .buddy-image.is-shaking {
-  transform-origin: 50% 80%;
-  animation: pokeball-shake 0.6s ease-in-out;
-}
-
-@keyframes pokeball-shake {
-  0%, 100% {
-    transform: translateX(0) rotate(0deg);
-  }
-
-  20%, 60% {
-    transform: translateX(-5px) rotate(-15deg);
-  }
-
-  40%, 80% {
-    transform: translateX(5px) rotate(15deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .town-buddy.is-sleeping .buddy-image.is-shaking {
-    animation-duration: 1ms;
-  }
-}
-
-/* Allow clicking the sleeping Poké Ball */
-.town-buddy.is-sleeping .buddy-image {
-  pointer-events: auto;
-  cursor: pointer;
-}
 
 </style>
