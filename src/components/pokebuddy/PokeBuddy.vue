@@ -1,5 +1,6 @@
 <script setup>
 import axios from 'axios';
+import { pokemonUrl } from '../../lib/pokeapi'
 import { onMounted, ref } from 'vue';
 const avatar_img = ref('/assets/male.png')
 const max_xp = 100
@@ -77,7 +78,7 @@ const bagImages = ref({})
 async function getPokemon(poke_name, species) {
   try {
     const response = await axios.get(
-      `https://pokeapi.co/api/v2/pokemon/${poke_name.toLowerCase()}`
+      pokemonUrl(poke_name)
     )
 
     const pokemonData = {

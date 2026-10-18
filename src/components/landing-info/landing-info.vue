@@ -21,8 +21,8 @@ const features = [
     </div>
  
     <div class="nav-buttons">
-      <a href="/login" class="btn btn-outline">Log in</a>
-      <a href="/signup" class="btn btn-yellow">Sign up</a>
+      <RouterLink to="/login" class="btn btn-outline">Log in</RouterLink>
+      <RouterLink to="/signup" class="btn btn-yellow">Sign up</RouterLink>
     </div>
   </nav>
  
@@ -47,7 +47,7 @@ const features = [
       </div>
     </div>
  
-    <a href="/signup" class="btn btn-yellow big">Start your journey</a>
+    <RouterLink to="/signup" class="btn btn-yellow big">Start your journey</RouterLink>
   </section>
 </template>
  
@@ -114,8 +114,8 @@ const features = [
 }
  
 .background {
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   object-fit: cover;
 }
  

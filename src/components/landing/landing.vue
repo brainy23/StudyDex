@@ -1,4 +1,5 @@
 <script setup>
+import ProfileSummary from '../common/ProfileSummary.vue'
 // Each cloud: file, top (% from top), width (px), speed (seconds to cross), start (0-1)
 // Big clusters are slow, small clouds are fast.
 const clouds = [
@@ -37,7 +38,9 @@ const clouds = [
 
     <div class="front">
       <img src="/backgrounds/studydex_logo.png" alt="StudyDex" class="logo" />
-      <a href="/landing-info" class="enter-btn">Start your journey</a>
+      <h3>Learn. Evolve. Grow.</h3>
+      <ProfileSummary />
+      <RouterLink to="/home" class="enter-btn">Start</RouterLink>
     </div>
   </div>
 </template>
