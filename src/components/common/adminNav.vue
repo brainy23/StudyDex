@@ -58,13 +58,13 @@ const route = useRoute()
       >
         Manage Rewards
       </RouterLink>
-      <RouterLink
-        to="/admin-feedback"
-        class="nav-item"
-        :class="{ active: route.path === '/admin-feedback' }"
-      >
-        Reports and Feedback
-      </RouterLink>
+
+      <!-- Logout Button -->
+      <button type="button" class="nav-item logout-btn">
+        Logout
+      </button>
+
+
 
     </nav>
 
@@ -132,5 +132,24 @@ const route = useRoute()
 .nav-item.active {
   background-color: rgba(255, 255, 255, 0.5);
   color: #30304b;
+}
+
+/* =====================================================
+   LOGOUT BUTTON
+===================================================== */
+
+
+.logout-btn {
+  background-color: #ffd51a;
+  color: #ea3030;
+  border: none;
+  cursor: pointer;
+  padding-top: 10px;
+  padding-bottom:10px;
+}
+
+.logout-btn:hover {
+  background-color: #ea3030;
+  color: white;
 }
 </style>

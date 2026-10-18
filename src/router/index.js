@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
-import AdminHome from '@/components/admin/AdminHome.vue'
-import AdminUsers from '@/components/admin/AdminUsers.vue'
-import AdminEducation from '@/components/admin/AdminEducation.vue'
-import AdminQuiz from '@/components/admin/AdminQuiz.vue'
+import AdminHome from '@/views/admin/AdminHome.vue'
+import AdminUsers from '@/views/admin/AdminUsers.vue'
+import AdminEducation from '@/views/admin/AdminEducation.vue'
+import AdminQuiz from '@/views/admin/AdminQuiz.vue'
+
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
