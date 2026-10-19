@@ -120,7 +120,7 @@
           <button id="nextButton" @click="(question_no == 4 || locked ?question_no = question_no:question_no += 1)">Next Question ></button>
         </div>   
       </div>
-      <div class="link-to-sign-in"><p>Already a breeder? <a href="/login" style="color: #ffd117;">Sign In</a></p></div>
+      <div class="link-to-sign-in"><p>Already a trainer? <a href="/login" style="color: #ffd117;">Sign In</a></p></div>
     </div>
   </main>
 </template>
@@ -312,7 +312,6 @@
   }
 
   .pw-not-fulfilled {
-;
     color: rgb(234, 75, 75);
     font-size: 24px;
     -webkit-text-stroke: 4px black;
