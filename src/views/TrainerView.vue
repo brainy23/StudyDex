@@ -9,10 +9,10 @@ const base = import.meta.env.BASE_URL
 const images = {
   room: `${base}trainer-home/trainer-home-v3.png`,
   landscape: `${base}trainer-home/window-landscape-clean.png`,
-  sun: `${base}home/sun.png`,
-  moon: `${base}home/moon.png`,
-  stars: `${base}home/stars.png`,
-  clouds: `${base}home/cloud.png`,
+  sun: `${base}town/bg_sun.png`,
+  moon: `${base}town/bg_moon.png`,
+  stars: `${base}town/bg_stars.png`,
+  clouds: `${base}town/bg_clouds.png`,
 }
 const failedImages = ref([])
 
@@ -478,7 +478,7 @@ const wardrobeArea = {
 }
 
 // Change this path if your town page uses a different route.
-const exitLink = { label: 'Back to town', path: '/' }
+const exitLink = { label: 'Back to town', path: '/home' }
 // Visible door leaf above the desk, measured in the 1672 × 941 artwork.
 const exitDoorStyle = {
   left: `${334 / 1672 * 100}%`, top: `${195 / 941 * 100}%`,

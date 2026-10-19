@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router'
 
 const router = useRouter()
 
-const asset = '/home/'
+const asset = '/town/'
 
 const buildingButtons = [
   {
@@ -36,7 +36,7 @@ const buildingButtons = [
     icon: asset+ 'poke_home.png',
     left: '83%',
     top: '67%',
-    path: '/dashboard',
+    path: '/trainer',
   },
 ]
 
@@ -107,6 +107,7 @@ const fetchWeather = async () => {
 
    temperature.value = response.data.current.temperature_2m
    weatherCode.value = response.data.current.weather_code
+   console.log(weatherCode.value)
    isDay.value = response.data.current.is_day === 1
 
  } catch (error) {
