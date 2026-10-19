@@ -7,7 +7,7 @@ const router = useRouter()
 const base = import.meta.env.BASE_URL
 
 const images = {
-  room: `${base}trainer-home/trainer-home-v2.png`,
+  room: `${base}trainer-home/trainer-home-v3.png`,
   landscape: `${base}trainer-home/window-landscape-clean.png`,
   sun: `${base}home/sun.png`,
   moon: `${base}home/moon.png`,
@@ -304,12 +304,14 @@ const trainerVariants = [
     gender: 'male',
     label: 'Classic trainer',
     image: `${base}avatars/male.png`,
+    idleImage: `${base}avatars/male-idle.png`,
   },
   {
     id: 'female-classic',
     gender: 'female',
     label: 'Classic trainer',
     image: `${base}avatars/female.png`,
+    idleImage: `${base}avatars/female-idle.png`,
   },
 ]
 
@@ -324,6 +326,18 @@ const selectedTrainer = computed(() =>
   trainerVariants.find(item => item.id === selectedVariantId.value)
   ?? trainerVariants[0],
 )
+
+// Fall back to the original avatar if an idle sheet is unavailable.
+const loadedIdle = ref('')
+watch(() => selectedTrainer.value.idleImage, (src, previous, onCleanup) => {
+  loadedIdle.value = ''
+  if (!src) return
+  const image = new Image()
+  image.onload = () => { loadedIdle.value = src }
+  image.onerror = () => { loadedIdle.value = '' }
+  onCleanup(() => { image.onload = null; image.onerror = null })
+  image.src = src
+}, { immediate: true })
 
 const genderFilter = ref(selectedTrainer.value.gender)
 
@@ -432,11 +446,45 @@ function closePanel() {
 }
 
 // Change these three paths to match your router when those pages are ready.
+// Coordinates and traced outlines match trainer-home-v3.png.
+// SVG shapes also define the clickable area, rather than a rectangular box.
 const roomLinks = [
-  { id: 'dashboard', label: 'Dashboard', path: '/dashboard', left: '74.7%', top: '34.8%', width: '11.5%', height: '23%' },
-  { id: 'studydecks', label: 'Study decks', path: '/studydecks', left: '10.5%', top: '48.5%', width: '8%', height: '9%' },
-  { id: 'pokepacks', label: 'Open Poképacks', path: '/pokepacks', left: '91%', top: '68.7%', width: '11.5%', height: '20%' },
+  {
+    id: 'dashboard', label: 'Dashboard', path: '/dashboard',
+    left: '74.7%', top: '34.8%', width: '11.5%', height: '23%',
+    outline: 'M 2 2 L 98 2 L 98 98 L 2 98 Z',
+  },
+  {
+    id: 'studydecks', label: 'Study decks', path: '/studydecks',
+    left: '12%', top: '49.6%', width: '11.3%', height: '11.2%',
+    outline: 'M 2 8 Q 1 3 5 3 L 58 0 Q 61 0 62 4 L 70 66 L 98 79 Q 100 81 96 84 L 40 98 L 14 88 Z',
+  },
+  {
+    id: 'pokepacks', label: 'Open Poképacks', path: '/pokepacks',
+    left: '91%', top: '68.7%', width: '11.5%', height: '20%',
+    outline: 'M 43 11 Q 41 0 52 0 Q 63 0 64 11 L 77 12 Q 88 15 91 35 L 96 56 L 99 84 Q 99 93 89 95 L 62 99 L 11 92 Q 2 91 2 80 L 3 68 L 9 57 L 12 34 Q 14 14 26 12 Z',
+  },
 ]
+const wardrobeArea = {
+  // Pixel coordinates from the 1672 × 941 room artwork.
+  left: `${(1400 + 272 / 2) / 1672 * 100}%`,
+  top: `${(90 + 560 / 2) / 941 * 100}%`,
+  width: `${272 / 1672 * 100}%`,
+  height: `${560 / 941 * 100}%`,
+  // Two open segments: do not draw across the bag in front of the cupboard.
+  outline: 'M 1462 589 L 1404 577 L 1404 555 L 1408 551 L 1408 181 L 1401 176 L 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634',
+  // The transparent click area also excludes the visible bag.
+  hitArea: 'M 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634 L 1596 592 L 1580 577 L 1550 574 Q 1545 554 1526 555 Q 1507 556 1506 574 L 1474 574 L 1462 589 L 1404 577 Z',
+}
+
+// Change this path if your town page uses a different route.
+const exitLink = { label: 'Back to town', path: '/' }
+// Visible door leaf above the desk, measured in the 1672 × 941 artwork.
+const exitDoorStyle = {
+  left: `${334 / 1672 * 100}%`, top: `${195 / 941 * 100}%`,
+  width: `${80 / 1672 * 100}%`, height: `${273 / 941 * 100}%`,
+}
+
 const navigationMessage = ref('')
 function openRoomPage(link) {
   if (!router.resolve(link.path).matched.length) {
@@ -535,7 +583,16 @@ function openRoomPage(link) {
 
         <div class="carpet-party">
           <div class="trainer-figure">
+            <div
+              v-if="loadedIdle"
+              :key="loadedIdle"
+              class="trainer-idle"
+              :style="{ backgroundImage: `url('${loadedIdle}')` }"
+              role="img"
+              :aria-label="`${selectedTrainer.gender} trainer — ${selectedTrainer.label}`"
+            ></div>
             <img
+              v-else
               :src="selectedTrainer.image"
               :alt="`${selectedTrainer.gender} trainer — ${selectedTrainer.label}`"
               class="trainer-sprite"
@@ -569,6 +626,19 @@ function openRoomPage(link) {
         </div>
 
         <button
+          type="button"
+          class="exit-door"
+          :style="exitDoorStyle"
+          aria-label="Leave room and return to town"
+          @click="openRoomPage(exitLink)"
+        >
+          <svg class="door-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path d="M 0 0 L 100 8 L 100 100 L 0 100 Z" vector-effect="non-scaling-stroke" />
+          </svg>
+          <span class="hotspot-label" aria-hidden="true">Back to town</span>
+        </button>
+
+        <button
           v-for="link in roomLinks"
           :key="link.id"
           type="button"
@@ -576,22 +646,29 @@ function openRoomPage(link) {
           :class="`hotspot-${link.id}`"
           :style="{ left: link.left, top: link.top, width: link.width, height: link.height }"
           :aria-label="link.label"
-          :title="link.label"
           @click="openRoomPage(link)"
         >
-          <span class="hotspot-label">{{ link.label }}</span>
+          <svg class="object-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path :d="link.outline" vector-effect="non-scaling-stroke" />
+          </svg>
+          <span class="hotspot-label" aria-hidden="true">{{ link.label }}</span>
         </button>
 
         <button
           ref="wardrobeButton"
           type="button"
           class="room-hotspot wardrobe-hotspot"
+          :style="{ left: wardrobeArea.left, top: wardrobeArea.top, width: wardrobeArea.width, height: wardrobeArea.height }"
           aria-label="Open wardrobe to change avatar"
           :aria-expanded="openPanel === 'wardrobe'"
           aria-controls="room-selection-panel"
           @click="togglePanel('wardrobe')"
         >
-          <span class="hotspot-label">Change avatar</span>
+          <svg class="object-outline wardrobe-outline" viewBox="1400 90 272 560" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+            <path class="wardrobe-hit" :d="wardrobeArea.hitArea" />
+            <path class="wardrobe-stroke" :d="wardrobeArea.outline" vector-effect="non-scaling-stroke" />
+          </svg>
+          <span class="hotspot-label" aria-hidden="true">Change avatar</span>
         </button>
 
         <section
@@ -821,11 +898,11 @@ to { opacity: 1; }
 
 .room-characters button:focus-visible { outline: 3px solid #ffe58c; outline-offset: 4px; }
 
-.carpet-party { position: absolute; left: var(--party-left); top: var(--party-feet); width: 29%; display: flex; align-items: flex-end; gap: 7%; transform: translate(-50%, -100%); }
+.carpet-party { position: absolute; left: var(--party-left); top: var(--party-feet); width: 33%; display: flex; flex-direction: row-reverse; justify-content: center; align-items: flex-end; gap: 6%; transform: translate(-50%, -100%); }
 
-.trainer-figure { width: 57%; flex-shrink: 0; }
+.trainer-figure { width: 63%; flex-shrink: 0; }
 
-.buddy-figure { width: 30%; min-width: 0; }
+.buddy-figure { width: 26.36%; flex-shrink: 0; min-width: 0; }
 
 .trainer-sprite,
 .buddy-sprite { display: block; width: 100%; height: auto; image-rendering: pixelated; user-select: none; filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%)); }
@@ -868,13 +945,128 @@ to { opacity: 1; }
 }
 .page-message { margin: 0; padding: 16px; text-align: center; background: #142033; }
 
-.room-hotspot { position: absolute; transform: translate(-50%, -50%); border: 2px solid transparent; border-radius: 14px; background: transparent; color: #46392d; }
-.room-hotspot:hover, .room-hotspot:focus-visible { border-color: #ffe6a3; background: rgb(255 226 154 / 12%); box-shadow: 0 0 20px rgb(255 221 134 / 30%); }
-.hotspot-label { opacity: 0; visibility: hidden; pointer-events: none; position: absolute; top: calc(100% + 5px); left: 50%; transform: translateX(-50%); padding: 6px 10px; border: 2px solid #594334; border-radius: 10px; background: #fff4d9; box-shadow: 0 3px 0 #594334; white-space: nowrap; font-size: clamp(10px, 1vw, 14px); font-weight: 800; }
-@media (max-width: 600px) { .hotspot-label { padding: 3px 5px; border-width: 1px; } }
-.hotspot-dashboard .hotspot-label { left: 50%; right: auto; transform: translateX(-50%); }
-.room-hotspot:hover .hotspot-label,
-.room-hotspot:focus-visible .hotspot-label { opacity: 1; visibility: visible; }
-.room-hotspot:active { background: rgb(255 226 154 / 25%); }
-.wardrobe-hotspot { left: 91.5%; top: 37.5%; width: 14%; height: 40%; }
+.room-characters .room-hotspot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #46392d;
+  overflow: visible;
+  pointer-events: none;
+}
+.object-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms ease;
+  filter: drop-shadow(0 0 3px rgb(255 213 64 / 65%));
+}
+.object-outline path {
+  fill: transparent;
+  stroke: #ffdc55;
+  stroke-width: 1.7px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: all;
+  cursor: pointer;
+}
+.hotspot-label {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 10px;
+  border: 2px solid #594334;
+  border-radius: 10px;
+  background: #fff4d9;
+  box-shadow: 0 3px 0 #594334;
+  white-space: nowrap;
+  font-size: clamp(10px, 1vw, 14px);
+  font-weight: 800;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity 140ms ease;
+}
+.wardrobe-hotspot .hotspot-label { top: 60%; }
+@media (hover: hover) {
+  .room-hotspot:hover .hotspot-label { opacity: 0; }
+  .room-hotspot:hover .object-outline { opacity: 1; }
+}
+.room-characters .room-hotspot:focus-visible { outline: none; }
+.room-hotspot:focus-visible .hotspot-label { opacity: 0; }
+.room-hotspot:focus-visible .object-outline,
+.room-hotspot:active .object-outline { opacity: 1; }
+.room-hotspot:active .object-outline path { stroke: #fff2ab; stroke-width: 2.5px; }
+@media (max-width: 600px) {
+  .hotspot-label { padding: 3px 5px; border-width: 1px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .object-outline, .hotspot-label { transition: none; }
+}
+/* Separate the cupboard's invisible hit area from its visible open outline. */
+.wardrobe-outline .wardrobe-hit { fill: transparent; stroke: none; pointer-events: all; }
+.wardrobe-outline .wardrobe-stroke { fill: none; pointer-events: none; }
+
+/* Four 512 × 768 crops from the 2048 × 768 generated strips.
+   Offsets compensate for the artwork's nonuniform cell placement. */
+.trainer-idle {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background-repeat: no-repeat;
+  background-size: 400% 100%;
+  background-position: 4.166667% 0;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%));
+  animation: trainer-idle-loop 4s steps(1, end) infinite;
+}
+@keyframes trainer-idle-loop {
+  0%, 100% { background-position: 4.166667% 0; }
+  45% { background-position: 34.765625% 0; }
+  72% { background-position: 65.364583% 0; }
+  75% { background-position: 95.963542% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trainer-idle { animation: none; }
+}
+
+/* Static exit door: label and hover outline over the room artwork. */
+.room-characters .exit-door {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #46392d;
+  pointer-events: auto;
+  cursor: pointer;
+}
+.door-outline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  opacity: 0;
+  pointer-events: none;
+  filter: drop-shadow(0 0 3px rgb(255 213 64 / 65%));
+  transition: opacity 140ms ease;
+}
+.door-outline path { fill: none; stroke: #ffdc55; stroke-width: 1.7px; stroke-linejoin: round; }
+.exit-door .hotspot-label { top: 48%; bottom: auto; left: 50%; transform: translate(-50%, -50%); width: 88%; padding: 5px 3px; white-space: normal; text-align: center; line-height: 1.2; font-size: clamp(8px, 0.8vw, 13px); }
+@media (hover: hover) {
+  .exit-door:hover .door-outline { opacity: 1; }
+  .exit-door:hover .hotspot-label { opacity: 0; }
+}
+.room-characters .exit-door:focus-visible { outline: none; }
+.exit-door:focus-visible .door-outline { opacity: 1; }
+.exit-door:focus-visible .hotspot-label { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .door-outline { transition: none; }
+}
 </style>
+
+
