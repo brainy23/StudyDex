@@ -51,6 +51,14 @@ const sampleData = [
    'created_at': '2026-10-19',
    'avatar_choice': 'male',
    'email': 'testing4@gmail.com'
+  },
+  {
+   'id':5,
+   'display_name': "saylor twift",
+   'school_level_id': 6,
+   'created_at': '2026-10-20',
+   'avatar_choice': 'male',
+   'email': 'saylortwift@gmail.com'
   }
 ];
 
@@ -115,7 +123,7 @@ function arrow(key) {
         <div class="overview-header">
           <h1>User Overview</h1>
   
-          <div><span class="search-prompt">⌕ Search for a user:</span><input v-model="searchQuery" type="text" class="search-bar" placeholder="Username..."></div>
+          <div><span class="search-prompt">⌕ Search for a student:</span><input v-model="searchQuery" type="text" class="search-bar" placeholder="Username..."></div>
         </div>
 
         <div class="user-table">
