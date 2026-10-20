@@ -24,28 +24,28 @@ const sampleData = [
    'id':1,
    'display_name': "orangutan67",
    'school_level_id': 1,
-   'created_at': '2026-10-17 14:08:35.709137+00',
+   'created_at': '2026-10-17',
    'avatar_choice': 'female'
   },
   {
    'id':2,
    'display_name': "aligator68",
    'school_level_id': 5,
-   'created_at': '2026-10-17 14:08:35.709137+00',
+   'created_at': '2026-10-17',
    'avatar_choice': 'male'
   },
   {
    'id':3,
    'display_name': "idek69",
    'school_level_id': 3,
-   'created_at': '2026-10-17 14:08:35.709137+00',
+   'created_at': '2026-10-17',
    'avatar_choice': 'male'
   },
   {
    'id':3,
    'display_name': "idek70",
    'school_level_id': 3,
-   'created_at': '2026-10-17 14:08:35.709137+00',
+   'created_at': '2026-10-17',
    'avatar_choice': 'male'
   }
 ];
@@ -105,7 +105,11 @@ function arrow(key) {
           <span>Gender</span>
           <span>
             Primary Level
-            <button @click="toggleSort('level')">{{ arrow('school_level_id') }}</button>
+            <button @click="toggleSort('school_level_id')">{{ arrow('school_level_id') }}</button>
+          </span>
+          <span>
+            Date Joined
+            <button @click="toggleSort('created_at')">{{ arrow('created_at') }}</button>
           </span>
         </div>
 
@@ -113,6 +117,7 @@ function arrow(key) {
           <span>{{ user.display_name }}</span>
           <span>{{ user.avatar_choice }}</span>
           <span>{{ user.school_level_id }}</span>
+          <span>{{ user.created_at }}</span>
         </div>
       </div>
     </main>
@@ -130,17 +135,17 @@ function arrow(key) {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   padding: 8px 12px;
   background-color: rgb(236, 235, 235);
   margin-top: 8px;
-  border: 1px solid darkgrey;
+  /* border: 1px solid darkgrey; */
   border-radius: 9px;
 }
 
 .header {
   font-weight: bold;
-  border-bottom: 1px solid #999;
+  border: 1px solid #c3c3c3;
   margin-bottom: 4px;
 }
 
