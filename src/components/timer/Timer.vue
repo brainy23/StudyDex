@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
+const emit = defineEmits(['complete'])
 const modes = [
   {id: 'pomodoro', label: 'Pomodoro', seconds: 25*60},
   {id: 'short', label: 'Short Break', seconds: 5*60},
@@ -27,7 +28,10 @@ function start() {
     running.value = true
     interval = setInterval(() => {
         secondsLeft.value = Math.max(0, Math.round((endTime - Date.now()) / 1000))
-        if (secondsLeft.value === 0) pause()
+        if (secondsLeft.value === 0) {
+            pause()
+            if (mode.value === 'pomodoro') emit('complete')
+        }
     }, 250)
 }
 
@@ -55,8 +59,7 @@ onUnmounted(() => clearInterval(interval))
 
 
 <template>
-    <title>Study Session Timer</title>
-    <main :class="`mode-${mode}`">
+    <div class="timer-panel" :class="`mode-${mode}`">
         <div class="title">
         Study Session Timer
         </div>
@@ -76,30 +79,30 @@ onUnmounted(() => clearInterval(interval))
             <button @click="toggle">{{ finished ? 'RESET' : running ? 'PAUSE' : 'START' }}</button>
         </div>
         </div>
-    </main>
+    </div>
 </template>
 
 
 <style scoped>
-    main {
+    .timer-panel {
         font-family:Verdana, Geneva, Tahoma, sans-serif;
-        color: white;
+        color: rgb(51, 51, 51);
         min-height: 100vh;
         transition: background-color 0.4s ease
     }
-    main.mode-pomodoro {
+    .timer-panel.mode-pomodoro {
         background-color: rgb(255, 208, 0);
         --btn: rgb(224, 183, 0);
         --btn-active: rgb(253, 224, 98);
     }
 
-    main.mode-short {
+    .timer-panel.mode-short {
         background-color: rgb(39, 39, 153);
         --btn: rgb(34, 34, 122);
         --btn-active: rgb(51, 51, 182);
     }
 
-    main.mode-long {
+    .timer-panel.mode-long {
         background-color: rgb(73, 35, 106);
         --btn: rgb(64, 32, 92);
         --btn-active: rgb(107, 46, 160);
@@ -107,19 +110,19 @@ onUnmounted(() => clearInterval(interval))
 
     .title{
         text-align: center;
-        padding:40px;
-        font-size: 40px;
+        padding: 0 0 12px;
+        font-size: 20px;
     }
 
     .timer{
         text-align: center;
         display: flex;
         flex-direction: column;
-        gap:50px;
+        gap:12px;
     }
 
     .timer-func{
-        font-size: 170px;
+        font-size: 56px;
         margin: auto;
         line-height: 1;
     }
@@ -130,22 +133,23 @@ onUnmounted(() => clearInterval(interval))
         margin: auto;
         display:flex;
         justify-content: center;
-        gap: 30px;
+        flex-wrap: wrap;
+        gap: 8px;
     }
 
     .selector button{
-        font-size: 20px;
+        font-size: 13px;
         background-color: var(--btn);
         border-radius: 10px;
         color: white;
-        padding: 15px;
+        padding: 8px 10px;
         border:0px;
         transition: background-color 0.2s ease, transform 0.2s ease;
     }
 
     .selector button.active{
         background-color: var(--btn-active);
-        transform: scale(1.2)
+        transform: scale(1.05)
     }
 
     .selector button:hover{
@@ -156,9 +160,9 @@ onUnmounted(() => clearInterval(interval))
 
     .status button {
         font-family: Verdana, Geneva, Tahoma, sans-serif;
-        font-size: 30px;
+        font-size: 20px;
         border-radius: 15px;
-        padding: 5px 40px;
+        padding: 5px 28px;
         color: rgb(51, 51, 51);
         border:0px;
         box-shadow:0 5px 0 rgb(106, 106, 106);
