@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import Landing from '../components/landing/landing.vue'
 import Landinginfo from '../components/landing-info/landing-info.vue'
+import 'bootstrap/dist/css/bootstrap.min.css'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
