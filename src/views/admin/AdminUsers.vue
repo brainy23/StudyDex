@@ -46,7 +46,7 @@ const sampleData = [
   },
   {
    'id':4,
-   'display_name': "idek70",
+   'display_name': "idek70_superlongnametoseeifthiscrapbreaks",
    'school_level_id': 3,
    'created_at': '2026-10-19',
    'avatar_choice': 'male',
@@ -148,12 +148,12 @@ function arrow(key) {
           </div>
 
           <div v-for="user in displayedUsers" class="row">
-            <span style="font-weight: bold;">{{ user.display_name }}</span>
+            <span style="font-weight: bold;min-width: 0;overflow-wrap: anywhere;">{{ user.display_name }}</span>
             <span>{{ user.email }}</span>
             <span>{{ user.avatar_choice.charAt(0).toUpperCase() + user.avatar_choice.slice(1)}}</span>
             <span>P{{ user.school_level_id }}</span>
             <span>{{ user.created_at }}</span>
-            <span><button id="ban-button">Ban</button><button id="remove-button">Remove</button></span>
+            <span><button id="unban-button">Unban</button><button id="ban-button">Ban</button><button id="remove-button">Remove</button></span>
           </div>
           <p class="row" v-if="filteredData.length == 0">No such user.</p>
         </div>
@@ -209,7 +209,7 @@ function arrow(key) {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px 90px minmax(0, 1fr) minmax(0, 1fr);
   padding: 8px 12px;
   background-color: rgb(236, 235, 235);
   margin-top: 8px;
@@ -229,6 +229,15 @@ button {
   background: transparent;
   cursor: pointer;
   font-size: 1rem;
+}
+
+#unban-button{
+  background-color: rgb(0, 193, 74);
+  border-radius: 9px;
+  font-size: small;
+  padding: 3px 8px;
+  color: rgb(255, 255, 255);
+  margin-right: 8px;
 }
 
 #ban-button{
