@@ -3,6 +3,7 @@ import HomeView from '../views/HomeView.vue'
 import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import TimerView from '../views/timerView.vue'
 import RewardsView from '../views/rewardsView.vue'
+import QuizView from '@/views/quizView.vue'
 
 
 const router = createRouter({
@@ -28,6 +29,11 @@ const router = createRouter({
       path: '/rewards',
       name: 'rewards',
       component: RewardsView,
+    },
+    {
+      path: '/quiz',
+      name: 'quiz',
+      component: QuizView,
     }
 
   ],

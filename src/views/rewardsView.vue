@@ -14,6 +14,9 @@ async function loadPokemon() {
         id,
         name: data.name.replace(/-/g, ' '),
         img: data.sprites.other['official-artwork'].front_default,
+        sprite:
+            data.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
+            data.sprites.front_default,
     }
 }
 
@@ -24,7 +27,7 @@ function openPack() {
 }
 
 function onMove(e) {
-  if (stage.value === 'idle' || stage.value === 'zoom') return
+  if (stage.value !== 'ready' && stage.value !== 'tear') return
   const x = (e.clientX / window.innerWidth - 0.5) * 2
   const y = (e.clientY / window.innerHeight - 0.5) * 2
   ry.value = x * 18
@@ -35,7 +38,11 @@ function tear() {
   if (stage.value !== 'ready') return
   if (!card.value) return
   stage.value = 'tear'
-  setTimeout(() => (stage.value = 'revealed'), 900)
+  setTimeout(() => {
+        stage.value = 'revealed'
+        rx.value = 0
+        ry.value = 0
+    }, 900)
 }
 
 function reset() {
@@ -57,7 +64,10 @@ function reset() {
       >
         <div class="card">
           <img v-if="card" :src="card.img" alt="Your new card" />
-          <p></p>
+          <div v-if="card && stage === 'revealed'" class="sprite-stage">
+                <img :src="card.sprite" :alt="card.name">
+                <div class="sprite-shadow"></div>
+            </div>
         </div>
         <img class="pack-body" src="../../public/assets/pack_unopened.png" alt="pack" />
         <img class="pack-top" src="../../public/assets/pack_unopened.png" alt="pack" />
@@ -138,7 +148,8 @@ function reset() {
         transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
     }
     .stage-zoom, .stage-ready, .stage-tear, .stage-revealed{ --s: 1.8; }
-    .stage-ready, .stage-tear, .stage-revealed{ transition: transform 0.1s ease-out; }
+    .stage-ready, .stage-tear{ transition: transform 0.1s ease-out; }
+    .stage-revealed{ transition: transform 0.5s ease-out; }
     .stage-ready{ cursor: pointer; }
 
     .pack-wrap > img{
@@ -169,7 +180,7 @@ function reset() {
         grid-area: 1 / 1;
         z-index: 1;
         place-self: center;
-        width: 150%;
+        width: 160%;
         opacity: 0;
         transition: transform 1s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.7s ease;
     }
@@ -189,15 +200,59 @@ function reset() {
         background: linear-gradient(rgb(255, 230, 0, 0.6),rgb(255, 230, 0, 0.0) );
     }
 
-    .card img{ width: 0; min-width: 100%; }
+    .card > img{ width: 0; min-width: 100%; }
+ 
+    .card{ position: relative; }
+ 
+    .sprite-stage{
+        position: absolute;
+        left: 50%;
+        bottom: 25%;
+        translate: -50% 0;
+        scale: 1.3;
+        transform-origin: 50% 100%;
+        z-index: 2;
+        pointer-events: none;
+        animation: pop 0.5s 0.3s ease-out both;
+    }
+    .sprite-stage img{
+        display: block;
+        image-rendering: pixelated;
+        animation: bob 1.2s ease-in-out infinite;
+    }
+    .sprite-shadow{
+        position: absolute;
+        left: 50%;
+        bottom: -3px;
+        translate: -50% 0;
+        width: 90%;
+        height: 6px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.5), transparent 70%);
+        animation: shadow 1.2s ease-in-out infinite;
+    }
+ 
+    @keyframes pop{
+        from{ opacity: 0; transform: translateY(20px) scale(0.6); }
+        to{ opacity: 1; transform: none; }
+    }
+    @keyframes bob{
+        0%, 100%{ transform: translateY(0); }
+        50%{ transform: translateY(-4px); }
+    }
+    @keyframes shadow{
+        0%, 100%{ transform: scale(1); opacity: 0.6; }
+        50%{ transform: scale(0.8); opacity: 0.4; }
+    }
     .stage-tear .card{
         opacity: 1;
         transform: translateY(-45%);
     }
     .stage-revealed .card{
         opacity: 1;
-        transform: translateY(0) scale(1.3);
+        transform: translateY(-6%) scale(1.6);
     }
+    .stage-revealed .card > img{ opacity: 0.75; }
 
     .tear-line{
         grid-area: 1 / 1;
