@@ -181,6 +181,7 @@ function arrow(key) {
 .search-prompt {
   background-color: #fee67b;
   margin-right: 10px;
+  border: 1.5px solid #f9d11f;
   border-radius: 6px;
   padding: 5px;
   color: rgb(0, 0, 0);
@@ -188,7 +189,7 @@ function arrow(key) {
 }
 
 .search-bar {
-  border: 0px;
+  border: 1px solid grey;
   border-radius: 6px;
   background-color: #d7d6d6;
   padding: 2.5px;
