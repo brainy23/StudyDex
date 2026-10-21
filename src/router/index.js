@@ -4,6 +4,7 @@ import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import TimerView from '../views/timerView.vue'
 import RewardsView from '../views/rewardsView.vue'
 import QuizView from '@/views/quizView.vue'
+import StarterView from '../views/starterSelectionView.vue'
 
 
 const router = createRouter({
@@ -34,6 +35,11 @@ const router = createRouter({
       path: '/quiz',
       name: 'quiz',
       component: QuizView,
+    },
+        {
+      path: '/starter',
+      name: 'starter',
+      component: StarterView,
     }
 
   ],
