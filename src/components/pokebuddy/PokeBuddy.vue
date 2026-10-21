@@ -13,6 +13,12 @@ const POKEAPI = 'https://pokeapi.co/api/v2'
 const max_xp = 100
 const GEN1_COUNT = 151
 
+
+const showMaxedGift = ref(false)
+const isOpeningGift = ref(false)
+const giftError = ref('')
+
+
 // Available starter Pokémon.
 // Evolution information is retrieved from PokéAPI.
 const starterPokemon = [
@@ -363,70 +369,70 @@ async function addPokemon(poke) {
 // Returns a random, unowned, first-stage Gen 1 Pokémon.
 // Does not add the Pokémon to the user's collection.
 
-async function addRandomPokemon() {
+async function addRandomPokemon(forXPTransfer = false) {
   if (
     isAddingRandomPokemon.value ||
     isEvolving.value ||
-    isFetchingEvolution.value
+    isFetchingEvolution.value ||
+    (
+      !forXPTransfer &&
+      (isProcessingXP.value || showXPTransfer.value)
+    )
   ) return
 
   isAddingRandomPokemon.value = true
   randomPokemonNotice.value = ''
 
   try {
-    // Generate unowned Gen 1 IDs.
     const availableIds = Array.from(
       { length: GEN1_COUNT },
       (_, i) => i + 1
     ).filter(id => !ownsPokemon(id))
 
     while (availableIds.length > 0) {
-      // Randomly choose an untested ID.
       const randomIndex = Math.floor(
         Math.random() * availableIds.length
       )
 
-      const [randomId] = availableIds.splice(
-        randomIndex,
-        1
-      )
+      // Remove this candidate so it cannot be picked again.
+      const [randomId] = availableIds.splice(randomIndex, 1)
 
-      // Check evolution stage.
       const speciesData = await fetchSpecies(randomId)
 
+      // Only award first-stage Pokémon.
       if (speciesData.evolves_from_species !== null) {
         continue
       }
 
-      // Retrieve Pokémon details and both images.
       const data = await fetchPokemon(randomId)
       const newPokemon = createPokemon(data)
 
-      // Add to user's collection.
+      // All new Pokémon start at 0/100 XP,
+      // including Pokémon without another evolution.
       user.value.pokemons.push(newPokemon)
 
-      // Reward modal uses the animated GIF.
       rewardedPokemon.value = {
         name: newPokemon.name,
         image: newPokemon.animated_img
       }
 
-      showPokemonReward.value = true
+      // For gifts, apply the remaining XP before showing the reward.
+      if (!forXPTransfer) {
+        showPokemonReward.value = true
+      }
 
-      console.log('New Pokémon added:', newPokemon)
-
-      return
+      return newPokemon
     }
 
-    randomPokemonNotice.value =
-      'You already own all available first-stage Gen 1 Pokémon!'
-
+    randomPokemonNotice.value = forXPTransfer
+      ? 'No eligible unowned Pokémon remain. Your leftover XP is kept.'
+      : 'You already own all available first-stage Gen 1 Pokémon!'
   } catch (error) {
     console.error('Unable to add Pokémon:', error)
 
-    randomPokemonNotice.value =
-      'Unable to find a Pokémon. Please try again.'
-
+    randomPokemonNotice.value = forXPTransfer
+      ? 'Unable to find a Pokémon. Your leftover XP is kept. Please try again.'
+      : 'Unable to find a Pokémon. Please try again.'
   } finally {
     isAddingRandomPokemon.value = false
   }
@@ -438,6 +444,10 @@ async function addRandomPokemon() {
 
 function closePokemonReward() {
   showPokemonReward.value = false
+
+  if (pendingXP.value > 0) {
+    showXPTransfer.value = true
+  }
 }
 
 // =====================================================
@@ -519,7 +529,13 @@ function updatePokemonForm(poke, data, stageChange, xp) {
 
   poke.id = data.id
   poke.name = capitalise(data.name)
-  poke.evolution_stage += stageChange
+  // Preserve the numeric stage separately because 'MAX' is a string.
+  const currentStage =
+    poke.evolution_stage === 'MAX'
+      ? (poke.stageBeforeMax ?? 0)
+      : poke.evolution_stage
+
+  poke.evolution_stage = Math.max(0, currentStage + stageChange)
   poke.xp = xp
 
   poke.animated_img = images.animated_img
@@ -544,7 +560,7 @@ function updatePokemonForm(poke, data, stageChange, xp) {
 // EVOLUTION ANIMATION
 // =====================================================
 
-async function playEvolution(poke, newName) {
+async function playEvolution(poke, newName, remainingXP) {
   isEvolving.value = true
   isRevealing.value = false
   isSwapping.value = false
@@ -555,31 +571,29 @@ async function playEvolution(poke, newName) {
   try {
     const data = await fetchPokemon(newName)
 
-    // Phase 1: Flash old Pokémon.
     await wait(1600)
 
-    // Phase 2: White burst.
     isSwapping.value = true
     await wait(250)
 
-    // Update form and both image formats.
-    updatePokemonForm(poke, data, 1, 0)
+    updatePokemonForm(poke, data, 1, remainingXP)
 
     isSwapping.value = false
-
-    // Phase 3: Reveal new animated Pokémon.
     isRevealing.value = true
+
     await wait(1600)
 
     evolutionMessage.value =
       `${oldName} evolved into ${poke.name}! 🎉`
 
+    return true
   } catch (error) {
     console.error('Evolution failed:', error)
 
     evolutionMessage.value =
-      'Evolution failed. Please try again.'
+      'Evolution failed. Your reward is still available. Please retry.'
 
+    return false
   } finally {
     isEvolving.value = false
     isRevealing.value = false
@@ -645,108 +659,67 @@ async function updateXP(action) {
 
   if (
     !poke ||
+    isProcessingXP.value ||
     isEvolving.value ||
-    isFetchingEvolution.value
+    isFetchingEvolution.value ||
+    showXPTransfer.value ||
+    showPokemonReward.value ||
+    showMaxedGift.value
   ) return
 
+  // Resolve any existing reward before subtracting XP.
+  if (action === 'minus' && pendingXP.value > 0) return
+
+  isProcessingXP.value = true
   evolutionMessage.value = ''
 
-  // -------------------------------
-  // ADD XP
-  // -------------------------------
+  try {
+    if (action === 'add') {
+      // On retry, reuse the existing reward instead of awarding again.
+      if (pendingXP.value === 0) {
+        lastXPGain.value = Math.floor(Math.random() * 41) + 10
+        pendingXP.value = lastXPGain.value
+      }
 
-  if (action === 'add') {
-    if (poke.isDefeated) {
-      poke.isDefeated = false
-    }
+      await applyPendingXP(poke)
+    } else if (action === 'minus') {
+      if (poke.isDefeated) return
 
-    const newXP = poke.xp + 10
+      const newXP = poke.xp - 10
 
-    if (newXP < max_xp) {
-      poke.xp = newXP
-      return
-    }
+      if (newXP >= 0) {
+        poke.xp = newXP
 
-    isFetchingEvolution.value = true
-
-    try {
-      const evolution = await getEvolutionOptions(
-        poke.name
-      )
-
-      // Already at final evolution.
-      if (evolution.next.length === 0) {
-        poke.xp = max_xp
-
-        alert(
-          `${poke.name} has reached its maximum evolution!`
-        )
+        if (
+          poke.evolution_stage === 'MAX' &&
+          poke.xp < max_xp
+        ) {
+          poke.evolution_stage = poke.stageBeforeMax ?? 0
+        }
 
         return
       }
 
-      // Randomly select branching evolution.
-      const randomIndex = Math.floor(
-        Math.random() * evolution.next.length
-      )
-
-      const newName = evolution.next[randomIndex]
-
-      await playEvolution(poke, newName)
-
-    } catch (error) {
-      console.error('Unable to evolve:', error)
-
-      evolutionMessage.value =
-        'Unable to retrieve evolution. Please try again.'
-
-    } finally {
-      isFetchingEvolution.value = false
-    }
-
-  // -------------------------------
-  // MINUS XP
-  // -------------------------------
-
-  } else if (action === 'minus') {
-    if (poke.isDefeated) return
-
-    const newXP = poke.xp - 10
-
-    if (newXP >= 0) {
-      poke.xp = newXP
-      return
-    }
-
-    isFetchingEvolution.value = true
-
-    try {
-      const evolution = await getEvolutionOptions(
-        poke.name
-      )
+      const evolution = await getEvolutionOptions(poke.name)
 
       if (evolution.previous) {
-        await playDevolution(
-          poke,
-          evolution.previous
-        )
-
+        await playDevolution(poke, evolution.previous)
       } else {
         poke.xp = 0
         poke.isDefeated = true
 
-        alert(`${poke.name} has been defeated!`)
+        evolutionMessage.value = `${poke.name} has been defeated!`
       }
-
-    } catch (error) {
-      console.error('Unable to devolve:', error)
-
-      evolutionMessage.value =
-        'Unable to retrieve devolution. Please try again.'
-
-    } finally {
-      isFetchingEvolution.value = false
     }
+  } catch (error) {
+    console.error('Unable to update XP:', error)
+
+    evolutionMessage.value =
+      action === 'add'
+        ? 'Unable to apply XP. Your reward is kept — press Retry XP.'
+        : 'Unable to subtract XP. Please try again.'
+  } finally {
+    isProcessingXP.value = false
   }
 }
 
@@ -761,6 +734,231 @@ onMounted(() => {
 
 onUnmounted(() => {
 })
+
+
+const isProcessingXP = ref(false)
+const pendingXP = ref(0)
+const lastXPGain = ref(0)
+
+const showXPTransfer = ref(false)
+const maxEvolutionName = ref('')
+const xpTransferError = ref('')
+
+const xpRecipients = computed(() =>
+  user.value.pokemons.filter(p =>
+    p.evolution_stage !== 'MAX' &&
+    p.species !== user.value.active_pokemon_species
+  )
+)
+
+function markPokemonMax(poke) {
+  if (poke.evolution_stage !== 'MAX') {
+    poke.stageBeforeMax = poke.evolution_stage
+    poke.evolution_stage = 'MAX'
+  }
+}
+
+// Check other Pokémon before displaying transfer choices.
+// This also identifies Pokémon that have no Gen 1 evolution.
+async function refreshXPRecipients() {
+  const candidates = user.value.pokemons.filter(
+    p => p.evolution_stage !== 'MAX' && p.xp >= max_xp
+  )
+
+  await Promise.all(
+    candidates.map(async p => {
+      const options = await getEvolutionOptions(p.name)
+
+      if (options.next.length === 0) {
+        markPokemonMax(p)
+      }
+    })
+  )
+}
+
+async function openXPTransfer(poke) {
+  maxEvolutionName.value = poke.name
+  xpTransferError.value = ''
+  giftError.value = ''
+
+  try {
+    await refreshXPRecipients()
+
+    if (
+      pendingXP.value > 0 &&
+      xpRecipients.value.length === 0
+    ) {
+      // Show the gift invitation before fetching a Pokémon.
+      showXPTransfer.value = false
+      showMaxedGift.value = true
+      return
+    }
+
+    showXPTransfer.value = true
+  } catch (error) {
+    console.error(error)
+
+    xpTransferError.value =
+      'Unable to load Pokémon. Your remaining XP is kept.'
+
+    showXPTransfer.value = true
+  }
+}
+
+// Applies the existing pending reward without generating another reward.
+async function applyPendingXP(poke) {
+  if (!poke || pendingXP.value <= 0) return
+
+  // A Pokémon that has already filled its final XP bar.
+  if (poke.evolution_stage === 'MAX') {
+    await openXPTransfer(poke)
+    return
+  }
+
+  while (pendingXP.value > 0) {
+    const totalXP = poke.xp + pendingXP.value
+
+    if (totalXP < max_xp) {
+      poke.xp = totalXP
+      poke.isDefeated = false
+      pendingXP.value = 0
+      return
+    }
+
+    const evolution = await getEvolutionOptions(poke.name)
+    const remainingXP = totalXP - max_xp
+
+    // Final form becomes MAX only after reaching 100 XP.
+    if (evolution.next.length === 0) {
+      poke.xp = max_xp
+      poke.isDefeated = false
+      markPokemonMax(poke)
+
+      pendingXP.value = remainingXP
+
+      await openXPTransfer(poke)
+      return
+    }
+
+    const newName = evolution.next[
+      Math.floor(Math.random() * evolution.next.length)
+    ]
+
+    // Apply overflow after the evolution succeeds.
+    const succeeded = await playEvolution(poke, newName, 0)
+
+    if (!succeeded) {
+      throw new Error(
+        'Evolution failed. Your XP has been kept for retry.'
+      )
+    }
+
+    poke.isDefeated = false
+    pendingXP.value = remainingXP
+
+    // The next loop applies the leftover XP to the new form.
+  }
+}
+
+async function transferRemainingXP(poke) {
+  if (
+    isProcessingXP.value ||
+    pendingXP.value <= 0 ||
+    !xpRecipients.value.includes(poke)
+  ) return
+
+  isProcessingXP.value = true
+  xpTransferError.value = ''
+
+  try {
+    // Validate the recipient before changing the active buddy.
+    const options = await getEvolutionOptions(poke.name)
+
+    if ( poke.evolution_stage === 'MAX' || (options.next.length === 0 && poke.xp >= max_xp)
+      ) {
+      markPokemonMax(poke)
+
+      xpTransferError.value =
+        `${poke.name} is already at maximum evolution. Choose another Pokémon.`
+
+      return
+    }
+
+    // Use your existing function to update the Battle Buddy.
+    selectPoke(poke)
+
+    showXPTransfer.value = false
+
+    await applyPendingXP(poke)
+  } catch (error) {
+    console.error(error)
+
+    evolutionMessage.value =
+      'Unable to apply XP. Your remaining XP is saved for retry.'
+
+    // If selection already changed, the main XP button retries
+    // the same pending reward on that active Pokémon.
+    if (showXPTransfer.value) {
+      xpTransferError.value = 'Unable to check this Pokémon. Please retry.'
+    }
+  } finally {
+    isProcessingXP.value = false
+  }
+}
+
+async function openMaxedGift() {
+  if (
+    isOpeningGift.value ||
+    isProcessingXP.value ||
+    isAddingRandomPokemon.value
+  ) return
+
+  isOpeningGift.value = true
+  isProcessingXP.value = true
+  giftError.value = ''
+
+  try {
+    const newPokemon = await addRandomPokemon(true)
+
+    if (!newPokemon) {
+      giftError.value =
+        randomPokemonNotice.value ||
+        'Unable to open your gift. Please try again.'
+
+      return
+    }
+
+    // Make the gift Pokémon the active Battle Buddy.
+    selectPoke(newPokemon)
+
+    // New Pokémon starts at 0 XP.
+    // Leftover XP from a 10–50 XP reward fits in its 100 XP bar.
+    const transferredXP = pendingXP.value
+
+    newPokemon.xp = transferredXP
+    newPokemon.isDefeated = false
+    pendingXP.value = 0
+
+    rewardedPokemon.value = {
+      name: newPokemon.name,
+      image: newPokemon.animated_img || newPokemon.static_img,
+      transferredXP,
+      xp: newPokemon.xp
+    }
+
+    showMaxedGift.value = false
+    showXPTransfer.value = false
+    showPokemonReward.value = true
+  } catch (error) {
+    console.error('Unable to open gift:', error)
+
+    giftError.value =
+      'Unable to open your gift. Your remaining XP is kept.'
+  } finally {
+    isOpeningGift.value = false
+    isProcessingXP.value = false
+  }
+}
 </script>
 
 
@@ -858,39 +1056,76 @@ onUnmounted(() => {
               </p>
 
               <!-- Individual Pokémon XP -->
-              <div
-                v-if="activePokemon"
-                class="xp-section"
-              >
-                <p>XP Progress</p>
+              <div v-if="activePokemon" class="xp-section">
+                <p>
+                  {{
+                    activePokemon.evolution_stage === 'MAX'
+                      ? 'Maximum evolution reached!'
+                      : 'XP Progress'
+                  }}
+                </p>
 
                 <div class="xp-bar">
                   <div
                     class="xp-fill"
-                    :style="{ width: activePokemon.xp + '%' }"
+                    :style="{
+                      width:
+                        activePokemon.evolution_stage === 'MAX'
+                          ? '100%'
+                          : `${activePokemon.xp / max_xp * 100}%`
+                    }"
                   ></div>
                 </div>
 
                 <p>
-                  {{ activePokemon.xp }} / {{ max_xp }} XP
+                  {{
+                    activePokemon.evolution_stage === 'MAX'
+                      ? 'MAX'
+                      : `${activePokemon.xp} / ${max_xp} XP`
+                  }}
                 </p>
               </div>
 
               <div class="xp-buttons">
                 <button
-                  :disabled="isEvolving || isFetchingEvolution"
+                  type="button"
+                  :disabled="
+                    isProcessingXP ||
+                    isEvolving ||
+                    isFetchingEvolution ||
+                    showXPTransfer ||
+                    showPokemonReward
+                  "
                   @click="updateXP('add')"
                 >
-                  Add XP
+                  {{
+                    isProcessingXP
+                      ? 'Updating…'
+                      : pendingXP > 0
+                        ? `Retry XP (${pendingXP})`
+                        : '🎲 Add 10–50 XP'
+                  }}
                 </button>
 
                 <button
-                  :disabled="isEvolving || isFetchingEvolution"
+                  type="button"
+                  :disabled="
+                    isProcessingXP ||
+                    isEvolving ||
+                    isFetchingEvolution ||
+                    pendingXP > 0 ||
+                    showXPTransfer ||
+                    showPokemonReward
+                  "
                   @click="updateXP('minus')"
                 >
-                  Minus XP
+                  Minus 10 XP
                 </button>
               </div>
+
+              <p v-if="lastXPGain" class="evolution-message">
+                Last reward: +{{ lastXPGain }} XP
+              </p>
 
             </div>
           </div>
@@ -919,7 +1154,11 @@ onUnmounted(() => {
                 </p>
 
                 <p>
-                  XP: {{ poke.xp }}/100
+                  {{
+                    poke.evolution_stage === 'MAX'
+                      ? 'Maximum evolution'
+                      : `XP: ${poke.xp}/${max_xp}`
+                  }}
                 </p>
 
                 <button
@@ -958,16 +1197,16 @@ onUnmounted(() => {
       type="button"
       class="random-pokemon-button"
       :disabled="isAddingRandomPokemon || isEvolving"
-      @click="addRandomPokemon"
+      @click="addRandomPokemon()"
     >
       {{ isAddingRandomPokemon ? 'Finding Pokémon...' : '🎲 Add Random Pokémon' }}
     </button>
 
 
-      <!-- POKEMON REWARD MODAL -->
+      <!-- POKÉMON REWARD MODAL -->
       <div
         v-if="showPokemonReward && rewardedPokemon"
-        class="modal show d-block"
+        class="modal fade show d-block"
         tabindex="-1"
         role="dialog"
         aria-modal="true"
@@ -976,9 +1215,9 @@ onUnmounted(() => {
         @keydown.esc="closePokemonReward"
       >
         <div class="modal-dialog modal-dialog-centered">
-
-          <div class="modal-content rounded-4 shadow-lg border-0 reward-pop">
-
+          <div
+            class="modal-content rounded-4 shadow-lg border-0 reward-pop"
+          >
             <!-- HEADER -->
             <div class="modal-header border-0 pb-0">
               <span class="text-muted small fw-bold">
@@ -995,7 +1234,6 @@ onUnmounted(() => {
 
             <!-- BODY -->
             <div class="modal-body text-center px-4 pb-4">
-
               <div class="fs-3 mb-2">✨ ⭐ ✨</div>
 
               <h2
@@ -1005,25 +1243,16 @@ onUnmounted(() => {
                 You Got a Pokémon!
               </h2>
 
-              <!-- POKEMON IMAGE WITH SPARKLES -->
+              <!-- POKÉMON IMAGE WITH SPARKLES -->
               <div
                 class="reward-image-box bg-warning bg-opacity-25 rounded-4
                       d-flex justify-content-center align-items-center
                       mx-auto mb-3"
               >
-                <!-- SPARKLE EFFECT -->
                 <div class="reward-sparkles" aria-hidden="true">
-                  <span>✦</span>
-                  <span>✦</span>
-                  <span>✦</span>
-                  <span>✦</span>
-                  <span>✦</span>
-                  <span>✦</span>
-                  <span>✦</span>
-                  <span>✦</span>
+                  <span v-for="n in 8" :key="n">✦</span>
                 </div>
 
-                <!-- POKEMON SPRITE -->
                 <img
                   v-if="rewardedPokemon.image"
                   :src="rewardedPokemon.image"
@@ -1032,13 +1261,48 @@ onUnmounted(() => {
                 />
               </div>
 
-
-              <!-- POKEMON NAME -->
+              <!-- POKÉMON NAME -->
               <h3 class="fw-bold text-capitalize mb-2">
                 {{ rewardedPokemon.name }}
               </h3>
 
-              <p class="text-secondary small mb-4">
+              <!-- GIFT WITH AUTOMATIC XP TRANSFER -->
+              <div
+                v-if="rewardedPokemon.transferredXP > 0"
+                class="mb-4"
+              >
+                <p class="text-secondary small mb-3">
+                  Meet your new Battle Buddy!
+                  Your remaining XP has been added automatically.
+                </p>
+
+                <p class="text-success fw-bold mb-2">
+                  +{{ rewardedPokemon.transferredXP }} XP added!
+                </p>
+
+                <div
+                  class="progress"
+                  role="progressbar"
+                  aria-label="Pokémon XP"
+                  :aria-valuenow="rewardedPokemon.xp"
+                  :aria-valuemin="0"
+                  :aria-valuemax="max_xp"
+                >
+                  <div
+                    class="progress-bar bg-success"
+                    :style="{
+                      width: `${(rewardedPokemon.xp / max_xp) * 100}%`
+                    }"
+                  ></div>
+                </div>
+
+                <p class="small mt-2 mb-0">
+                  XP: {{ rewardedPokemon.xp }} / {{ max_xp }}
+                </p>
+              </div>
+
+              <!-- NORMAL RANDOM POKÉMON REWARD -->
+              <p v-else class="text-secondary small mb-4">
                 A new Pokémon has joined your adventure!
               </p>
 
@@ -1050,11 +1314,16 @@ onUnmounted(() => {
               >
                 Awesome! 🎉
               </button>
-
             </div>
           </div>
         </div>
       </div>
+
+      <!-- REWARD MODAL BACKDROP -->
+      <div
+        v-if="showPokemonReward && rewardedPokemon"
+        class="modal-backdrop fade show"
+      ></div>
 
       <!-- BOOTSTRAP BACKDROP -->
       <div
@@ -1062,6 +1331,154 @@ onUnmounted(() => {
         class="modal-backdrop fade show"
       ></div>
 
+      <!-- MAX EVOLUTION / LEFTOVER XP -->
+        <div
+          v-if="showXPTransfer"
+          class="modal show d-block"
+          tabindex="-1"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="xpTransferTitle"
+        >
+          <div class="modal-dialog modal-dialog-centered xp-transfer-dialog">
+            <div class="modal-content rounded-4 shadow-lg border-0">
+
+              <div class="modal-header border-0">
+                <h2 id="xpTransferTitle" class="fs-5 mb-0">
+                  Maximum Evolution! 🎉
+                </h2>
+              </div>
+
+              <div class="modal-body text-center">
+                <h3 class="fs-5">
+                  {{ maxEvolutionName }} has reached max evolution!
+                </h3>
+
+                <template v-if="pendingXP > 0">
+                  <p>
+                    You have <strong>{{ pendingXP }} XP</strong> left to add.
+                    Which Pokémon would you like to give it to?
+                  </p>
+
+                  <p class="small text-secondary">
+                    Your selected Pokémon will become your new Battle Buddy.
+                  </p>
+
+                  <p v-if="xpTransferError" class="text-danger" role="alert">
+                    {{ xpTransferError }}
+                  </p>
+
+                  <div
+                    v-if="xpRecipients.length"
+                    class="row g-3 xp-recipient-list"
+                  >
+                    <div
+                      v-for="poke in xpRecipients"
+                      :key="poke.originalSpeciesId"
+                      class="col-6 col-sm-4"
+                    >
+                      <button
+                        type="button"
+                        class="btn btn-outline-dark w-100 h-100 rounded-3 p-2"
+                        :disabled="isProcessingXP"
+                        @click="transferRemainingXP(poke)"
+                      >
+                        <img
+                          :src="poke.static_img || poke.animated_img"
+                          :alt="poke.name"
+                          class="xp-recipient-image"
+                        />
+
+                        <span class="d-block fw-bold">{{ poke.name }}</span>
+
+                        <span class="d-block small">
+                          {{ poke.xp }} / {{ max_xp }} XP
+                        </span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <p v-else class="text-secondary">
+                    No eligible Pokémon are available.
+                    Add another Pokémon, then use Retry XP to allocate your reward.
+                  </p>
+                </template>
+
+                <p v-else class="text-secondary">
+                  All of this round’s XP was used. No XP remains to transfer.
+                </p>
+
+                <button
+                  type="button"
+                  class="btn btn-warning fw-bold w-100 mt-4"
+                  :disabled="isProcessingXP"
+                  @click="showXPTransfer = false"
+                >
+                  {{ pendingXP > 0 ? 'Keep XP for later' : 'Awesome!' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="showXPTransfer"
+          class="modal-backdrop fade show"
+        ></div>
+
+        <!-- Gift invitation when every owned Pokémon is MAX -->
+        <div
+          v-if="showMaxedGift"
+          class="modal fade show d-block"
+          tabindex="-1"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="maxedGiftTitle"
+        >
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content rounded-4 shadow-lg border-0">
+              <div class="modal-body text-center p-4">
+                <h2 id="maxedGiftTitle" class="fs-5 mb-3">
+                  A gift for you! 🎁
+                </h2>
+
+                <p>
+                  You have maxed out
+                  <strong>{{ maxEvolutionName }}</strong>!
+                </p>
+
+                <p>
+                  None of your other Pokémon can receive more XP.
+                  Here is a gift from us to you!
+                </p>
+
+                <p class="small">
+                  Your new Pokémon will receive your remaining
+                  <strong>{{ pendingXP }} XP</strong>
+                  and become your Battle Buddy.
+                </p>
+
+                <p v-if="giftError" class="text-danger small" role="alert">
+                  {{ giftError }}
+                </p>
+
+                <button
+                  type="button"
+                  class="btn btn-warning fw-bold w-100 mt-3"
+                  :disabled="isOpeningGift || isProcessingXP || isAddingRandomPokemon"
+                  @click="openMaxedGift"
+                >
+                  {{ isOpeningGift ? 'Opening...' : 'Open 🎁' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div
+          v-if="showMaxedGift"
+          class="modal-backdrop fade show"
+        ></div>
   </main>
 </template>
 
@@ -1972,6 +2389,25 @@ button:disabled {
   .reward-sparkles {
     display: none;
   }
+}
+
+
+.modal-dialog.xp-transfer-dialog {
+  max-width: 560px;
+}
+
+.xp-recipient-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.xp-recipient-image {
+  display: block;
+  width: 80px;
+  height: 80px;
+  margin: 0 auto;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 
