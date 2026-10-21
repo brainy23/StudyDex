@@ -153,7 +153,7 @@ const locked = computed(() => {
         <RouterLink v-if="needsEmailConfirmation" to="/login">Log in after confirming</RouterLink>
         <RouterLink to="/landing-info">Back to StudyDex</RouterLink>
       </div>
-      <form v-else class="container" @submit.prevent="submitRegistration">
+      <form v-else class="container" @submit.prevent="submitRegistration" style="margin-top: 300px">
         <fieldset :disabled="submitting">
           <p class="step-counter">Step {{ question_no }} of 5</p>
           <p class="question-prompt" v-if="question_no == 3">Which Primary level are you in?</p>
