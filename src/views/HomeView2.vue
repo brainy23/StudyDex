@@ -3,8 +3,10 @@
 // STUDYDEX HOME — STATE, API CALLS, AND INTERACTIONS
 // =====================================================
 import axios from 'axios'
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+
+
 
 const router = useRouter()
 
@@ -90,83 +92,257 @@ function toggleAutoPreview() {
   }
 }
 
-// Weather data
+// ==========================================
+// 1. WEATHER DATA
+// ==========================================
 const temperature = ref(null)
 const weatherCode = ref(null)
+const cloudCover = ref(null)
 const isDay = ref(true)
 
+const isRaining = ref(false)
+const rainDataAvailable = ref(false)
+
+// Default: Singapore (fallback location)
+const latitude = ref(1.3521)
+const longitude = ref(103.8198)
+
 let weatherInterval
+let rainInterval
 
-const weather_API_URL = 'https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.8198&current=temperature_2m,weather_code,is_day&timezone=Asia%2FSingapore'
+// ==========================================
+// 2. GET USER'S DEVICE LOCATION
+// ==========================================
+function getUserLocation() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      console.warn('Geolocation not supported')
+      resolve()
+      return
+    }
 
-// Fetch weather from Open-Meteo
-const fetchWeather = async () => {
- try {
-   const response = await axios.get(weather_API_URL)
-   console.log(response.data.current)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        latitude.value = position.coords.latitude
+        longitude.value = position.coords.longitude
 
-   temperature.value = response.data.current.temperature_2m
-   weatherCode.value = response.data.current.weather_code
-   console.log(weatherCode.value)
-   isDay.value = response.data.current.is_day === 1
-
- } catch (error) {
-   console.error('Error fetching weather:', error)
- }
+        console.log('Device location:', latitude.value, longitude.value)
+        resolve()
+      },
+      (error) => {
+        console.warn('Using default Singapore location:', error.message)
+        resolve()
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 10000,
+        maximumAge: 300000
+      }
+    )
+  })
 }
 
-const weatherImg = computed(() => {
- const code = weatherCode.value
- if (code === null) return null
+const showLocationModal = ref(false)
 
- // Rain / Thunderstorm (day or night)
- if (
-   (code >= 51 && code <= 67) ||
-   (code >= 80 && code <= 82) ||
-   (code >= 95 && code <= 99)
- ) {
-   return '/assets/rain.png'
- }
-
- // Nighttime
- if (!isDay.value) {
-   return '/assets/moon.png'
- }
-
- // Overcast / Fog
- if (code === 3 || code === 45 || code === 48) {
-   return '/assets/cloud.png'
- }
-
- // Partly cloudy
- if (code === 1 || code === 2) {
-   return '/assets/suncloud.png'
- }
-
- // Clear daytime
- return '/assets/sun.png'
-})
+let weatherStarted = false
+let weatherPageActive = false
 
 
+async function chooseLocation(useDeviceLocation) {
+  console.log('hai in choose location')
+  if (weatherStarted) return
 
-onMounted(() => {
-  clockInterval = setInterval(() => {
-    currentTime.value = new Date()
-  }, 1000)
+  weatherStarted = true
 
+  // Close location modal
+  showLocationModal.value = false
+
+  // Request device location if user agrees
+  if (useDeviceLocation) {
+    await getUserLocation()
+  }
+
+  if (!weatherPageActive) return
+
+  // Fetch weather using selected location
   fetchWeather()
- // Refresh weather every 10 minutes
- weatherInterval = setInterval(fetchWeather, 600000)
+  fetchActualRain()
 
- getPokeBall()
+  // Update weather every 10 minutes
+  weatherInterval = setInterval(fetchWeather, 600000)
 
+  // Update rainfall every 5 minutes
+  rainInterval = setInterval(fetchActualRain, 300000)
+}
+
+
+
+// ==========================================
+// 3. FETCH WEATHER FROM OPEN-METEO
+// ==========================================
+async function fetchWeather() {
+  try {
+    const response = await axios.get(
+      'https://api.open-meteo.com/v1/forecast',
+      {
+        params: {
+          latitude: latitude.value,
+          longitude: longitude.value,
+          current: 'temperature_2m,weather_code,cloud_cover,is_day',
+          timezone: 'auto'
+        }
+      }
+    )
+
+    const current = response.data.current
+
+    temperature.value = current.temperature_2m
+    weatherCode.value = current.weather_code
+    cloudCover.value = current.cloud_cover
+    isDay.value = current.is_day === 1
+
+    console.log('Open-Meteo weather:', current)
+
+  } catch (error) {
+    console.error('Error fetching weather:', error)
+  }
+}
+
+// ==========================================
+// 4. CALCULATE DISTANCE BETWEEN LOCATIONS
+// ==========================================
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const toRad = deg => deg * Math.PI / 180
+
+  const dLat = toRad(lat2 - lat1)
+  const dLon = toRad(lon2 - lon1)
+
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+    Math.cos(toRad(lat2)) *
+    Math.sin(dLon / 2) ** 2
+
+  return 2 * R * Math.asin(Math.sqrt(a))
+}
+
+// ==========================================
+// 5. CHECK ACTUAL RAINFALL USING NEA
+// ==========================================
+async function fetchActualRain() {
+  try {
+    const response = await axios.get(
+      'https://api-open.data.gov.sg/v2/real-time/api/rainfall'
+    )
+
+    const { stations, readings } = response.data.data
+
+    const latest = readings?.[0]
+
+    if (!latest) {
+      rainDataAvailable.value = false
+      isRaining.value = false
+      return
+    }
+
+    // Only use recent rainfall measurements
+    const ageMinutes =
+      (Date.now() - new Date(latest.timestamp).getTime()) / 60000
+
+    if (
+      !Number.isFinite(ageMinutes) ||
+      ageMinutes < 0 ||
+      ageMinutes > 12
+    ) {
+      rainDataAvailable.value = false
+      isRaining.value = false
+      return
+    }
+
+    // Match each station with its rainfall reading
+    const rainValues = new Map(
+      latest.data.map(item => [
+        item.stationId,
+        item.value
+      ])
+    )
+
+    // Find nearest station with a valid reading
+    const nearestStation = stations
+      .filter(station =>
+        station.location &&
+        Number.isFinite(rainValues.get(station.id))
+      )
+      .map(station => ({
+        name: station.name,
+        distance: getDistance(
+          latitude.value,
+          longitude.value,
+          station.location.latitude,
+          station.location.longitude
+        ),
+        rainfall: rainValues.get(station.id)
+      }))
+      .filter(station => station.distance <= 2.5)
+      .sort((a, b) => a.distance - b.distance)[0]
+
+    // No sufficiently nearby station
+    if (!nearestStation) {
+      rainDataAvailable.value = false
+      isRaining.value = false
+      return
+    }
+
+    rainDataAvailable.value = true
+
+    // Rain only when nearby station measured rainfall
+    isRaining.value = nearestStation.rainfall > 0
+
+    console.log('Nearest station:', nearestStation.name)
+    console.log('Distance (km):', nearestStation.distance)
+    console.log('Rainfall (mm):', nearestStation.rainfall)
+    console.log('Is raining:', isRaining.value)
+
+  } catch (error) {
+    console.error('Error fetching NEA rainfall:', error)
+    rainDataAvailable.value = false
+    isRaining.value = false
+  }
+}
+
+// ==========================================
+// 6. DETERMINE WEATHER IMAGE
+// ==========================================
+const weatherImg = computed(() => {
+  if (weatherCode.value === null) return null
+
+  // Rain: based on observed NEA rainfall
+  if (isRaining.value) {
+    return '/assets/rain.png'
+  }
+
+  // Nighttime
+  if (!isDay.value) {
+    return '/assets/moon.png'
+  }
+
+  // Cloudy
+  if (cloudCover.value >= 70) {
+    return '/assets/cloud.png'
+  }
+
+  // Sunny + Cloudy
+  if (cloudCover.value >= 20) {
+    return '/assets/suncloud.png'
+  }
+
+  // Sunny
+  return '/assets/sun.png'
 })
 
-onUnmounted(() => {
-  clearInterval(clockInterval)
-  clearInterval(weatherInterval)
-  stopAutoPreview()
-})
+
+
 
 const hour = computed(() => {
   if (!live.value) return Number(previewHour.value)
@@ -316,7 +492,6 @@ const displayTime = computed(() => {
 })
 
 // RAININGGG
-const isRaining = ref(false)
 
 // Create drops once so they don't reset when the clock updates
 const rainDrops = Array.from({ length: 90 }, (_, id) => ({
@@ -333,83 +508,168 @@ const rainDrops = Array.from({ length: 90 }, (_, id) => ({
  // TODAY'S STUDY GOALS
 const goalsOpen = ref(false)
 
-// Sample data — replace with actual study progress later.
-// These targets represent cards planned for today.
-const dailyGoals = ref([
-  {
-    id: 'science',
-    subject: 'Science',
-    title: 'The Solar System',
-    completed: 6,
-    total: 10,
-    color: '#6489ed',
-  },
-  {
-    id: 'math',
-    subject: 'Mathematics',
-    title: 'Fractions',
-    completed: 3,
-    total: 8,
-    color: '#aa7be5',
-  },
-  {
-    id: 'english',
-    subject: 'English',
-    title: 'Vocabulary Practice',
-    completed: 0,
-    total: 12,
-    color: '#e8a34d',
-  },
-  {
-    id: 'biology',
-    subject: 'Biology',
-    title: 'Plant Cells',
-    completed: 8,
-    total: 8,
-    color: '#49ad94',
-  },
+// TO-DOS — shared by the notepad and the quest screen.
+// Completion dates follow the device's local calendar, not the town preview clock.
+const TODO_STORAGE_KEY = 'studydex-todos-v1'
+const todos = ref([])
+const todoDialog = ref(null)
+const todoInput = ref(null)
+const newTodoTitle = ref('')
+const editingTodoId = ref(null)
+const editTodoTitle = ref('')
+const todoStorageNotice = ref('')
+let todoMidnightTimer
+let todoReturnFocus
+
+const remainingTodoCount = computed(() => todos.value.filter(todo => !todo.completedAt).length)
+const completedTodoCount = computed(() => todos.value.length - remainingTodoCount.value)
+const orderedTodos = computed(() => [
+  ...todos.value.filter(todo => !todo.completedAt),
+  ...todos.value.filter(todo => todo.completedAt),
 ])
-
-// Show a maximum of four goals.
-const todayGoals = computed(() => dailyGoals.value.slice(0, 4))
-
-function goalCompleted(goal) {
-  return Math.min(Math.max(goal.completed, 0), Math.max(goal.total, 0))
-}
-
-function goalIsDone(goal) {
-  return goal.total > 0 && goalCompleted(goal) >= goal.total
-}
-
-function goalPercent(goal) {
-  if (goal.total <= 0) return 0
-  return Math.round((goalCompleted(goal) / goal.total) * 100)
-}
-
-const finishedGoals = computed(() =>
-  todayGoals.value.filter(goalIsDone).length
+const remainingTodoLabel = computed(() =>
+  `${remainingTodoCount.value} to-do${remainingTodoCount.value === 1 ? '' : 's'} remaining`
 )
 
-const totalGoalCards = computed(() =>
-  todayGoals.value.reduce((sum, goal) => sum + Math.max(goal.total, 0), 0)
-)
+function localDateKey(date = new Date()) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
-const completedGoalCards = computed(() =>
-  todayGoals.value.reduce((sum, goal) => sum + goalCompleted(goal), 0)
-)
+function removePastCompletedTodos() {
+  const today = localDateKey()
+  const kept = todos.value.filter(todo => !todo.completedAt || todo.completedAt >= today)
+  if (kept.length !== todos.value.length) todos.value = kept
+}
 
-const dailyGoalPercent = computed(() => {
-  if (!totalGoalCards.value) return 0
+function saveTodos() {
+  try {
+    localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(todos.value))
+    todoStorageNotice.value = ''
+  } catch {
+    todoStorageNotice.value = 'Browser storage is unavailable. Changes will only last for this visit.'
+  }
+}
 
-  return Math.round(
-    (completedGoalCards.value / totalGoalCards.value) * 100
-  )
+function loadTodos() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TODO_STORAGE_KEY) || '[]')
+    if (!Array.isArray(saved)) throw new Error('Invalid saved to-dos')
+    todos.value = saved.filter(todo =>
+      todo && typeof todo.id === 'string' && typeof todo.title === 'string' &&
+      todo.title.trim() && (todo.completedAt === null ||
+        (typeof todo.completedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todo.completedAt)))
+    )
+    removePastCompletedTodos()
+  } catch {
+    todoStorageNotice.value = 'Saved to-dos could not be loaded in this browser.'
+  }
+}
+
+watch(todos, saveTodos, { deep: true })
+
+function scheduleTodoCleanup() {
+  clearTimeout(todoMidnightTimer)
+  removePastCompletedTodos()
+  const now = new Date()
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  todoMidnightTimer = setTimeout(scheduleTodoCleanup, midnight - now + 100)
+}
+
+function refreshTodosOnReturn() {
+  if (!document.hidden) scheduleTodoCleanup()
+}
+
+async function openTodoModal() {
+  removePastCompletedTodos()
+  todoReturnFocus = document.activeElement
+  todoDialog.value?.showModal()
+  await nextTick()
+  todoInput.value?.focus()
+}
+
+function closeTodoModal() {
+  todoDialog.value?.close()
+}
+
+function onTodoModalClosed() {
+  editingTodoId.value = null
+  todoReturnFocus?.focus()
+}
+
+function addTodo() {
+  const title = newTodoTitle.value.trim()
+  if (!title) return
+  removePastCompletedTodos()
+  todos.value.push({ id: crypto.randomUUID(), title, completedAt: null })
+  newTodoTitle.value = ''
+  todoInput.value?.focus()
+}
+
+function toggleTodo(todo) {
+  removePastCompletedTodos()
+  if (!todos.value.some(item => item.id === todo.id)) return
+  todo.completedAt = todo.completedAt ? null : localDateKey()
+}
+
+async function startEditingTodo(todo) {
+  editingTodoId.value = todo.id
+  editTodoTitle.value = todo.title
+  await nextTick()
+  const input = todoDialog.value?.querySelector('.todo-edit-input')
+  input?.focus()
+  input?.select()
+}
+
+function saveTodoEdit(todo) {
+  const title = editTodoTitle.value.trim()
+  if (!title) return
+  todo.title = title
+  editingTodoId.value = null
+}
+
+function deleteTodo(todo) {
+  todos.value = todos.value.filter(item => item.id !== todo.id)
+  if (editingTodoId.value === todo.id) editingTodoId.value = null
+}
+
+
+onMounted(() => {
+  weatherPageActive = true
+  // Show location modal
+  showLocationModal.value = true
+  console.log('Page mounted — location modal:', showLocationModal.value)
+
+  // Existing to-do setup
+  loadTodos()
+  scheduleTodoCleanup()
+  document.addEventListener('visibilitychange', refreshTodosOnReturn)
+  window.addEventListener('focus', refreshTodosOnReturn)
+
+  // Update clock every second
+  clockInterval = setInterval(() => {
+    currentTime.value = new Date()
+  }, 1000)
+
+  // Retrieve Pokeball
+  getPokeBall()
+
+
 })
 
-const allGoalsDone = computed(() =>
-  todayGoals.value.length > 0 &&
-  finishedGoals.value === todayGoals.value.length
-)
+onUnmounted(() => {
+  weatherPageActive = false
+
+  clearTimeout(todoMidnightTimer)
+  document.removeEventListener('visibilitychange', refreshTodosOnReturn)
+  window.removeEventListener('focus', refreshTodosOnReturn)
+
+  clearInterval(clockInterval)
+  clearInterval(weatherInterval)
+  clearInterval(rainInterval)
+
+  stopAutoPreview()
+})
+
 
 function closeGoals() {
   goalsOpen.value = false
@@ -653,6 +913,26 @@ function selectProfileAction(action) {
   profileNotice.value = messages[action] || ''
 }
 
+// QUEST DEVICE TABS
+const questTab = ref('todos')
+
+// Sample owned Pokémon — replace with the user's inventory later.
+// Only include Pokémon the user actually owns.
+const ownedPokemon = ref([
+  { id: 25, name: 'Pikachu' },
+  { id: 133, name: 'Eevee' },
+  { id: 1, name: 'Bulbasaur' },
+  { id: 4, name: 'Charmander' },
+])
+
+function pokemonSprite(id) {
+  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
+}
+
+function chooseQuestBuddy(pokemon) {
+  setActiveBuddy(pokemon)
+}
+
 
 </script>
 
@@ -663,743 +943,887 @@ function selectProfileAction(action) {
   <div class="world-page">
 
     <!-- STUDYDEX LOGO AND CLOCK -->
-<header class="sd-hud">
-  <img
-    class="sd-logo"
-    :src="asset + 'studydex-logo.png'"
-    alt="StudyDex"
-  />
+  <header class="sd-hud">
+    <img
+      class="sd-logo"
+      :src="asset + 'studydex-logo.png'"
+      alt="StudyDex"
+    />
 
-  <div class="sd-clock" aria-label="Town time">
-    <img v-if="weatherImg" :src="weatherImg" alt="" style="width:40px;">
+    <div class="sd-clock" aria-label="Town time">
+      <img v-if="weatherImg" :src="weatherImg" alt="" style="width:40px;">
 
-    <span class="sd-clock-time">{{ displayTime }}</span>
+      <span class="sd-clock-time">{{ displayTime }}</span>
 
-    <span class="sd-clock-divider" aria-hidden="true"></span>
+      <span class="sd-clock-divider" aria-hidden="true"></span>
 
-    <span class="sd-clock-period">{{ lighting.name }}</span>
-  </div>
-</header>
+      <span class="sd-clock-period">{{ lighting.name }}</span>
+    </div>
+  </header>
 
-<!-- Click outside to dismiss the profile menu -->
-<div
-  v-if="profileMenuOpen"
-  class="trainer-menu-backdrop"
-  aria-hidden="true"
-  @click="closeProfileMenu()"
-></div>
+  <!-- Click outside to dismiss the profile menu -->
+  <div
+    v-if="profileMenuOpen"
+    class="trainer-menu-backdrop"
+    aria-hidden="true"
+    @click="closeProfileMenu()"
+  ></div>
 
-<!-- TOP-RIGHT TRAINER PROFILE -->
-<aside
-  class="trainer-hud"
-  aria-label="Trainer profile and active Pokémon"
-  @keydown.esc.stop.prevent="closeProfileMenu(true)"
->
-  <div class="trainer-profile-card">
-    <!-- CLICKABLE TRAINER HEADER -->
-    <button
-      ref="profileTrigger"
-      type="button"
-      class="trainer-profile-trigger"
-      :aria-expanded="profileMenuOpen"
-      aria-controls="trainer-profile-actions"
-      @click="
-        profileMenuOpen = !profileMenuOpen;
-        profileNotice = ''
-      "
-    >
-      <span class="trainer-avatar-frame">
+  <!-- TOP-RIGHT TRAINER PROFILE -->
+  <aside
+    class="trainer-hud"
+    aria-label="Trainer profile and active Pokémon"
+    @keydown.esc.stop.prevent="closeProfileMenu(true)"
+  >
+    <div class="trainer-profile-card">
+      <!-- CLICKABLE TRAINER HEADER -->
+      <button
+        ref="profileTrigger"
+        type="button"
+        class="trainer-profile-trigger"
+        :aria-expanded="profileMenuOpen"
+        aria-controls="trainer-profile-actions"
+        @click="
+          profileMenuOpen = !profileMenuOpen;
+          profileNotice = ''
+        "
+      >
+        <span class="trainer-avatar-frame">
+          <img
+            :src="trainerAvatarImage"
+            alt=""
+            class="trainer-avatar"
+          />
+        </span>
+
+        <span class="trainer-identity">
+          <span class="trainer-caption">TRAINER PROFILE</span>
+          <span class="trainer-name">{{ trainerProfile.name }}</span>
+        </span>
+
+        <svg
+          class="trainer-chevron"
+          :class="{ 'is-open': profileMenuOpen }"
+          viewBox="0 0 20 20"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path d="m5 8 5 5 5-5" />
+        </svg>
+      </button>
+
+      <!-- ACTIVE POKÉMON -->
+      <div class="trainer-buddy-row">
+        <div class="trainer-buddy-icon" aria-hidden="true">
+          <img
+            v-if="profileBuddyIcon"
+            :src="profileBuddyIcon"
+            alt=""
+          />
+          <span v-else>●</span>
+        </div>
+
+        <div class="trainer-buddy-details">
+          <div class="trainer-buddy-heading">
+            <span class="trainer-buddy-name">
+              {{ activeBuddy.name }}
+            </span>
+
+            <span class="trainer-buddy-level">
+              Lv. {{ activeBuddyTraining.level }}
+            </span>
+          </div>
+
+          <progress
+            class="trainer-exp-bar"
+            :value="buddyExpValue"
+            :max="buddyExpTarget"
+            :aria-label="`${activeBuddy.name} experience toward next level`"
+          ></progress>
+
+          <div class="trainer-exp-caption">
+            <span>EXP</span>
+            <span>{{ buddyExpValue }} / {{ buddyExpTarget }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PROFILE OPTIONS -->
+    <Transition name="trainer-menu">
+      <div
+        v-if="profileMenuOpen"
+        id="trainer-profile-actions"
+        class="trainer-dropdown"
+      >
+        <span class="trainer-dropdown-title">YOUR TRAINER</span>
+
+        <button type="button" @click="selectProfileAction('name')">
+          <span>Edit name</span>
+          <span aria-hidden="true">›</span>
+        </button>
+
+        <button type="button" @click="selectProfileAction('avatar')">
+          <span>Change avatar</span>
+          <span aria-hidden="true">›</span>
+        </button>
+
+        <button type="button" @click="selectProfileAction('progress')">
+          <span>My Progress</span>
+          <span aria-hidden="true">›</span>
+        </button>
+
+        <button type="button" @click="selectProfileAction('settings')">
+          <span>Settings</span>
+          <span aria-hidden="true">›</span>
+        </button>
+
+        <div class="trainer-menu-divider"></div>
+
+        <button
+          type="button"
+          class="trainer-logout"
+          @click="selectProfileAction('logout')"
+        >
+          <span>Log out</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </div>
+    </Transition>
+
+    <p v-if="profileNotice" class="trainer-notice" role="status">
+      {{ profileNotice }}
+      <button
+        type="button"
+        aria-label="Dismiss message"
+        @click="profileNotice = ''"
+      >
+        ×
+      </button>
+    </p>
+  </aside>
+
+  <!-- COLLAPSIBLE POKÉDEX STUDY GOALS -->
+  <aside
+    class="quest-dock"
+    aria-label="To-dos and Pokémon collection"
+    @keydown.esc.stop.prevent="closeGoals"
+  >
+    <Transition name="quest-slide" type="transition">
+      <section
+        v-if="goalsOpen"
+        id="daily-goals-panel"
+        class="quest-phone"
+        aria-labelledby="daily-goals-title"
+      >
+
         <img
-          :src="trainerAvatarImage"
-          alt=""
-          class="trainer-avatar"
-        />
-      </span>
+            class="quest-device-image"
+            :src="asset + 'pokedex-goals.png'"
+            alt=""
+            aria-hidden="true"
+            draggable="false"
+          />
 
-      <span class="trainer-identity">
-        <span class="trainer-caption">TRAINER PROFILE</span>
-        <span class="trainer-name">{{ trainerProfile.name }}</span>
+        <!-- RED POKÉDEX FRAME -->
+        <div class="quest-device-top" aria-hidden="true">
+          <span class="quest-camera"></span>
+
+          <span class="quest-device-name">STUDYDEX</span>
+
+          <span class="quest-device-lights">
+            <i></i>
+            <i></i>
+            <i></i>
+          </span>
+        </div>
+
+        <!-- PHONE SCREEN -->
+        <div class="quest-screen">
+
+        <!-- EXISTING LOADING ANIMATION -->
+        <div class="quest-boot" aria-hidden="true">
+          <span class="quest-boot-title">STUDYDEX OS</span>
+
+          <p class="quest-loading-text">
+            Loading<span class="quest-dots"><span>.</span><span>.</span><span>.</span></span>
+          </p>
+        </div>
+
+        <!-- CONTENT APPEARS AFTER LOADING -->
+        <div class="quest-content">
+
+          <header class="quest-device-heading">
+            <span class="quest-eyebrow">YOUR DAILY ADVENTURE</span>
+            <h2 id="daily-goals-title">Trainer Hub</h2>
+          </header>
+
+          <!-- SECTION BUTTONS -->
+          <nav class="quest-tabs" aria-label="Trainer hub sections">
+            <button
+              type="button"
+              :class="{ 'is-selected': questTab === 'todos' }"
+              :aria-pressed="questTab === 'todos'"
+              @click="questTab = 'todos'"
+            >
+              To-Dos
+            </button>
+
+            <button
+              type="button"
+              :class="{ 'is-selected': questTab === 'pokedex' }"
+              :aria-pressed="questTab === 'pokedex'"
+              @click="questTab = 'pokedex'"
+            >
+              Pokédex
+              <span class="quest-tab-count">{{ ownedPokemon.length }}</span>
+            </button>
+          </nav>
+
+          <!-- =====================================
+              TO-DOS
+          ====================================== -->
+          <section v-if="questTab === 'todos'" class="quest-tab-panel">
+            <header class="quest-heading">
+              <h3 class="quest-section-title">My To-Dos</h3>
+              <p>{{ remainingTodoLabel }}</p>
+            </header>
+
+            <button class="quest-manage-todos" type="button" @click="openTodoModal">
+              + Add / edit to-dos
+            </button>
+            <p v-if="todoStorageNotice" class="todo-storage-note" role="status">{{ todoStorageNotice }}</p>
+
+            <ul v-if="orderedTodos.length" class="quest-todo-list">
+              <li v-for="todo in orderedTodos" :key="todo.id"
+                  class="quest-todo-item" :class="{ 'is-done': todo.completedAt }">
+                <button type="button" class="todo-check"
+                        :aria-label="`Mark ${todo.title} as ${todo.completedAt ? 'incomplete' : 'done'}`"
+                        :aria-pressed="!!todo.completedAt" @click="toggleTodo(todo)">
+                  <svg v-if="todo.completedAt" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8" /></svg>
+                </button>
+                <span class="quest-todo-title">{{ todo.title }}</span>
+              </li>
+            </ul>
+            <p v-else class="quest-empty">A fresh page! Add your first to-do.</p>
+            <footer class="quest-footer">Unfinished tasks carry over. Completed tasks clear tomorrow.</footer>
+          </section>
+
+          <!-- POKÉDEX -->
+          <section v-else class="quest-tab-panel">
+
+            <header class="quest-heading">
+              <h3 class="quest-section-title">Your Pokémon</h3>
+              <p>Select a Pokémon to make it your town buddy.</p>
+            </header>
+
+            <!-- CURRENT SELECTION -->
+            <div class="pokedex-active" role="status">
+              <span class="pokedex-active-dot" aria-hidden="true"></span>
+              <span>Town buddy: <strong>{{ activeBuddy.name }}</strong></span>
+            </div>
+
+            <!-- OWNED POKÉMON -->
+            <div v-if="ownedPokemon.length" class="pokedex-grid">
+              <button
+                v-for="pokemon in ownedPokemon"
+                :key="pokemon.id"
+                type="button"
+                class="pokedex-card"
+                :class="{ 'is-active': activeBuddy.id === pokemon.id }"
+                :aria-pressed="activeBuddy.id === pokemon.id"
+                :aria-label="`Choose ${pokemon.name} as your town buddy`"
+                @click="chooseQuestBuddy(pokemon)"
+              >
+                <span class="pokedex-number">
+                  #{{ String(pokemon.id).padStart(3, '0') }}
+                </span>
+
+                <img
+                  :src="pokemonSprite(pokemon.id)"
+                  alt=""
+                  class="pokedex-sprite"
+                  loading="lazy"
+                />
+
+                <span class="pokedex-name">{{ pokemon.name }}</span>
+
+                <span class="pokedex-card-caption">
+                  {{ activeBuddy.id === pokemon.id ? '✓ Active buddy' : 'Select buddy' }}
+                </span>
+              </button>
+            </div>
+
+            <p v-else class="quest-empty">
+              No Pokémon yet. Open a pack to meet your first buddy!
+            </p>
+
+            <footer class="quest-footer">
+              {{ ownedPokemon.length }} Pokémon collected
+            </footer>
+          </section>
+
+        </div>
+      </div>
+
+        <div class="quest-home-indicator" aria-hidden="true"></div>
+      </section>
+    </Transition>
+
+    <!-- ALWAYS-VISIBLE OPEN / CLOSE BUTTON -->
+    <button
+      type="button"
+      class="quest-toggle"
+      :class="{ 'quest-toggle-open': goalsOpen }"
+      :aria-expanded="goalsOpen"
+      aria-controls="daily-goals-panel"
+      @click="goalsOpen = !goalsOpen"
+    >
+      <svg
+        class="quest-toggle-icon"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <rect x="5" y="2" width="14" height="20" rx="4" />
+        <path d="M10 5h4M9 10h6M9 14h6M11 19h2" />
+      </svg>
+
+      <span>{{ goalsOpen ? 'Close Hub' : 'Trainer Hub' }}</span>
+
+      <span class="quest-toggle-count">
+        {{ remainingTodoLabel }}
       </span>
 
       <svg
-        class="trainer-chevron"
-        :class="{ 'is-open': profileMenuOpen }"
+        class="quest-toggle-chevron"
         viewBox="0 0 20 20"
         fill="none"
         aria-hidden="true"
       >
-        <path d="m5 8 5 5 5-5" />
+        <path d="m5 12 5-5 5 5" />
       </svg>
     </button>
+  </aside>
 
-    <!-- ACTIVE POKÉMON -->
-    <div class="trainer-buddy-row">
-      <div class="trainer-buddy-icon" aria-hidden="true">
+      <div class="world-scene">
+        <!-- Sky colour changes continuously -->
+        <div
+          class="layer sky"
+          :style="{
+            background: `linear-gradient(
+              to bottom,
+              ${lighting.top} 0%,
+              ${lighting.horizon} 30%
+            )`,
+          }"
+        ></div>
+
         <img
-          v-if="profileBuddyIcon"
-          :src="profileBuddyIcon"
+          class="celestial sun"
+          :src="asset + 'bg_sun.png'"
+          :style="celestialStyle(false)"
           alt=""
         />
-        <span v-else>●</span>
-      </div>
 
-      <div class="trainer-buddy-details">
-        <div class="trainer-buddy-heading">
-          <span class="trainer-buddy-name">
-            {{ activeBuddy.name }}
-          </span>
-
-          <span class="trainer-buddy-level">
-            Lv. {{ activeBuddyTraining.level }}
-          </span>
-        </div>
-
-        <progress
-          class="trainer-exp-bar"
-          :value="buddyExpValue"
-          :max="buddyExpTarget"
-          :aria-label="`${activeBuddy.name} experience toward next level`"
-        ></progress>
-
-        <div class="trainer-exp-caption">
-          <span>EXP</span>
-          <span>{{ buddyExpValue }} / {{ buddyExpTarget }}</span>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- PROFILE OPTIONS -->
-  <Transition name="trainer-menu">
-    <div
-      v-if="profileMenuOpen"
-      id="trainer-profile-actions"
-      class="trainer-dropdown"
-    >
-      <span class="trainer-dropdown-title">YOUR TRAINER</span>
-
-      <button type="button" @click="selectProfileAction('name')">
-        <span>Edit name</span>
-        <span aria-hidden="true">›</span>
-      </button>
-
-      <button type="button" @click="selectProfileAction('avatar')">
-        <span>Change avatar</span>
-        <span aria-hidden="true">›</span>
-      </button>
-
-      <button type="button" @click="selectProfileAction('progress')">
-        <span>My Progress</span>
-        <span aria-hidden="true">›</span>
-      </button>
-
-      <button type="button" @click="selectProfileAction('settings')">
-        <span>Settings</span>
-        <span aria-hidden="true">›</span>
-      </button>
-
-      <div class="trainer-menu-divider"></div>
-
-      <button
-        type="button"
-        class="trainer-logout"
-        @click="selectProfileAction('logout')"
-      >
-        <span>Log out</span>
-        <span aria-hidden="true">↗</span>
-      </button>
-    </div>
-  </Transition>
-
-  <p v-if="profileNotice" class="trainer-notice" role="status">
-    {{ profileNotice }}
-    <button
-      type="button"
-      aria-label="Dismiss message"
-      @click="profileNotice = ''"
-    >
-      ×
-    </button>
-  </p>
-</aside>
-
-<!-- COLLAPSIBLE POKÉDEX STUDY GOALS -->
-<aside
-  class="quest-dock"
-  aria-label="Daily study goals"
-  @keydown.esc.stop.prevent="closeGoals"
->
-  <Transition name="quest-slide">
-    <section
-      v-show="goalsOpen"
-      id="daily-goals-panel"
-      class="quest-phone"
-      aria-labelledby="daily-goals-title"
-    >
-
-      <img
-          class="quest-device-image"
-          :src="asset + 'pokedex-goals.png'"
+        <img
+          class="celestial moon"
+          :src="asset + 'bg_moon.png'"
+          :style="celestialStyle(true)"
           alt=""
+        />
+
+        <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.stars }">
+          <img class="layer stars" :src="asset + 'bg_stars.png'" alt="" />
+        </div>
+
+        <div
+          class="layer"
+          :style="{
+            opacity: lighting.cloud,
+            filter: `brightness(${lighting.brightness})`,
+          }"
+        >
+          <img class="layer clouds" :src="asset + 'bg_clouds.png'" alt="" />
+        </div>
+
+        <!-- One fixed world prevents geometry shifting -->
+        <img
+          class="layer"
+          :src="asset + 'building_img.png'"
+          :style="worldStyle"
+          alt="StudyDex world with an arena, laboratory and trainer house"
+        />
+
+        <!-- Building lights -->
+        <img
+          class="layer building-lights"
+          :src="asset + 'bg_buildinglights.png'"
+          :style="{ opacity: buddySleeping ? 0 : lighting.lights * 0.45 }"
+          alt=""
+        />
+
+
+
+        <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.fireflies }">
+          <img
+            class="layer fireflies"
+            :src="asset + 'bg_firefly.png'"
+            alt=""
+          />
+        </div>
+
+        <!-- Darkening layer: separate from the rain -->
+        <div
+          class="layer rain-shade"
+          :class="{ 'rain-active': isRaining }"
+        ></div>
+
+        <!-- Raindrops must be INSIDE this container -->
+        <div
+          class="layer rain-overlay"
+          :class="{ 'rain-active': isRaining }"
           aria-hidden="true"
-          draggable="false"
-        />
-
-      <!-- RED POKÉDEX FRAME -->
-      <div class="quest-device-top" aria-hidden="true">
-        <span class="quest-camera"></span>
-
-        <span class="quest-device-name">STUDYDEX</span>
-
-        <span class="quest-device-lights">
-          <i></i>
-          <i></i>
-          <i></i>
-        </span>
-      </div>
-
-      <!-- PHONE SCREEN -->
-      <div class="quest-screen">
-        <div class="quest-screen-top" aria-hidden="true">
-          <span class="quest-speaker"></span>
+        >
+          <span
+            v-for="drop in rainDrops"
+            :key="drop.id"
+            class="rain-drop"
+            :style="drop.style"
+          ></span>
         </div>
 
-        <header class="quest-heading">
-          <span class="quest-eyebrow">YOUR DAILY ADVENTURE</span>
-
-          <h2 id="daily-goals-title">Today's Goals</h2>
-
-          <p>
-            {{
-              allGoalsDone
-                ? 'All done! Your buddy has earned a break.'
-                : 'A little progress, one deck at a time.'
-            }}
-          </p>
-        </header>
-
-        <!-- OVERALL PROGRESS -->
-        <div class="quest-summary">
-          <div class="quest-summary-row">
-            <span>
-              <strong>{{ finishedGoals }}</strong>
-              / {{ todayGoals.length }} goals complete
+        <!-- ACTIVE BUDDY: speech, sprite, sleeping Poké Ball -->
+        <div
+          class="town-buddy"
+          :class="{ 'is-sleeping': buddySleeping }"
+        >
+          <div class="buddy-speech">
+            <span class="buddy-speaker">
+              {{ activeBuddy.name }}
             </span>
 
-            <strong>{{ dailyGoalPercent }}%</strong>
+            <p v-if="buddyLoading" role="status">
+              Your buddy is on the way…
+            </p>
+
+            <p v-else-if="buddyError" role="status">
+              {{ buddyError }}
+            </p>
+
+            <p v-else-if="buddySleeping">
+              Zzz… Time to recharge.
+            </p>
+
+            <p v-else>
+              What are we going to do today?
+            </p>
           </div>
 
-          <progress
-            class="quest-progress quest-overall-progress"
-            :value="completedGoalCards"
-            :max="totalGoalCards || 1"
-            aria-label="Today's total card progress"
-          ></progress>
+          <div class="buddy-character">
+            <template v-if="townBuddyImage && !buddyError">
+              <span
+                class="buddy-ground-shadow"
+                aria-hidden="true"
+              ></span>
 
-          <span class="quest-summary-caption">
-            {{ completedGoalCards }} of {{ totalGoalCards }} cards studied
-          </span>
+              <Transition name="buddy-swap" mode="out-in" type="transition">
+                <img
+                  :key="townBuddyImage"
+                  class="buddy-image"
+                  :class="{ 'is-shaking': ballShaking }"
+                  :src="townBuddyImage"
+                  :alt="`${activeBuddy.name}, ${buddySleeping ? 'resting' : 'your active study buddy'}`"
+                  draggable="false"
+                  @click="shakePokeball"
+                  @animationend="ballShaking = false"
+                  @error="buddyError = 'Your buddy’s image could not load.'"
+                />
+              </Transition>
+
+              <div
+                v-if="buddySleeping"
+                class="buddy-zzz"
+                aria-hidden="true"
+              >
+                <span>z</span>
+                <span>z</span>
+                <span>Z</span>
+              </div>
+            </template>
+          </div>
         </div>
 
-        <!-- FOUR STUDY GOALS -->
-        <ol v-if="todayGoals.length" class="quest-list">
-          <li
-            v-for="(goal, index) in todayGoals"
-            :key="goal.id"
-            class="quest-card"
-            :class="{ 'quest-card-done': goalIsDone(goal) }"
-            :style="{ '--quest-accent': goal.color }"
+
+
+        <!-- Building navigation -->
+        <div class="building-navigation">
+          <button
+            v-for="building in buildingButtons"
+            :key="building.id"
+            type="button"
+            class="building-button"
+            :style="{
+              left: building.left,
+              top: building.top,
+            }"
+
+            :disabled="buddySleeping && building.id !== 'trainer'"
+            @click="selectBuilding(building)"
           >
-            <span class="quest-number" aria-hidden="true">
-              <svg
-                v-if="goalIsDone(goal)"
-                viewBox="0 0 20 20"
-                fill="none"
-              >
-                <path d="m4 10 4 4 8-8" />
-              </svg>
 
-              <template v-else>
-                {{ String(index + 1).padStart(2, '0') }}
-              </template>
-            </span>
+          <span class="building-button-icon">
+            <img
+              :src="building.icon"
+              :alt="building.title"
+              class="building-icon-img"
+            />
+          </span>
 
-            <div class="quest-card-content">
-              <div class="quest-card-top">
-                <span class="quest-subject">{{ goal.subject }}</span>
-
-                <span v-if="goalIsDone(goal)" class="quest-done-label">
-                  Done
-                </span>
-              </div>
-
-              <h3>{{ goal.title }}</h3>
-
-              <div class="quest-card-progress-row">
-                <progress
-                  class="quest-progress"
-                  :value="goalCompleted(goal)"
-                  :max="goal.total > 0 ? goal.total : 1"
-                  :aria-label="`${goal.title}: ${goalPercent(goal)}% complete`"
-                ></progress>
-
-                <span class="quest-card-count">
-                  {{ goalCompleted(goal) }}/{{ goal.total }}
-                </span>
-              </div>
-
-              <span class="quest-card-status">
-                {{
-                  goalIsDone(goal)
-                    ? 'Today’s target complete'
-                    : goalCompleted(goal) > 0
-                      ? 'Keep going — you’ve started!'
-                      : 'Ready when you are'
-                }}
+            <span class="building-button-text">
+              <span class="building-button-title">
+                {{ building.title }}
               </span>
-            </div>
+
+              <span class="building-button-subtitle">
+                {{ building.subtitle }}
+              </span>
+            </span>
+          </button>
+        </div>
+      </div>
+
+        <!-- TRAINER NAVBAR -->
+  <nav class="sd-navbar" aria-label="Main navigation">
+
+    <!-- STUDY -->
+    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
+      <span class="sd-icon-tile sd-icon-study">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path
+            d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
+              4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
+            fill="#fff9e8"
+          />
+          <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
+        </svg>
+      </span>
+      <span class="sd-nav-label">Study</span>
+    </button>
+
+    <!-- QUIZ -->
+    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
+      <span class="sd-icon-tile sd-icon-quiz">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path
+            d="m7 3 5 2 13 17-4 4L7 9Z"
+            fill="#fff9e8"
+          />
+          <path
+            d="m25 3-5 2L7 22l4 4L25 9Z"
+            fill="#fff9e8"
+          />
+          <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
+        </svg>
+      </span>
+      <span class="sd-nav-label">Quiz</span>
+    </button>
+
+    <!-- TOWN: ACTIVE ON HOMEVIEW2 -->
+    <button
+      type="button"
+      class="sd-nav-button sd-town-button is-active"
+      aria-current="page"
+    >
+      <span class="sd-pokeball" aria-hidden="true"></span>
+      <span class="sd-nav-label">Town</span>
+    </button>
+
+    <!-- TO-DO LIST — available even while the buddy sleeps -->
+    <button type="button" class="sd-nav-button" @click="openTodoModal" aria-haspopup="dialog">
+      <span class="sd-icon-tile sd-icon-todos">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="6" y="4" width="21" height="25" rx="3" fill="#fff9e8" />
+          <path d="M11 2v5M22 2v5M16 13h7M16 19h7M16 25h7" />
+          <path d="m9 12 2 2 3-4m-5 8 2 2 3-4" />
+          <circle cx="11" cy="25" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </span>
+      <span class="sd-nav-label">To-Do List</span>
+    </button>
+
+    <!-- BAG -->
+    <!-- BAG WITH UNOPENED PACK COUNT -->
+    <button
+      type="button"
+      class="sd-nav-button"
+      :aria-label="
+        unopenedPackCount > 0
+          ? `Bag, ${unopenedPackCount} unopened packs`
+          : 'Bag, no unopened packs'
+      "
+
+      :disabled="buddySleeping"
+    >
+      <span class="sd-icon-tile sd-icon-bag">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M12 7V5a4 4 0 0 1 8 0v2" />
+
+          <rect
+            x="6"
+            y="7"
+            width="20"
+            height="22"
+            rx="6"
+            fill="#ffcf65"
+          />
+
+          <path d="M6 15h20" />
+
+          <rect
+            x="10"
+            y="18"
+            width="12"
+            height="7"
+            rx="2"
+            fill="#fff0bb"
+          />
+
+          <path d="M16 13v4" />
+        </svg>
+
+        <Transition name="pack-badge">
+          <span
+            v-if="unopenedPackCount > 0"
+            :key="unopenedPackLabel"
+            class="sd-pack-badge"
+            aria-hidden="true"
+          >
+            {{ unopenedPackLabel }}
+          </span>
+        </Transition>
+      </span>
+
+      <span class="sd-nav-label">Bag</span>
+    </button>
+
+  </nav>
+
+  <!-- NOTEPAD MODAL: native dialog provides focus trapping and Escape support -->
+  <Teleport to="body">
+    <dialog ref="todoDialog" class="todo-notepad" aria-labelledby="todo-modal-title"
+            @close="onTodoModalClosed" @click="event => { if (event.target === todoDialog) closeTodoModal() }">
+      <div class="todo-paper">
+        <header class="todo-modal-header">
+          <div>
+            <span class="todo-kicker">STUDYDEX / MY NOTES</span>
+            <h2 id="todo-modal-title">My To-Do List</h2>
+            <p aria-live="polite">{{ remainingTodoLabel }}</p>
+          </div>
+          <button type="button" class="todo-close" aria-label="Close to-do list" @click="closeTodoModal">×</button>
+        </header>
+
+        <form class="todo-add-form" @submit.prevent="addTodo">
+          <label class="visually-hidden" for="new-todo-title">New to-do</label>
+          <input id="new-todo-title" ref="todoInput" v-model="newTodoTitle" maxlength="180"
+                placeholder="What would you like to get done?" autocomplete="off" />
+          <button type="submit" :disabled="!newTodoTitle.trim()">+ Add</button>
+        </form>
+        <p v-if="todoStorageNotice" class="todo-storage-note" role="status">{{ todoStorageNotice }}</p>
+
+        <ul v-if="orderedTodos.length" class="todo-notepad-list">
+          <li v-for="todo in orderedTodos" :key="todo.id" class="todo-notepad-row"
+              :class="{ 'is-done': todo.completedAt }">
+            <button type="button" class="todo-check" :aria-pressed="!!todo.completedAt"
+                    :aria-label="`Mark ${todo.title} as ${todo.completedAt ? 'incomplete' : 'done'}`"
+                    @click="toggleTodo(todo)">
+              <svg v-if="todo.completedAt" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8" /></svg>
+            </button>
+
+            <form v-if="editingTodoId === todo.id" class="todo-edit-form" @submit.prevent="saveTodoEdit(todo)">
+              <input class="todo-edit-input" v-model="editTodoTitle" aria-label="Edit to-do title" maxlength="180"
+                    @keydown.esc.stop.prevent="editingTodoId = null" />
+              <div class="todo-row-actions">
+                <button type="submit" :disabled="!editTodoTitle.trim()">Save</button>
+                <button type="button" @click="editingTodoId = null">Cancel</button>
+              </div>
+            </form>
+            <template v-else>
+              <button type="button" class="todo-title-button" :aria-label="`Edit ${todo.title}`" @click="startEditingTodo(todo)">
+                {{ todo.title }}
+              </button>
+              <div class="todo-row-actions">
+                <button type="button" :aria-label="`Edit ${todo.title}`" @click="startEditingTodo(todo)">Edit</button>
+                <button type="button" class="todo-delete" :aria-label="`Delete ${todo.title}`" @click="deleteTodo(todo)">Delete</button>
+              </div>
+            </template>
           </li>
-        </ol>
-
-        <p v-else class="quest-empty">
-          Your study goals will appear here when you add a deck.
-        </p>
-
-        <footer class="quest-footer">
-          <span class="quest-footer-dot" aria-hidden="true"></span>
-
-          {{
-            allGoalsDone
-              ? 'Great work. Time to recharge!'
-              : 'Small steps make a stronger trainer.'
-          }}
+        </ul>
+        <div v-else class="todo-notepad-empty">
+          <span aria-hidden="true">✓</span>
+          <h3>A fresh page, a fresh start.</h3>
+          <p>Add a study task or a little reminder above.</p>
+        </div>
+        <footer class="todo-modal-footer">
+          <span>{{ completedTodoCount }} completed today</span>
+          <p>Completed items clear after midnight. Unfinished items stay.<br />Saved in this browser · Uses your device's local date.</p>
         </footer>
       </div>
+    </dialog>
+  </Teleport>
 
-      <div class="quest-home-indicator" aria-hidden="true"></div>
-    </section>
-  </Transition>
+      <!-- Development controls: remove when ready -->
 
-  <!-- ALWAYS-VISIBLE OPEN / CLOSE BUTTON -->
-  <button
-    type="button"
-    class="quest-toggle"
-    :class="{ 'quest-toggle-open': goalsOpen }"
-    :aria-expanded="goalsOpen"
-    aria-controls="daily-goals-panel"
-    @click="goalsOpen = !goalsOpen"
-  >
-    <svg
-      class="quest-toggle-icon"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect x="5" y="2" width="14" height="20" rx="4" />
-      <path d="M10 5h4M9 10h6M9 14h6M11 19h2" />
-    </svg>
-
-    <span>{{ goalsOpen ? 'Close Goals' : "Today's Goals" }}</span>
-
-    <span class="quest-toggle-count">
-      {{ finishedGoals }}/{{ todayGoals.length }}
-    </span>
-
-    <svg
-      class="quest-toggle-chevron"
-      viewBox="0 0 20 20"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path d="m5 12 5-5 5 5" />
-    </svg>
-  </button>
-</aside>
-
-    <div class="world-scene">
-      <!-- Sky colour changes continuously -->
-      <div
-        class="layer sky"
-        :style="{
-          background: `linear-gradient(
-            to bottom,
-            ${lighting.top} 0%,
-            ${lighting.horizon} 30%
-          )`,
-        }"
-      ></div>
-
-      <img
-        class="celestial sun"
-        :src="asset + 'bg_sun.png'"
-        :style="celestialStyle(false)"
-        alt=""
-      />
-
-      <img
-        class="celestial moon"
-        :src="asset + 'bg_moon.png'"
-        :style="celestialStyle(true)"
-        alt=""
-      />
-
-      <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.stars }">
-        <img class="layer stars" :src="asset + 'bg_stars.png'" alt="" />
-      </div>
-
-      <div
-        class="layer"
-        :style="{
-          opacity: lighting.cloud,
-          filter: `brightness(${lighting.brightness})`,
-        }"
-      >
-        <img class="layer clouds" :src="asset + 'bg_clouds.png'" alt="" />
-      </div>
-
-      <!-- One fixed world prevents geometry shifting -->
-      <img
-        class="layer"
-        :src="asset + 'building_img.png'"
-        :style="worldStyle"
-        alt="StudyDex world with an arena, laboratory and trainer house"
-      />
-
-      <!-- Building lights -->
-      <img
-        class="layer building-lights"
-        :src="asset + 'bg_buildinglights.png'"
-        :style="{ opacity: buddySleeping ? 0 : lighting.lights * 0.45 }"
-        alt=""
-      />
-
-
-
-      <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.fireflies }">
-        <img
-          class="layer fireflies"
-          :src="asset + 'bg_firefly.png'"
-          alt=""
-        />
-      </div>
-
-      <!-- Darkening layer: separate from the rain -->
-      <div
-        class="layer rain-shade"
-        :class="{ 'rain-active': isRaining }"
-      ></div>
-
-      <!-- Raindrops must be INSIDE this container -->
-      <div
-        class="layer rain-overlay"
-        :class="{ 'rain-active': isRaining }"
-        aria-hidden="true"
-      >
-        <span
-          v-for="drop in rainDrops"
-          :key="drop.id"
-          class="rain-drop"
-          :style="drop.style"
-        ></span>
-      </div>
-
-      <!-- ACTIVE BUDDY: speech, sprite, sleeping Poké Ball -->
-      <div
-        class="town-buddy"
-        :class="{ 'is-sleeping': buddySleeping }"
-      >
-        <div class="buddy-speech">
-          <span class="buddy-speaker">
-            {{ activeBuddy.name }}
-          </span>
-
-          <p v-if="buddyLoading" role="status">
-            Your buddy is on the way…
-          </p>
-
-          <p v-else-if="buddyError" role="status">
-            {{ buddyError }}
-          </p>
-
-          <p v-else-if="buddySleeping">
-            Zzz… Time to recharge.
-          </p>
-
-          <p v-else>
-            What are we going to do today?
-          </p>
-        </div>
-
-        <div class="buddy-character">
-          <template v-if="townBuddyImage && !buddyError">
-            <span
-              class="buddy-ground-shadow"
-              aria-hidden="true"
-            ></span>
-
-            <Transition name="buddy-swap" mode="out-in" type="transition">
-              <img
-                :key="townBuddyImage"
-                class="buddy-image"
-                :class="{ 'is-shaking': ballShaking }"
-                :src="townBuddyImage"
-                :alt="`${activeBuddy.name}, ${buddySleeping ? 'resting' : 'your active study buddy'}`"
-                draggable="false"
-                @click="shakePokeball"
-                @animationend="ballShaking = false"
-                @error="buddyError = 'Your buddy’s image could not load.'"
-              />
-            </Transition>
-
-            <div
-              v-if="buddySleeping"
-              class="buddy-zzz"
-              aria-hidden="true"
-            >
-              <span>z</span>
-              <span>z</span>
-              <span>Z</span>
-            </div>
-          </template>
-        </div>
-      </div>
-
-
-
-      <!-- Building navigation -->
-      <div class="building-navigation">
-        <button
-          v-for="building in buildingButtons"
-          :key="building.id"
-          type="button"
-          class="building-button"
-          :style="{
-            left: building.left,
-            top: building.top,
-          }"
-
-          :disabled="buddySleeping && building.id !== 'trainer'"
-          @click="selectBuilding(building)"
-        >
-
-        <span class="building-button-icon">
-          <img
-            :src="building.icon"
-            :alt="building.title"
-            class="building-icon-img"
+      <!-- INCLUDES MANUAL SHIFTING AND AUTO PREVIEW OF TIME  -->
+      <div class="preview-controls">
+        <label>
+          <input v-model="isRaining" type="checkbox" />
+          🌧️ Test rain
+        </label>
+        <label>
+          <button
+            type="button"
+            class="preview-play-button"
+            @click="toggleAutoPreview"
+          >
+            {{ autoPreview ? '⏸ Pause preview' : '▶ Run day cycle' }}
+          </button>
+          <input
+            v-model="live"
+            type="checkbox"
+            @change="stopAutoPreview"
           />
-        </span>
+          Live time
+        </label>
 
-          <span class="building-button-text">
-            <span class="building-button-title">
-              {{ building.title }}
-            </span>
-
-            <span class="building-button-subtitle">
-              {{ building.subtitle }}
-            </span>
-          </span>
-        </button>
-      </div>
-    </div>
-
-      <!-- TRAINER NAVBAR -->
-<nav class="sd-navbar" aria-label="Main navigation">
-
-  <!-- STUDY -->
-  <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-    <span class="sd-icon-tile sd-icon-study">
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <path
-          d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
-             4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
-          fill="#fff9e8"
-        />
-        <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
-      </svg>
-    </span>
-    <span class="sd-nav-label">Study</span>
-  </button>
-
-  <!-- QUIZ -->
-  <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-    <span class="sd-icon-tile sd-icon-quiz">
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <path
-          d="m7 3 5 2 13 17-4 4L7 9Z"
-          fill="#fff9e8"
-        />
-        <path
-          d="m25 3-5 2L7 22l4 4L25 9Z"
-          fill="#fff9e8"
-        />
-        <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
-      </svg>
-    </span>
-    <span class="sd-nav-label">Quiz</span>
-  </button>
-
-  <!-- TOWN: ACTIVE ON HOMEVIEW2 -->
-  <button
-    type="button"
-    class="sd-nav-button sd-town-button is-active"
-    aria-current="page"
-  >
-    <span class="sd-pokeball" aria-hidden="true"></span>
-    <span class="sd-nav-label">Town</span>
-  </button>
-
-  <!-- POKÉMON -->
-  <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-    <span class="sd-icon-tile sd-icon-pokemon">
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="6" y="3" width="20" height="26" rx="4" fill="#ff7382" />
-        <circle cx="12" cy="8" r="2" fill="#9beaff" />
-        <path d="M18 8h4" />
-        <rect x="10" y="13" width="12" height="9" rx="2" fill="#dcf8ff" />
-        <path d="M11 26h4m5 0h1" />
-      </svg>
-    </span>
-    <span class="sd-nav-label">Pokémon</span>
-  </button>
-
-  <!-- BAG -->
-  <!-- BAG WITH UNOPENED PACK COUNT -->
-  <button
-    type="button"
-    class="sd-nav-button"
-    :aria-label="
-      unopenedPackCount > 0
-        ? `Bag, ${unopenedPackCount} unopened packs`
-        : 'Bag, no unopened packs'
-    "
-
-    :disabled="buddySleeping"
-  >
-    <span class="sd-icon-tile sd-icon-bag">
-      <svg viewBox="0 0 32 32" aria-hidden="true">
-        <path d="M12 7V5a4 4 0 0 1 8 0v2" />
-
-        <rect
-          x="6"
-          y="7"
-          width="20"
-          height="22"
-          rx="6"
-          fill="#ffcf65"
+        <input
+          v-model.number="previewHour"
+          type="range"
+          min="0"
+          max="23.99"
+          step="0.01"
+          :disabled="live || autoPreview"
+          aria-label="Preview time of day"
         />
 
-        <path d="M6 15h20" />
+        <span>{{ displayTime }} · {{ lighting.name }}</span>
 
-        <rect
-          x="10"
-          y="18"
-          width="12"
-          height="7"
-          rx="2"
-          fill="#fff0bb"
-        />
-
-        <path d="M16 13v4" />
-      </svg>
-
-      <Transition name="pack-badge">
-        <span
-          v-if="unopenedPackCount > 0"
-          :key="unopenedPackLabel"
-          class="sd-pack-badge"
-          aria-hidden="true"
-        >
-          {{ unopenedPackLabel }}
-        </span>
-      </Transition>
-    </span>
-
-    <span class="sd-nav-label">Bag</span>
-  </button>
-
-</nav>
-
-    <!-- Development controls: remove when ready -->
-
-    <!-- INCLUDES MANUAL SHIFTING AND AUTO PREVIEW OF TIME  -->
-    <div class="preview-controls">
-      <label>
-        <input v-model="isRaining" type="checkbox" />
-        🌧️ Test rain
-      </label>
-      <label>
         <button
           type="button"
-          class="preview-play-button"
-          @click="toggleAutoPreview"
+          @click="setActiveBuddy({ id: 25, name: 'Pikachu' })"
         >
-          {{ autoPreview ? '⏸ Pause preview' : '▶ Run day cycle' }}
+          Pikachu
         </button>
-        <input
-          v-model="live"
-          type="checkbox"
-          @change="stopAutoPreview"
-        />
-        Live time
-      </label>
 
-      <input
-        v-model.number="previewHour"
-        type="range"
-        min="0"
-        max="23.99"
-        step="0.01"
-        :disabled="live || autoPreview"
-        aria-label="Preview time of day"
-      />
+        <button
+          type="button"
+          @click="setActiveBuddy({ id: 133, name: 'Eevee' })"
+        >
+          Eevee
+        </button>
 
-      <span>{{ displayTime }} · {{ lighting.name }}</span>
+        <button
+          type="button"
+          @click="setActiveBuddy({ id: 1, name: 'Bulbasaur' })"
+        >
+          Bulbasaur
+        </button>
 
-      <button
-        type="button"
-        @click="setActiveBuddy({ id: 25, name: 'Pikachu' })"
+        <button
+          type="button"
+          @click="setActiveBuddy({ id: 4, name: 'Charmander' })"
+        >
+          Charmander
+        </button>
+
+        <button type="button" @click="unopenedPackCount++">
+          Earn a pack
+        </button>
+
+        <button
+          type="button"
+          :disabled="unopenedPackCount === 0"
+          @click="unopenedPackCount = Math.max(0, unopenedPackCount - 1)"
+        >
+          Open a pack
+        </button>
+      </div>
+      <!-- LOCATION MODAL -->
+      <div
+        v-if="showLocationModal"
+        class="modal show d-block location-modal"
+        tabindex="-1"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="locationModalTitle"
       >
-        Pikachu
-      </button>
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content p-4">
 
-      <button
-        type="button"
-        @click="setActiveBuddy({ id: 133, name: 'Eevee' })"
-      >
-        Eevee
-      </button>
+            <div class="location-header d-flex justify-content-between align-items-center">
+              <span>STUDYDEX / TOWN SETUP</span>
+            </div>
 
-      <button
-        type="button"
-        @click="setActiveBuddy({ id: 1, name: 'Bulbasaur' })"
-      >
-        Bulbasaur
-      </button>
+            <div class="modal-body text-center px-0 pb-0">
 
-      <button
-        type="button"
-        @click="setActiveBuddy({ id: 4, name: 'Charmander' })"
-      >
-        Charmander
-      </button>
+              <div
+                class="location-icon d-flex align-items-center justify-content-center mx-auto mb-3"
+              >
+                🗺️
+              </div>
 
-      <button type="button" @click="unopenedPackCount++">
-        Earn a pack
-      </button>
+              <h2 id="locationModalTitle" class="mb-3">
+                Find Your Town!
+              </h2>
 
-      <button
-        type="button"
-        :disabled="unopenedPackCount === 0"
-        @click="unopenedPackCount = Math.max(0, unopenedPackCount - 1)"
-      >
-        Open a pack
-      </button>
+              <p class="location-description">
+                Let your Pokémon experience the same weather as you!
+              </p>
+
+              <div class="d-flex justify-content-center gap-3 my-3 fs-4">
+                <span>☀️</span>
+                <span>🌤️</span>
+                <span>🌧️</span>
+              </div>
+
+              <p class="location-notice p-3">
+                Allow location access to experience
+                your local weather in Pokémon Town.
+              </p>
+
+              <div class="d-flex gap-3 mt-2">
+                <button
+                  type="button"
+                  class="btn location-allow w-50 py-3"
+                  @click="chooseLocation(true)"
+                >
+                  📍 Use My Location
+                </button>
+
+                <button
+                  type="button"
+                  class="btn location-skip w-50 py-3"
+                  @click="chooseLocation(false)"
+                >
+                  Not Now
+                </button>
+              </div>
+
+              <p class="text-muted small-note mt-2 mb-0">
+                Without location access, Singapore's default weather will be used.
+              </p>
+
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
 </template>
 
 <style scoped>
+
+@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Silkscreen:wght@400;700&display=swap');
+
 /* =====================================================
    01. WORLD SCENE — BASE, LIGHTING, SKY, CLOUDS
    ===================================================== */
@@ -1517,6 +1941,7 @@ img.layer {
 }
 
 .building-button {
+ font-family: 'Luckiest Guy', cursive;
   pointer-events: auto;
 
   position: absolute;
@@ -1806,12 +2231,13 @@ img.layer {
   align-items: center;
   gap: 8px;
 
-  width: min(560px, calc(100% - 24px));
+  width: min(480px, calc(100% - 24px));
   height: 94px;
   padding: 10px 14px;
 
   border: 2px solid rgba(207, 234, 255, 0.78);
   border-radius: 30px;
+  font-size: 20px;
 
   background: linear-gradient(
     180deg,
@@ -2125,6 +2551,7 @@ img.layer {
     "Arial Rounded MT Bold",
     system-ui,
     sans-serif;
+
 }
 
 .quest-dock,
@@ -2202,6 +2629,7 @@ img.layer {
 
   background: linear-gradient(160deg, #f8fbff, #eef3fa);
   color: #263955;
+  font-family: 'Silkscreen', monospace;
 }
 
 .quest-screen-top {
@@ -3533,5 +3961,499 @@ img.layer {
 }
 
 
+/* Loading overlay */
+.quest-boot {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+
+  border-radius: inherit;
+  background: #132b25;
+  color: #b4f5b0;
+  pointer-events: none;
+
+  /* Hide after 5 seconds */
+  animation: quest-boot-hide 0.25s ease 2s forwards;
+}
+
+.quest-boot-title {
+  color: #ffde59;
+  font-family: "Silkscreen", monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+
+.quest-loading-text {
+  margin: 0;
+  font-family: "Silkscreen", monospace;
+  font-size: 14px;
+}
+
+/* Dots appear one by one, then reset together */
+.quest-dots span {
+  opacity: 0;
+  animation: quest-dot-one 1.2s step-end infinite;
+}
+
+.quest-dots span:nth-child(2) {
+  animation-name: quest-dot-two;
+}
+
+.quest-dots span:nth-child(3) {
+  animation-name: quest-dot-three;
+}
+
+/* Keep quests hidden until the loading screen finishes */
+.quest-content {
+  animation: quest-content-show 0.25s ease 2s both;
+}
+
+@keyframes quest-dot-one {
+  0%, 90%, 100% { opacity: 0; }
+  20% { opacity: 1; }
+}
+
+@keyframes quest-dot-two {
+  0%, 90%, 100% { opacity: 0; }
+  40% { opacity: 1; }
+}
+
+@keyframes quest-dot-three {
+  0%, 90%, 100% { opacity: 0; }
+  60% { opacity: 1; }
+}
+
+@keyframes quest-boot-hide {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+@keyframes quest-content-show {
+  from {
+    opacity: 0;
+    visibility: hidden;
+  }
+  to {
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+/* Skip animation when reduced motion is preferred */
+@media (prefers-reduced-motion: reduce) {
+  .quest-boot {
+    display: none;
+  }
+
+  .quest-content {
+    animation: none;
+  }
+}
+
+/* =========================================
+   TRAINER HUB — HEADING & TABS
+========================================= */
+
+.quest-device-heading {
+  margin-bottom: 12px;
+}
+
+.quest-device-heading h2 {
+  margin: 4px 0 0;
+  color: #263955;
+  font-family: "Silkscreen", monospace;
+  font-size: 18px;
+}
+
+.quest-tabs {
+  display: flex;
+  gap: 5px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border: 1px solid #dedbc9;
+  border-radius: 10px;
+  background: #eeecdf;
+}
+
+.quest-tabs button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+
+  color: #626858;
+  font-family: "Silkscreen", monospace;
+  font-size: 10px;
+  cursor: pointer;
+
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.quest-tabs button:hover {
+  background: #fff8db;
+}
+
+.quest-tabs button.is-selected {
+  background: #ffde59;
+  color: #30304b;
+  box-shadow: 0 2px 0 #d5b83e;
+}
+
+.quest-tab-count {
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgba(48, 48, 75, 0.09);
+  font-size: 9px;
+}
+
+.quest-section-title {
+  margin: 0 0 5px;
+  color: #263955;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.quest-tab-panel {
+  animation: quest-tab-appear 0.2s ease-out;
+}
+
+/* =========================================
+   POKÉDEX — ACTIVE BUDDY
+========================================= */
+
+.pokedex-active {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 10px;
+  margin-bottom: 12px;
+
+  border: 1px solid #cce7db;
+  border-radius: 8px;
+  background: #e9f5ec;
+  color: #287b5f;
+
+  font-size: 11px;
+}
+
+.pokedex-active-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #35936d;
+}
+
+/* =========================================
+   POKÉDEX — COLLECTION GRID
+========================================= */
+
+.pokedex-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+
+.pokedex-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  min-width: 0;
+  padding: 8px 5px 10px;
+
+  border: 2px solid #e2e3d7;
+  border-radius: 10px;
+  background: #fffef7;
+  color: #263955;
+
+  font: inherit;
+  cursor: pointer;
+
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.pokedex-card:hover {
+  transform: translateY(-2px);
+  border-color: #e4c34b;
+  background: #fff9df;
+}
+
+.pokedex-card.is-active {
+  border-color: #d0a925;
+  background: #fff3bd;
+}
+
+.pokedex-number {
+  align-self: flex-start;
+  color: #737b87;
+  font-family: "Silkscreen", monospace;
+  font-size: 9px;
+}
+
+.pokedex-sprite {
+  display: block;
+  width: 76px;
+  max-width: 100%;
+  height: 76px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.pokedex-name {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.pokedex-card-caption {
+  margin-top: 5px;
+  color: #737b87;
+  font-size: 9px;
+}
+
+.pokedex-card.is-active .pokedex-card-caption {
+  color: #725912;
+  font-weight: 700;
+}
+
+.quest-tabs button:focus-visible,
+.pokedex-card:focus-visible {
+  outline: 2px solid #345b86;
+  outline-offset: 3px;
+}
+
+@keyframes quest-tab-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .quest-tab-panel {
+    animation: none;
+  }
+
+  .quest-tabs button,
+  .pokedex-card {
+    transition: none;
+  }
+
+  .pokedex-card:hover {
+    transform: none;
+  }
+}
+
+
+
+
+/* SHARED TO-DOS — NOTEPAD AND QUEST DEVICE */
+.sd-icon-todos { background: linear-gradient(#a9e5c8, #4aaf8a); color: #294b52; }
+.todo-notepad, .todo-notepad * { box-sizing: border-box; }
+.todo-notepad {
+  width: min(720px, calc(100vw - 28px)); max-height: calc(100dvh - 40px);
+  padding: 0; border: 1px solid #e6dcc4; border-radius: 22px;
+  background: #fffcf2; color: #30374a; margin: auto;
+  box-shadow: 0 24px 80px #14233d66;
+  font-family: 'Nunito', system-ui, sans-serif;
+}
+
+.todo-notepad::backdrop { background: #12203988; backdrop-filter: blur(5px); }
+
+.todo-notepad[open] { animation: todo-modal-in 180ms ease-out; }
+
+.todo-paper { padding: 30px; border-top: 10px solid #ffde59; }
+
+.todo-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+
+.todo-kicker { font: 10px 'Silkscreen', monospace; color: #887037; letter-spacing: 1px; }
+
+.todo-modal-header h2 { margin: 9px 0 4px; font-size: clamp(24px, 4vw, 34px); font-weight: 800; }
+
+.todo-modal-header p { color: #707887; margin: 0; font-size: 14px; }
+
+.todo-close { border: 0; background: #eee9dd; width: 36px; height: 36px; border-radius: 50%; font-size: 25px; color: #515967; cursor: pointer; }
+
+.todo-add-form { display: flex; gap: 10px; margin: 24px 0 12px; }
+
+.todo-add-form input, .todo-edit-input { min-width: 0; flex: 1; padding: 12px; border: 1px solid #ded8c6; border-radius: 9px; background: #fff; color: #30374a; font: inherit; }
+
+.todo-add-form button { border: 0; border-radius: 9px; background: #ffde59; padding: 10px 18px; font-weight: 800; color: #30374a; cursor: pointer; }
+
+.todo-notepad button:disabled { opacity: .45; cursor: default; }
+
+.todo-notepad-list, .quest-todo-list { padding: 0; margin: 0; list-style: none; }
+
+.todo-notepad-row { display: flex; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid #e6e1d1; }
+
+.todo-check { display: inline-flex; justify-content: center; align-items: center; flex: 0 0 24px; width: 24px; height: 24px; padding: 3px; border: 2px solid #a2b0ac; border-radius: 50%; background: transparent; cursor: pointer; color: white; }
+
+.todo-check[aria-pressed="true"] { border-color: #35936d; background: #35936d; }
+
+.todo-check svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+
+.todo-title-button { flex: 1; min-width: 0; border: 0; padding: 4px 0; background: transparent; color: #30374a; text-align: left; font: inherit; overflow-wrap: anywhere; cursor: text; }
+
+.is-done .todo-title-button, .is-done .quest-todo-title { text-decoration: line-through; color: #818b88; }
+
+.todo-row-actions { display: flex; gap: 5px; }
+
+.todo-row-actions button { padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: #536e87; font: inherit; font-size: 12px; cursor: pointer; }
+
+.todo-row-actions button:hover { background: #eeeadc; }
+
+.todo-row-actions .todo-delete { color: #a4404d; }
+
+.todo-edit-form { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: 8px; }
+
+.todo-edit-input { width: 100%; }
+
+.todo-notepad-empty { padding: 40px 12px; text-align: center; color: #7e887f; }
+
+.todo-notepad-empty > span { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #e5f1e8; color: #35936d; font-size: 28px; }
+
+.todo-notepad-empty h3 { font-size: 18px; margin: 14px 0 6px; }
+
+.todo-notepad-empty p { font-size: 14px; }
+
+.todo-modal-footer { margin-top: 24px; font-size: 12px; color: #707887; }
+
+.todo-modal-footer > span { font-weight: 700; color: #35936d; }
+
+.todo-modal-footer p { margin: 8px 0 0; line-height: 1.6; }
+
+.todo-storage-note { font-size: 12px; color: #9b482e; margin: 10px 0; }
+
+.quest-manage-todos { width: 100%; margin: 0 0 10px; padding: 9px; border: 1px solid #d9bd4e; border-radius: 8px; background: #ffed9b; color: #53451b; font: inherit; font-size: 11px; cursor: pointer; }
+
+.quest-todo-item { display: flex; align-items: flex-start; gap: 9px; padding: 12px 2px; border-bottom: 1px solid #e1dfd0; }
+
+.quest-todo-title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+
+.quest-todo-item .todo-check { margin-top: 1px; }
+
+.quest-toggle-count { white-space: normal; }
+
+.todo-notepad button:focus-visible, .todo-notepad input:focus-visible, .todo-check:focus-visible, .quest-manage-todos:focus-visible { outline: 3px solid #6489ed; outline-offset: 3px; }
+
+@keyframes todo-modal-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 600px) {
+  .todo-paper { padding: 20px 16px; }
+  .todo-notepad-row { flex-wrap: wrap; gap: 9px; }
+  .todo-title-button { flex-basis: calc(100% - 40px); }
+  .todo-notepad-row > .todo-row-actions { margin-left: 33px; }
+  .todo-add-form button { padding: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .todo-notepad[open] { animation: none; } }
+
+
+/* STUDYDEX LOCATION MODAL */
+
+.location-modal {
+  z-index: 2000;
+  background: rgba(10, 23, 48, 0.7);
+  backdrop-filter: blur(5px);
+}
+
+.location-modal .modal-dialog {
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
+  width: calc(100% - 32px);
+}
+
+.location-modal .modal-content {
+  background: #fff9e8;
+  border: 3px solid #344967;
+  border-radius: 22px;
+  color: #293c60;
+  font-family: 'Nunito', sans-serif;
+}
+
+.location-header {
+  font-family: 'Silkscreen', monospace;
+  font-size: 10px;
+  color: #8f7440;
+}
+
+.location-icon {
+  width: 90px;
+  height: 90px;
+  background: #ffe68c;
+  border-radius: 20px;
+  font-size: 45px;
+}
+
+.location-modal h2 {
+  font-family: 'Silkscreen', monospace;
+  font-size: 22px;
+}
+
+.location-description {
+  color: #687791;
+  font-size: 14px;
+}
+
+.location-notice {
+  background: #f5ecd4;
+  border-radius: 12px;
+  color: #6c6046;
+  font-size: 12px;
+}
+
+.small-note {
+  font-size: 12px;
+}
+
+.location-allow,
+.location-skip {
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.location-allow {
+  background: #ffde59;
+  color: #283957;
+  border: 2px solid #d6b73a;
+}
+
+.location-allow:hover {
+  background: #ffe880;
+}
+
+.location-skip {
+  background: #fffdf5;
+  color: #62718b;
+  border: 2px solid #d7cdb5;
+}
+
+.location-skip:hover {
+  background: #f5ecd4;
+}
 
 </style>
