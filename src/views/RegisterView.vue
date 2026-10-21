@@ -1,9 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted,onUnmounted, watch } from 'vue'
 import { registerUser } from '../services/registrationService'
 import { getSupabase } from '../lib/supabase'
 import { useRouter } from 'vue-router'
 import { avatarOptions } from '../data/avatarOptions'
+import axios from 'axios'
+
+const POKEMON_API_URL = import.meta.env.VITE_POKE_API_URL
 const router = useRouter()
 const question_no = ref(1)
 const submitting = ref(false)
@@ -15,47 +18,6 @@ const confirmationTitle = computed(() => {
   if (confirmationState.value === 'checking') return 'Checking confirmation…'
   if (confirmationState.value === 'pending') return 'Check your other inbox'
   return 'Confirmation link unavailable'
-})
-
-onMounted(async () => {
-  const callback = new URLSearchParams(window.location.hash.slice(1))
-  const query = new URLSearchParams(window.location.search)
-  if (
-    callback.has('error') ||
-    callback.has('error_code') ||
-    query.has('error') ||
-    query.has('error_code')
-  ) {
-    confirmationState.value = 'error'
-    errorMessage.value =
-      'This confirmation link is invalid or expired. For an email change, return to account settings to resend the confirmation emails. If you already confirmed, log in.'
-  } else if (callback.has('access_token') || callback.has('message') || query.has('message')) {
-    confirmationState.value = 'checking'
-    submitting.value = true
-    try {
-      // Secure email changes can require two links. The first link may return
-      // only a message, without creating a session in this browser.
-      if (!callback.has('access_token')) {
-        confirmationState.value = 'pending'
-        return
-      }
-      const { data, error } = await getSupabase().auth.getUser()
-      if (error || !data.user)
-        throw new Error('Unable to confirm your account. Please try your email link again.')
-      if (callback.get('type') === 'email_change' && data.user.new_email) {
-        confirmationState.value = 'pending'
-        return
-      }
-      await router.replace({
-        name: callback.get('type') === 'email_change' ? 'account' : 'landing',
-      })
-    } catch (error) {
-      confirmationState.value = 'error'
-      errorMessage.value = error.message
-    } finally {
-      submitting.value = false
-    }
-  }
 })
 
 async function submitRegistration() {
@@ -120,10 +82,297 @@ const locked = computed(() => {
       return true
   }
 })
+
+// error messages
+const attemptedNext = ref(false)
+
+const pikachuError = computed(() => {
+  // Registration errors returned by your service
+  if (errorMessage.value) {
+    return `Pika! ${errorMessage.value}`
+  }
+
+  if (!attemptedNext.value || !locked.value) return ''
+
+  switch (question_no.value) {
+    case 1:
+      return 'Pika! Please enter a valid email address.'
+
+    case 2:
+      return 'Pika! Your name must be between 1 and 80 characters.'
+
+    case 3:
+      return 'Pika! Choose your Primary level first.'
+
+    case 4:
+      return 'Pika! Choose an avatar for your adventure!'
+
+    case 5:
+      if (!passed_password_check.value) {
+        return 'Pika! Use at least 8 characters, including a letter and a number.'
+      }
+
+      if (!confirmPassword_field.value) {
+        return 'Pika! Enter your password again to confirm it.'
+      }
+
+      if (checkIfPasswordsMismatch.value) {
+        return 'Pika! Your passwords don’t match. Try again!'
+      }
+
+      return ''
+
+    default:
+      return ''
+  }
+})
+
+watch(question_no, () => {
+  attemptedNext.value = false
+  errorMessage.value = ''
+})
+
+// animated pokemon sprite
+// PIKACHU SPRITES
+const pikachuSprites = ref({
+  front: '',
+  back: '',
+  shinyFront: '',
+  shinyBack: '',
+})
+
+const pikachuAction = ref('')
+
+let pikachuTimer
+const pikachuController = new AbortController()
+
+
+
+const pikachuImage = computed(() => {
+  const sprites = pikachuSprites.value
+  const hasError = Boolean(pikachuError.value)
+
+  // Keep facing backwards whenever a password is exposed
+  if (passwordExposed.value) {
+    return hasError ? sprites.shinyBack : sprites.back
+  }
+
+  return hasError ? sprites.shinyFront : sprites.front
+})
+
+const pikachuMessage = computed(() => {
+  if (submitting.value) {
+    return 'Getting your account ready…'
+  }
+
+  if (pikachuError.value) {
+    return pikachuError.value
+  }
+
+  if (passwordExposed.value) {
+    return 'Pika! No peeking! 🙈'
+  }
+
+  if (!locked.value) {
+    return 'Pika pika! Looking good!'
+  }
+
+  switch (question_no.value) {
+    case 1:
+      return 'What’s your email address? Pika!'
+
+    case 2:
+      return 'What should I call you, Trainer?'
+
+    case 3:
+      return 'Which Primary level are you in?'
+
+    case 4:
+      return 'Choose your trainer avatar! Pika!'
+
+    case 5:
+      return passed_password_check.value
+        ? 'Enter your password again to confirm it!'
+        : 'Choose a password with at least 8 characters, a letter and a number.'
+
+    default:
+      return 'Ready for your adventure?'
+  }
+})
+
+function playPikachuAction(action) {
+  clearTimeout(pikachuTimer)
+
+  // Changing the key restarts the animation on repeated clicks.
+  pikachuAction.value = action
+
+  pikachuTimer = setTimeout(() => {
+    pikachuAction.value = ''
+  }, 900)
+}
+
+// Celebrate only when the current step changes from invalid to valid.
+watch(
+  [question_no, locked],
+  ([step, isLocked], [previousStep, wasLocked]) => {
+    clearTimeout(pikachuTimer)
+    pikachuAction.value = ''
+
+    if (step === previousStep && wasLocked && !isLocked) {
+      playPikachuAction('celebrate')
+    }
+  }
+)
+
+function handleNext() {
+  if (submitting.value) return
+
+  attemptedNext.value = true
+  errorMessage.value = ''
+
+  if (locked.value) {
+    playPikachuAction('attack')
+    return
+  }
+
+  if (question_no.value < 5) {
+    question_no.value++
+  } else {
+    submitRegistration()
+  }
+}
+
+onMounted(async () => {
+
+  // ========================================
+  // 1. HANDLE SUPABASE EMAIL CONFIRMATION
+  // ========================================
+
+  const callback = new URLSearchParams(window.location.hash.slice(1))
+  const query = new URLSearchParams(window.location.search)
+
+  if (
+    callback.has('error') ||
+    callback.has('error_code') ||
+    query.has('error') ||
+    query.has('error_code')
+  ) {
+    confirmationState.value = 'error'
+    errorMessage.value =
+      'This confirmation link is invalid or expired. For an email change, return to account settings to resend the confirmation emails. If you already confirmed, log in.'
+
+  } else if (
+    callback.has('access_token') ||
+    callback.has('message') ||
+    query.has('message')
+  ) {
+    confirmationState.value = 'checking'
+    submitting.value = true
+
+    try {
+      if (!callback.has('access_token')) {
+        confirmationState.value = 'pending'
+      } else {
+        const { data, error } = await getSupabase().auth.getUser()
+
+        if (error || !data.user) {
+          throw new Error(
+            'Unable to confirm your account. Please try your email link again.'
+          )
+        }
+
+        if (callback.get('type') === 'email_change' && data.user.new_email) {
+          confirmationState.value = 'pending'
+        } else {
+          await router.replace({
+            name: callback.get('type') === 'email_change'
+              ? 'account'
+              : 'landing',
+          })
+        }
+      }
+
+    } catch (error) {
+      confirmationState.value = 'error'
+      errorMessage.value = error.message
+
+    } finally {
+      submitting.value = false
+    }
+  }
+
+  // ========================================
+  // 2. FETCH ANIMATED PIKACHU FROM POKÉAPI
+  // ========================================
+
+  try {
+    const response = await axios.get(
+      `${POKEMON_API_URL}/pokemon/25/`,
+      { signal: pikachuController.signal }
+    )
+
+    const data = response.data
+
+    const animated =
+      data.sprites.versions?.['generation-v']
+        ?.['black-white']?.animated
+
+    pikachuSprites.value = {
+      front:
+        animated?.front_default ||
+        data.sprites.front_default,
+
+      back:
+        animated?.back_default ||
+        data.sprites.back_default ||
+        data.sprites.front_default,
+
+      shinyFront:
+        animated?.front_shiny ||
+        data.sprites.front_shiny ||
+        data.sprites.front_default,
+
+      shinyBack:
+        animated?.back_shiny ||
+        data.sprites.back_shiny ||
+        data.sprites.back_default,
+    }
+
+  } catch (error) {
+    if (error.code !== 'ERR_CANCELED') {
+      console.warn('Pikachu could not load:', error)
+    }
+  }
+
+})
+
+onUnmounted(() => {
+  clearTimeout(pikachuTimer)
+  pikachuController.abort()
+})
+
+// password
+const showPassword = ref(false)
+const showConfirmPassword = ref(false)
+
+const passwordExposed = computed(() =>
+  question_no.value === 5 &&
+  (showPassword.value || showConfirmPassword.value)
+)
+
+// Hide passwords whenever the user changes steps
+watch(question_no, () => {
+  showPassword.value = false
+  showConfirmPassword.value = false
+})
 </script>
 <template>
   <main>
     <div class="register-bg">
+       <!-- BACK TO STUDYDEX -->
+      <RouterLink to="/landing-info" class="back-home">
+        ← Back to StudyDex
+      </RouterLink>
       <div
         v-if="confirmationState"
         class="container completion"
@@ -139,7 +388,7 @@ const locked = computed(() => {
         <template v-if="confirmationState !== 'checking'">
           <RouterLink to="/account">Account settings</RouterLink>
           <RouterLink to="/login">Log in</RouterLink>
-          <RouterLink to="/landing-info">Back to StudyDex</RouterLink>
+          <!-- <RouterLink to="/landing-info">Back to StudyDex</RouterLink> -->
         </template>
       </div>
       <div v-else-if="completed" class="container completion" role="status">
@@ -153,9 +402,70 @@ const locked = computed(() => {
         <RouterLink v-if="needsEmailConfirmation" to="/login">Log in after confirming</RouterLink>
         <RouterLink to="/landing-info">Back to StudyDex</RouterLink>
       </div>
-      <form v-else class="container" @submit.prevent="submitRegistration" style="margin-top: 300px">
-        <fieldset :disabled="submitting">
-          <p class="step-counter">Step {{ question_no }} of 5</p>
+      <form
+        v-else
+        class="container signup-form"
+        novalidate
+        @submit.prevent="handleNext"
+      >
+        <aside class="signup-pikachu">
+          <div class="pikachu-speech">
+            <span class="pikachu-speaker">Pikachu</span>
+            <p
+              role="status"
+              aria-atomic="true"
+              :class="{
+                'text-danger': pikachuError,
+                'error-blink': pikachuError
+              }"
+            >
+              {{ pikachuMessage }}
+            </p>
+          </div>
+
+          <div class="pikachu-stage" aria-hidden="true">
+            <div
+              class="pikachu-character"
+              :class="{
+                'is-attacking': pikachuAction === 'attack',
+                'is-celebrating': pikachuAction === 'celebrate'
+              }"
+            >
+              <img
+                v-if="pikachuImage"
+                :src="pikachuImage"
+                alt=""
+                class="pikachu-sprite"
+                :class="{ 'has-error': pikachuError }"
+              />
+
+              <span
+                v-if="pikachuAction === 'celebrate'"
+                class="pikachu-sparkles"
+              >
+                ✨
+              </span>
+            </div>
+
+            <div class="pikachu-shadow"></div>
+          </div>
+        </aside>
+        <fieldset class="signup-fields" :disabled="submitting">
+          <!-- STUDYDEX LOGO -->
+          <div class="signup-logo-container">
+            <img
+              src="/assets/studydexlogo.png"
+              alt="StudyDex Logo"
+              class="signup-logo"
+            />
+          </div>
+          <div class="form-heading">
+            <h2 class="form-title">Trainer Registration</h2>
+            <span class="form-title-divider"></span>
+            <!-- <div class="form-title-divider"></div> -->
+            <p class="step-counter">Step {{ question_no }} of 5</p>
+          </div>
+
           <p class="question-prompt" v-if="question_no == 3">Which Primary level are you in?</p>
           <!-- Signup details -->
           <p class="question-prompt" v-if="question_no == 1">What's your email?</p>
@@ -172,9 +482,9 @@ const locked = computed(() => {
               autocomplete="email"
               placeholder="Enter Email"
             /><br />
-            <p class="pw-not-fulfilled" v-if="checkPW">
+            <!-- <p class="pw-not-fulfilled" v-if="checkPW">
               Pokemon is waiting for a valid email address
-            </p>
+            </p> -->
           </div>
 
           <div class="input-container" v-if="question_no == 2">
@@ -188,9 +498,9 @@ const locked = computed(() => {
               maxlength="80"
               placeholder="Enter Username"
             /><br />
-            <p class="pw-not-fulfilled" v-if="checkUsername">
+            <!-- <p class="pw-not-fulfilled" v-if="checkUsername">
               Enter a name between 1 and 80 characters.
-            </p>
+            </p> -->
             <!-- <input v-model="password_input" type="password" name="" id="password-input" aria-label="Password" placeholder="Enter Password">
           <input  type="password" name="" id="confirm-password-input" aria-label="Confirm password" placeholder="Confirm Password"> -->
           </div>
@@ -204,9 +514,9 @@ const locked = computed(() => {
               <option value="p5">Primary 5</option>
               <option value="p6">Primary 6</option>
             </select>
-            <div>
+            <!-- <div>
               <p class="pw-not-fulfilled" v-if="checkLevel">Please select your level</p>
-            </div>
+            </div> -->
           </div>
 
           <fieldset v-if="question_no === 4" class="avatar-step">
@@ -238,17 +548,34 @@ const locked = computed(() => {
           </fieldset>
 
           <div class="input-container" v-if="question_no == 5">
-            <input
-              type="password"
-              name=""
-              id="password-input"
-              aria-label="Password"
-              autocomplete="new-password"
-              placeholder="Password"
-              v-model="password_field"
-            /><br />
+            <div class="password-wrapper">
+              <input
+                :type="showPassword ? 'text' : 'password'"
+                id="password-input"
+                aria-label="Password"
+                autocomplete="new-password"
+                placeholder="Password"
+                v-model="password_field"
+              />
 
-            <ul v-if="!passed_password_check">
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                :aria-pressed="showPassword"
+                aria-controls="password-input"
+                @click="showPassword = !showPassword"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path v-if="showPassword" d="m3 3 18 18" />
+                </svg>
+              </button>
+            </div>
+            <br />
+
+            <!-- <ul v-if="!passed_password_check">
               <li :class="password_field.length >= 8 ? 'pw-fulfilled' : 'pw-not-fulfilled'">
                 Password must have at least 8 characters
               </li>
@@ -258,7 +585,7 @@ const locked = computed(() => {
               <li :class="/\d/.test(password_field) ? 'pw-fulfilled' : 'pw-not-fulfilled'">
                 Password must have at least 1 number
               </li>
-            </ul>
+            </ul> -->
           </div>
 
           <div
@@ -267,18 +594,35 @@ const locked = computed(() => {
             v-if="question_no == 5 && passed_password_check"
           >
             <p class="question-prompt">Confirm Password</p>
-            <input
-              type="password"
-              v-model="confirmPassword_field"
-              id="confirm-password-input"
-              aria-label="Confirm password"
-              autocomplete="new-password"
-              placeholder="Re-type Password"
-              style="margin-top: -20px"
-            /><br />
-            <p class="pw-not-fulfilled" v-if="checkIfPasswordsMismatch" style="margin-top: -20px">
+            <div class="password-wrapper" style="margin-top: -20px">
+              <input
+                :type="showConfirmPassword ? 'text' : 'password'"
+                v-model="confirmPassword_field"
+                id="confirm-password-input"
+                aria-label="Confirm password"
+                autocomplete="new-password"
+                placeholder="Re-type Password"
+              />
+
+              <button
+                type="button"
+                class="password-toggle"
+                :aria-label="showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'"
+                :aria-pressed="showConfirmPassword"
+                aria-controls="confirm-password-input"
+                @click="showConfirmPassword = !showConfirmPassword"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path v-if="showConfirmPassword" d="m3 3 18 18" />
+                </svg>
+              </button>
+            </div>
+            <br />
+            <!-- <p class="pw-not-fulfilled" v-if="checkIfPasswordsMismatch" style="margin-top: -20px">
               Passwords do not match
-            </p>
+            </p> -->
           </div>
 
           <div class="button-container">
@@ -288,19 +632,20 @@ const locked = computed(() => {
               :disabled="question_no === 1"
               @click="question_no -= 1"
             >
-              &lt; Prev Question
+              &lt; Previous
             </button>
             <button
-              v-if="question_no < 5"
               id="nextButton"
-              type="button"
-              :disabled="locked"
-              @click="question_no += 1"
+              type="submit"
+              :disabled="submitting"
             >
-              Next Question >
-            </button>
-            <button v-else id="nextButton" type="submit" :disabled="locked || submitting">
-              {{ submitting ? 'Creating account…' : 'Create account' }}
+              {{
+                submitting
+                  ? 'Creating account…'
+                  : question_no < 5
+                    ? 'Next >'
+                    : 'Create account'
+              }}
             </button>
           </div>
           <p v-if="errorMessage" class="submission-error" role="alert">{{ errorMessage }}</p>
@@ -315,11 +660,7 @@ const locked = computed(() => {
   </main>
 </template>
 <style scoped>
-.step-counter {
-  text-align: center;
-  color: #fff;
-  text-shadow: 1px 1px 2px #000;
-}
+
 .avatar-step {
   text-align: center;
 }
@@ -416,7 +757,7 @@ fieldset {
 
 .register-bg {
   position: relative;
-  background: url('/backgrounds/StudyDex.png');
+  background: url('/backgrounds/signup_bg.png');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
@@ -425,7 +766,6 @@ fieldset {
   margin-top: 0px;
   display: flow-root;
 
-  font-family: 'Handjet', sans-serif;
   color: white;
 }
 
@@ -444,11 +784,14 @@ fieldset {
 
 .question-prompt {
   color: white;
-  font-size: 28px;
-  -webkit-text-stroke: 4px black;
+  font-size: 18px;
+  font-weight: 600;
+  text-align: center;
+
+  -webkit-text-stroke: 2px black;
   paint-order: stroke fill;
 
-  text-align: center;
+  margin-bottom: 12px;
 }
 
 .button-container {
@@ -474,24 +817,29 @@ fieldset {
 #password-input,
 #confirm-password-input,
 #email-input {
+  width: 360px;
+  max-width: 100%;
+  height: 35px;
+
   border: 0;
-  border-radius: 30px;
-  width: 430px;
-  height: 36px;
+  border-radius: 20px;
 
-  opacity: 70%;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
 
-  box-shadow: 3px 3px 6px #232323;
   text-align: center;
-  font-family: 'Handjet', sans-serif;
-  font-size: 26px;
+  font-size: 18px;
+  font-weight: 500;
 }
+
+/* Input placeholders */
 #username-input::placeholder,
 #password-input::placeholder,
 #confirm-password-input::placeholder,
 #email-input::placeholder {
   color: #4f5458;
-  opacity: 100%;
+  opacity: 1;
+  font-size: 18px;
 }
 
 @property --angle {
@@ -507,11 +855,10 @@ fieldset {
   margin-top: -24px;
 
   font-weight: 600;
-  font-family: 'Handjet', sans-serif;
-  font-size: 24px;
+  font-size: 20px;
   color: white;
   box-shadow: 3px 3px 6px #232323;
-  border: 4px solid #ffd117;
+  border: 2px solid #ffd117;
   border-radius: 12px;
   cursor: pointer;
   background-color: #072578;
@@ -544,23 +891,22 @@ fieldset {
 }
 
 #level-selector {
-  display: block;
   appearance: none;
 
-  width: 205px;
-  height: 46px;
-  padding: 0 44px 0 16px;
+  width: 180px;
+  height: 40px;
+  padding: 0 36px 0 14px;
 
-  font-family: 'Handjet', sans-serif;
-  font-size: 24px;
+  font-size: 17px;
   font-weight: 600;
   color: white;
 
   background-color: #072578;
-  border: 4px solid #ffd117;
-  border-radius: 12px;
+  border: 2px solid #ffd117;
+  border-radius: 10px;
   cursor: pointer;
-  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+
+  box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.25);
 
   /* custom gold arrow */
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23ffd117' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
@@ -586,16 +932,12 @@ fieldset {
 #level-selector option {
   background-color: #072578;
   color: white;
-  font-family: 'Handjet', sans-serif;
+
   font-size: 20px;
 }
 
 .link-to-sign-in {
-  position: absolute;
-
-  bottom: 0.5%;
-  left: 0;
-  right: 0;
+  margin: 24px 0;
   text-align: center;
   color: white;
   font-size: 28px;
@@ -637,5 +979,404 @@ button:disabled {
     width: 43vw;
     font-size: 20px;
   }
+}
+
+/* added styles with animated pikachu  */
+/* FORM LAYOUT */
+.signup-form {
+  position: relative;
+
+  width: 100%;
+  max-width: 1200px;
+
+  margin: 0 auto;
+  padding: 20px 15px;
+
+  min-height: 100vh;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.signup-fields {
+  position: relative;
+  width: 100%;
+  max-width: 620px;
+  min-width: 0;
+  margin: 0 auto;
+
+  padding: 34px;
+  border-radius: 28px;
+
+  background: rgba(7, 37, 120, 0.35);
+  border: 2px solid rgba(255, 209, 23, 0.9);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.28),
+    0 0 0 4px rgba(255, 255, 255, 0.08) inset;
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.signup-pikachu {
+  position: absolute;
+  left: 2%;
+  top: 42%;
+  width: 220px;
+  text-align: center;
+}
+
+/* SPEECH BUBBLE */
+.pikachu-speech {
+  position: relative;
+  width: 220px;
+  max-width: 100%;
+  padding: 11px 15px;
+  margin: 0 auto 20px;
+
+  border: 2px solid #344f78;
+  border-radius: 18px;
+
+  background: #fffdf3;
+  color: #2b4162;
+  text-align: center;
+  font-family: 'Nunito', sans-serif;
+
+  box-shadow:
+    0 4px 0 rgba(35, 57, 90, 0.18),
+    0 8px 18px rgba(22, 42, 65, 0.14);
+}
+
+/* Tail pointing towards Pikachu */
+.pikachu-speech::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -8px;
+
+  width: 13px;
+  height: 13px;
+
+  background: #fffdf3;
+  border-right: 2px solid #344f78;
+  border-bottom: 2px solid #344f78;
+
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.pikachu-speaker {
+  display: block;
+  margin-bottom: 4px;
+
+  color: #886317;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+}
+
+.pikachu-speech p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+/* PIKACHU */
+.pikachu-stage {
+  position: relative;
+  height: 170px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pikachu-character {
+  position: relative;
+  z-index: 1;
+}
+
+.pikachu-sprite {
+  display: block;
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.pikachu-placeholder {
+  font-size: 80px;
+}
+
+.pikachu-shadow {
+  position: absolute;
+  bottom: 12px;
+  width: 100px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* ATTACK */
+.pikachu-character.is-attacking {
+  animation: pikachu-attack 0.9s ease;
+}
+
+
+
+@keyframes pikachu-attack {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-8px) rotate(-4deg); }
+  40%, 80% { transform: translateX(8px) rotate(4deg); }
+}
+
+
+/* CELEBRATION */
+.pikachu-character.is-celebrating {
+  animation: pikachu-jump 0.9s ease;
+}
+
+.pikachu-sparkles {
+  position: absolute;
+  top: 0;
+  right: -10px;
+  font-size: 36px;
+  pointer-events: none;
+  animation: pikachu-sparkle 0.9s ease-out both;
+}
+
+@keyframes pikachu-jump {
+  0%, 45%, 75%, 100% {
+    transform: translateY(0);
+  }
+
+  25% {
+    transform: translateY(-35px) rotate(-8deg);
+  }
+
+  60% {
+    transform: translateY(-20px) rotate(8deg);
+  }
+
+  85% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes pikachu-sparkle {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(0.5);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-35px) scale(1.3);
+  }
+}
+
+/* PIKACHU ABOVE THE FORM ON SMALLER SCREENS */
+@media (max-width: 900px) {
+  .signup-form {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .signup-pikachu {
+    flex: none;
+    width: 220px;
+  }
+
+  .signup-fields {
+    width: 100%;
+  }
+}
+
+/* REDUCE EXTRA MOVEMENT WHEN REQUESTED */
+@media (prefers-reduced-motion: reduce) {
+  .pikachu-character,
+  .pikachu-lightning,
+  .pikachu-sparkles {
+    animation: none !important;
+  }
+}
+
+/* password */
+.password-wrapper {
+  position: relative;
+  width: min(430px, 85vw);
+}
+
+/* Keep both inputs inside their wrappers */
+.password-wrapper #password-input,
+.password-wrapper #confirm-password-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding-left: 44px;
+  padding-right: 44px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 32px;
+  height: 32px;
+  padding: 5px;
+
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #293c60;
+  cursor: pointer;
+}
+
+.password-toggle svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.password-toggle:hover {
+  background: rgba(41, 60, 96, 0.1);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid #ffd117;
+  outline-offset: 2px;
+}
+
+
+/* ========================================
+   STUDYDEX SIGNUP LOGO
+======================================== */
+
+.signup-logo-container {
+  width: 100%;
+  margin-bottom: 30px;
+}
+
+.signup-logo {
+  width: 400px;
+  max-width: 85%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  margin: auto;
+}
+
+/* PIKACHU FLICKER WHEN ERROR */
+/* .pikachu-sprite.has-error {
+  animation: pikachu-error-flicker 0.5s ease-in-out infinite;
+}
+
+@keyframes pikachu-error-flicker {
+  0%, 100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pikachu-sprite.has-error {
+    animation: none;
+  }
+} */
+
+ /* error msg blink */
+.error-blink {
+  animation: error-text-glow 1.2s ease-in-out infinite;
+}
+
+@keyframes error-text-glow {
+  0%, 100% {
+    text-shadow: none;
+  }
+
+  50% {
+    text-shadow:
+      0 0 5px rgba(255, 0, 0, 0.7),
+      0 0 12px rgba(251, 55, 55, 0.315);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .error-blink {
+    animation: none;
+  }
+}
+
+/* trainer reg form title */
+.form-heading {
+  text-align: center;
+  margin: 20px auto 24px;
+}
+
+.form-title {
+  font-size: 32px;
+  font-weight: 650;
+  color: #ffd117;
+  margin-bottom: 12px;
+  text-shadow: 2px 3px 0 #102e72;
+}
+
+.form-title-divider {
+  display: block;
+  width: 160px;
+  height: 3px;
+  background: #ffd117;
+  border-radius: 10px;
+  margin: 0 auto 12px;
+}
+
+.step-counter {
+  font-size: 16px;
+  font-weight: 500;
+  margin: 0;
+  color: #fff;
+  text-shadow: 1px 1px 2px #000;
+}
+
+/* back to studydex button */
+.back-home {
+  position: absolute;
+  top: 25px;
+  left: 30px;
+  z-index: 10;
+
+  padding: 10px 18px;
+
+  background: #072578;
+  border: 2px solid #ffd117;
+  border-radius: 12px;
+
+  color: #ffd117;
+  text-decoration: none;
+
+  font-family: 'Fredoka', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+
+  box-shadow: 3px 3px 6px rgba(0, 0, 0, 0.3);
+  transition: transform 0.2s ease;
+}
+
+.back-home:hover {
+  transform: translateY(-2px);
+  color: white;
 }
 </style>

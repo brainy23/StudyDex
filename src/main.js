@@ -14,7 +14,6 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 // Import Bootstrap JS (npm install bootstrap)
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
 
-
 app.use(createPinia())
 app.use(router)
 
