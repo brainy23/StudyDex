@@ -387,7 +387,7 @@ async function addRandomPokemon(forXPTransfer = false) {
     const availableIds = Array.from(
       { length: GEN1_COUNT },
       (_, i) => i + 1
-    ).filter(id => !ownsPokemon(id))
+    ).filter(id => id !== 132 && !ownsPokemon(id))
 
     while (availableIds.length > 0) {
       const randomIndex = Math.floor(
@@ -1409,12 +1409,13 @@ async function openMaxedGift() {
                 </p>
 
                 <button
+                  v-if="pendingXP === 0"
                   type="button"
                   class="btn btn-warning fw-bold w-100 mt-4"
                   :disabled="isProcessingXP"
                   @click="showXPTransfer = false"
                 >
-                  {{ pendingXP > 0 ? 'Keep XP for later' : 'Awesome!' }}
+                  Awesome! 🎉
                 </button>
               </div>
             </div>
