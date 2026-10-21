@@ -97,8 +97,8 @@ const displayedUsers = computed(() => {
 
   list.sort((a, b) => {
     let result
-    if (sortKey.value === 'level') {
-      result = a.level - b.level
+    if (sortKey.value === 'school_level_id') {
+      result = a.school_level_id - b.school_level_id;
     } else {
       result = (a.display_name ?? '').localeCompare(b.display_name ?? '')
     }
