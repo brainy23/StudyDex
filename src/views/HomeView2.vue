@@ -6,6 +6,10 @@ import axios from 'axios'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 
+// VUE TYPERR
+import VueTyper from 'vue3-typer'
+import 'vue3-typer/dist/vue-typer.css'
+
 
 
 const router = useRouter()
@@ -507,6 +511,19 @@ const rainDrops = Array.from({ length: 90 }, (_, id) => ({
 
  // TODAY'S STUDY GOALS
 const goalsOpen = ref(false)
+const questReady = ref(false)
+let questBootTimer
+
+watch(goalsOpen, (isOpen) => {
+  clearTimeout(questBootTimer)
+  questReady.value = false
+
+  if (isOpen) {
+    questBootTimer = setTimeout(() => {
+      questReady.value = true
+    }, 2100)
+  }
+})
 
 // TO-DOS — shared by the notepad and the quest screen.
 // Completion dates follow the device's local calendar, not the town preview clock.
@@ -668,6 +685,7 @@ onUnmounted(() => {
   clearInterval(rainInterval)
 
   stopAutoPreview()
+  clearTimeout(questBootTimer)
 })
 
 
@@ -1151,12 +1169,30 @@ function chooseQuestBuddy(pokemon) {
         </div>
 
         <!-- CONTENT APPEARS AFTER LOADING -->
-        <div class="quest-content">
+        <div v-if="questReady" class="quest-content">
+
 
           <header class="quest-device-heading">
-            <span class="quest-eyebrow">YOUR DAILY ADVENTURE</span>
-            <h2 id="daily-goals-title">Trainer Hub</h2>
+
+            <span class="quest-eyebrow">
+              <VueTyper
+                text="YOUR DAILY ADVENTURE"
+                :repeat="0"
+                :type-delay="25"
+              />
+            </span>
+
+            <h2 id="daily-goals-title">
+              <VueTyper
+                text="Trainer Hub"
+                :repeat="0"
+                :type-delay="60"
+                :pre-type-delay="300"
+              />
+            </h2>
+
           </header>
+
 
           <!-- SECTION BUTTONS -->
           <nav class="quest-tabs" aria-label="Trainer hub sections">
@@ -1185,8 +1221,18 @@ function chooseQuestBuddy(pokemon) {
           ====================================== -->
           <section v-if="questTab === 'todos'" class="quest-tab-panel">
             <header class="quest-heading">
-              <h3 class="quest-section-title">My To-Dos</h3>
+
+              <h3 class="quest-section-title">
+                <VueTyper
+                  text="My To-Dos"
+                  :repeat="0"
+                  :type-delay="50"
+                  :pre-type-delay="100"
+                />
+              </h3>
+
               <p>{{ remainingTodoLabel }}</p>
+
             </header>
 
             <button class="quest-manage-todos" type="button" @click="openTodoModal">
@@ -1212,10 +1258,29 @@ function chooseQuestBuddy(pokemon) {
           <!-- POKÉDEX -->
           <section v-else class="quest-tab-panel">
 
+
             <header class="quest-heading">
-              <h3 class="quest-section-title">Your Pokémon</h3>
-              <p>Select a Pokémon to make it your town buddy.</p>
+
+              <h3 class="quest-section-title">
+                <VueTyper
+                  text="Your Pokémon"
+                  :repeat="0"
+                  :type-delay="50"
+                  :pre-type-delay="100"
+                />
+              </h3>
+
+              <p>
+                <VueTyper
+                  text="Select a Pokémon to make it your town buddy."
+                  :repeat="0"
+                  :type-delay="30"
+                  :pre-type-delay="500"
+                />
+              </p>
+
             </header>
+
 
             <!-- CURRENT SELECTION -->
             <div class="pokedex-active" role="status">
@@ -4011,8 +4076,31 @@ img.layer {
 
 /* Keep quests hidden until the loading screen finishes */
 .quest-content {
-  animation: quest-content-show 0.25s ease 2s both;
+  animation: quest-tab-appear 0.25s ease-out;
 }
+
+
+/* VUE TYPER - QUEST SCREEN */
+
+.quest-screen :deep(.vue-typer) {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+.quest-screen :deep(.vue-typer .custom.char) {
+  color: inherit;
+}
+
+.quest-screen :deep(.vue-typer .custom.caret) {
+  background-color: #263955;
+  width: 2px;
+}
+
+.quest-screen :deep(.vue-typer .custom.caret.complete) {
+  display: none;
+}
+
 
 @keyframes quest-dot-one {
   0%, 90%, 100% { opacity: 0; }
