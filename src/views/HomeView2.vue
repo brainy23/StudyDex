@@ -16,6 +16,105 @@ const router = useRouter()
 
 const asset = '/town/'
 
+const POKE_API_URL = import.meta.env.VITE_POKE_API_URL
+
+// to be updated to match user
+const MAX_XP = 200
+
+// Sample profile matching your profile schema.
+// These UUIDs are examples, not existing database records.
+const user = ref({
+  id: '11111111-1111-4111-8111-111111111111',
+  display_name: 'Jake',
+  school_level_id: null,
+  created_at: '2026-10-22T06:00:00Z',
+  avatar_choice: 'male',
+})
+
+// Temporary Pokémon lookup.
+// Adapt these fields to your actual Pokémon table later.
+// pokemon_id in user_pokemon refers to one of these UUIDs.
+const pokemonCatalog = {
+  '22222222-2222-4222-8222-222222222222': {
+    pokeapi_id: 25,
+    name: 'Pikachu',
+  },
+  '33333333-3333-4333-8333-333333333333': {
+    pokeapi_id: 133,
+    name: 'Eevee',
+  },
+  '44444444-4444-4444-8444-444444444444': {
+    pokeapi_id: 4,
+    name: 'Charmander',
+  },
+}
+
+// Separate object containing the user's Pokémon records.
+// Every entry matches the user_pokemon columns shown.
+const userPokemon = ref({
+  pokemons: [
+    {
+      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      user_id: user.value.id,
+      pokemon_id: '22222222-2222-4222-8222-222222222222',
+      xp: 90,
+      level: 1,
+      is_selected: true,
+      is_defeated: false,
+      obtained_at: '2026-10-22T06:00:00Z',
+    },
+    {
+      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      user_id: user.value.id,
+      pokemon_id: '33333333-3333-4333-8333-333333333333',
+      xp: 45,
+      level: 1,
+      is_selected: false,
+      is_defeated: false,
+      obtained_at: '2026-10-22T06:05:00Z',
+    },
+    {
+      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      user_id: user.value.id,
+      pokemon_id: '44444444-4444-4444-8444-444444444444',
+      xp: 60,
+      level: 1,
+      is_selected: false,
+      is_defeated: false,
+      obtained_at: '2026-10-22T06:10:00Z',
+    },
+  ],
+})
+
+const ownedPokemon = computed(() =>
+  userPokemon.value.pokemons
+    .filter(record => record.user_id === user.value.id)
+    .map(record => {
+      const details = pokemonCatalog[record.pokemon_id]
+
+      return {
+        ownedId: record.id,
+        id: details?.pokeapi_id ?? null,
+        name: details?.name ?? 'Unknown Pokémon',
+        xp: record.xp,
+        level: record.level,
+        is_selected: record.is_selected,
+        is_defeated: record.is_defeated,
+      }
+    })
+)
+
+const activeBuddy = computed(() =>
+  ownedPokemon.value.find(pokemon => pokemon.is_selected) ?? {
+    ownedId: null,
+    id: null,
+    name: 'No buddy selected',
+    xp: 0,
+    level: 1,
+    is_defeated: false,
+  }
+)
+
 const buildingButtons = [
   {
     id: 'arena',
@@ -536,7 +635,7 @@ const editingTodoId = ref(null)
 const editTodoTitle = ref('')
 const todoStorageNotice = ref('')
 let todoMidnightTimer
-let todoReturnFocus
+
 
 const remainingTodoCount = computed(() => todos.value.filter(todo => !todo.completedAt).length)
 const completedTodoCount = computed(() => todos.value.length - remainingTodoCount.value)
@@ -594,23 +693,6 @@ function scheduleTodoCleanup() {
 
 function refreshTodosOnReturn() {
   if (!document.hidden) scheduleTodoCleanup()
-}
-
-async function openTodoModal() {
-  removePastCompletedTodos()
-  todoReturnFocus = document.activeElement
-  todoDialog.value?.showModal()
-  await nextTick()
-  todoInput.value?.focus()
-}
-
-function closeTodoModal() {
-  todoDialog.value?.close()
-}
-
-function onTodoModalClosed() {
-  editingTodoId.value = null
-  todoReturnFocus?.focus()
 }
 
 function addTodo() {
@@ -693,37 +775,37 @@ function closeGoals() {
   goalsOpen.value = false
 }
 
-const defaultBuddy = {
-  id: 25,
-  name: 'Pikachu',
-}
+// const defaultBuddy = {
+//   id: 25,
+//   name: 'Pikachu',
+// }
 
-function loadActiveBuddy() {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem('studydex-active-buddy')
-    )
+// function loadActiveBuddy() {
+//   try {
+//     const saved = JSON.parse(
+//       localStorage.getItem('studydex-active-buddy')
+//     )
 
-    if (
-      saved &&
-      Number.isInteger(saved.id) &&
-      saved.id > 0 &&
-      typeof saved.name === 'string' &&
-      saved.name.trim()
-    ) {
-      return {
-        id: saved.id,
-        name: saved.name,
-      }
-    }
-  } catch {
-    // Use Pikachu if saved data is missing or unreadable.
-  }
+//     if (
+//       saved &&
+//       Number.isInteger(saved.id) &&
+//       saved.id > 0 &&
+//       typeof saved.name === 'string' &&
+//       saved.name.trim()
+//     ) {
+//       return {
+//         id: saved.id,
+//         name: saved.name,
+//       }
+//     }
+//   } catch {
+//     // Use Pikachu if saved data is missing or unreadable.
+//   }
 
-  return { ...defaultBuddy }
-}
+//   return { ...defaultBuddy }
+// }
 
-const activeBuddy = ref(loadActiveBuddy())
+// const activeBuddy = ref(loadActiveBuddy())
 
 // POKÉAPI BUDDY DATA
 const buddyData = ref(null)
@@ -751,6 +833,12 @@ const activeBuddyImage = computed(() => {
 watch(
   () => activeBuddy.value.id,
   async (pokemonId, previousId, onCleanup) => {
+    if (!pokemonId) {
+      buddyData.value = null
+      buddyLoading.value = false
+      buddyError.value = ''
+      return
+    }
     const controller = new AbortController()
     let cancelled = false
 
@@ -769,7 +857,7 @@ watch(
 
       if (!data) {
         const response = await fetch(
-          `https://pokeapi.co/api/v2/pokemon/${pokemonId}/`,
+          `${POKE_API_URL}/pokemon/${pokemonId}/`,
           { signal: controller.signal }
         )
 
@@ -798,31 +886,35 @@ watch(
 )
 
 const pokeball = ref(null)
-async function getPokeBall(){
+async function getPokeBall() {
+  try {
+    const response = await axios.get(
+      `${POKE_API_URL}/item/poke-ball/`
+    )
 
-  const response = await axios.get('https://pokeapi.co/api/v2/item/poke-ball/')
-
-  pokeball.value = response.data.sprites.default
+    pokeball.value = response.data.sprites.default
+  } catch (error) {
+    console.error('Unable to load Poké Ball:', error)
+  }
 }
 
 
 // Call this when a Pokémon is selected as the active buddy.
 function setActiveBuddy(pokemon) {
-  activeBuddy.value = {
-    id: pokemon.id,
-    name: pokemon.name,
-  }
+  const selectedRecord = userPokemon.value.pokemons.find(
+    record =>
+      record.id === pokemon.ownedId &&
+      record.user_id === user.value.id
+  )
 
-  try {
-    localStorage.setItem(
-      'studydex-active-buddy',
-      JSON.stringify(activeBuddy.value)
-    )
-  } catch {
-    // The selection still works for this visit if storage is unavailable.
-  }
+  if (!selectedRecord) return
+
+  userPokemon.value.pokemons.forEach(record => {
+    if (record.user_id === user.value.id) {
+      record.is_selected = record.id === selectedRecord.id
+    }
+  })
 }
-
 // Sleep from 10 PM until 6 AM.
 // Uses your existing clock, including the time preview.
 const buddySleeping = computed(() =>
@@ -855,34 +947,41 @@ const unopenedPackLabel = computed(() =>
     : String(unopenedPackCount.value)
 )
 
-// TRAINER PROFILE — sample data for now
-const trainerProfile = ref({
-  name: 'Trainer',
-  avatar: 'male', // 'male' or 'female'
-})
+// TRAINER PROFILE based on data
+const trainerProfile = computed(() => ({
+  name: user.value.display_name,
+  avatar: user.value.avatar_choice,
+}))
 
 const profileMenuOpen = ref(false)
 
-const trainerAvatarImage = computed(() =>
-  `${asset}trainer-${trainerProfile.value.avatar}.png`
-)
+// const trainerAvatarImage = computed(() =>
+//   `${asset}trainer-${trainerProfile.value.avatar}.png`
+// )
 
 // Sample progress per Pokémon.
-// Later, use the user's owned Pokémon ID if they can own duplicates.
-const buddyTraining = ref({
-  25: { level: 5, exp: 120, expToNextLevel: 200 },
-  133: { level: 3, exp: 45, expToNextLevel: 100 },
-  1: { level: 2, exp: 30, expToNextLevel: 80 },
-  4: { level: 4, exp: 90, expToNextLevel: 150 },
-})
+// // Later, use the user's owned Pokémon ID if they can own duplicates.
+// const buddyTraining = ref({
+//   25: { level: 5, exp: 120, expToNextLevel: 200 },
+//   133: { level: 3, exp: 45, expToNextLevel: 100 },
+//   1: { level: 2, exp: 30, expToNextLevel: 80 },
+//   4: { level: 4, exp: 90, expToNextLevel: 150 },
+// })
 
-const activeBuddyTraining = computed(() =>
-  buddyTraining.value[activeBuddy.value.id] ?? {
-    level: 1,
-    exp: 0,
-    expToNextLevel: 100,
-  }
-)
+// const activeBuddyTraining = computed(() =>
+//   buddyTraining.value[activeBuddy.value.id] ?? {
+//     level: 1,
+//     exp: 0,
+//     expToNextLevel: 100,
+//   }
+// )
+
+
+const activeBuddyTraining = computed(() => ({
+  level: activeBuddy.value.level,
+  exp: activeBuddy.value.xp,
+  expToNextLevel: MAX_XP,
+}))
 
 const buddyExpTarget = computed(() =>
   Math.max(1, activeBuddyTraining.value.expToNextLevel)
@@ -935,13 +1034,6 @@ function selectProfileAction(action) {
 const questTab = ref('todos')
 
 // Sample owned Pokémon — replace with the user's inventory later.
-// Only include Pokémon the user actually owns.
-const ownedPokemon = ref([
-  { id: 25, name: 'Pikachu' },
-  { id: 133, name: 'Eevee' },
-  { id: 1, name: 'Bulbasaur' },
-  { id: 4, name: 'Charmander' },
-])
 
 function pokemonSprite(id) {
   return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
@@ -1008,7 +1100,7 @@ function chooseQuestBuddy(pokemon) {
       >
         <span class="trainer-avatar-frame">
           <img
-            :src="trainerAvatarImage"
+            :src="`/avatars/${user.avatar_choice}.png`"
             alt=""
             class="trainer-avatar"
           />
@@ -1235,7 +1327,7 @@ function chooseQuestBuddy(pokemon) {
 
             </header>
 
-            <button class="quest-manage-todos" type="button" @click="openTodoModal">
+            <button class="quest-manage-todos" type="button" data-bs-toggle="modal" data-bs-target="#todoModal">
               + Add / edit to-dos
             </button>
             <p v-if="todoStorageNotice" class="todo-storage-note" role="status">{{ todoStorageNotice }}</p>
@@ -1292,11 +1384,11 @@ function chooseQuestBuddy(pokemon) {
             <div v-if="ownedPokemon.length" class="pokedex-grid">
               <button
                 v-for="pokemon in ownedPokemon"
-                :key="pokemon.id"
+                :key="pokemon.ownedId"
                 type="button"
                 class="pokedex-card"
-                :class="{ 'is-active': activeBuddy.id === pokemon.id }"
-                :aria-pressed="activeBuddy.id === pokemon.id"
+                :class="{ 'is-active': activeBuddy.ownedId === pokemon.ownedId }"
+                :aria-pressed="activeBuddy.ownedId === pokemon.ownedId"
                 :aria-label="`Choose ${pokemon.name} as your town buddy`"
                 @click="chooseQuestBuddy(pokemon)"
               >
@@ -1312,9 +1404,17 @@ function chooseQuestBuddy(pokemon) {
                 />
 
                 <span class="pokedex-name">{{ pokemon.name }}</span>
+                <div class="small" style="font-size: 10px;">
+                  Lv. {{ pokemon.level }}
+                  <br/>
+                  {{ pokemon.xp }} / {{ MAX_XP }} XP
+                </div>
 
                 <span class="pokedex-card-caption">
-                  {{ activeBuddy.id === pokemon.id ? '✓ Active buddy' : 'Select buddy' }}
+                  {{ activeBuddy.ownedId === pokemon.ownedId
+                    ? '✓ Active buddy'
+                    : 'Select buddy'
+                  }}
                 </span>
               </button>
             </div>
@@ -1605,7 +1705,12 @@ function chooseQuestBuddy(pokemon) {
     </button>
 
     <!-- TO-DO LIST — available even while the buddy sleeps -->
-    <button type="button" class="sd-nav-button" @click="openTodoModal" aria-haspopup="dialog">
+    <button
+      type="button"
+      class="sd-nav-button"
+      data-bs-toggle="modal"
+      data-bs-target="#todoModal"
+    >
       <span class="sd-icon-tile sd-icon-todos">
         <svg viewBox="0 0 32 32" aria-hidden="true">
           <rect x="6" y="4" width="21" height="25" rx="3" fill="#fff9e8" />
@@ -1674,144 +1779,167 @@ function chooseQuestBuddy(pokemon) {
 
   </nav>
 
-  <!-- NOTEPAD MODAL: native dialog provides focus trapping and Escape support -->
-  <Teleport to="body">
-    <dialog ref="todoDialog" class="todo-notepad" aria-labelledby="todo-modal-title"
-            @close="onTodoModalClosed" @click="event => { if (event.target === todoDialog) closeTodoModal() }">
-      <div class="todo-paper">
-        <header class="todo-modal-header">
-          <div>
-            <span class="todo-kicker">STUDYDEX / MY NOTES</span>
-            <h2 id="todo-modal-title">My To-Do List</h2>
-            <p aria-live="polite">{{ remainingTodoLabel }}</p>
-          </div>
-          <button type="button" class="todo-close" aria-label="Close to-do list" @click="closeTodoModal">×</button>
-        </header>
+      <!-- TO-DO MODAL -->
+      <div
+        id="todoModal"
+        ref="todoDialog"
+        class="modal fade todo-notepad"
+        tabindex="-1"
+        aria-labelledby="todo-modal-title"
+        aria-hidden="true"
+      >
+        <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+          <div class="modal-content">
 
-        <form class="todo-add-form" @submit.prevent="addTodo">
-          <label class="visually-hidden" for="new-todo-title">New to-do</label>
-          <input id="new-todo-title" ref="todoInput" v-model="newTodoTitle" maxlength="180"
-                placeholder="What would you like to get done?" autocomplete="off" />
-          <button type="submit" :disabled="!newTodoTitle.trim()">+ Add</button>
-        </form>
-        <p v-if="todoStorageNotice" class="todo-storage-note" role="status">{{ todoStorageNotice }}</p>
-
-        <ul v-if="orderedTodos.length" class="todo-notepad-list">
-          <li v-for="todo in orderedTodos" :key="todo.id" class="todo-notepad-row"
-              :class="{ 'is-done': todo.completedAt }">
-            <button type="button" class="todo-check" :aria-pressed="!!todo.completedAt"
-                    :aria-label="`Mark ${todo.title} as ${todo.completedAt ? 'incomplete' : 'done'}`"
-                    @click="toggleTodo(todo)">
-              <svg v-if="todo.completedAt" viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10 4 4 8-8" /></svg>
-            </button>
-
-            <form v-if="editingTodoId === todo.id" class="todo-edit-form" @submit.prevent="saveTodoEdit(todo)">
-              <input class="todo-edit-input" v-model="editTodoTitle" aria-label="Edit to-do title" maxlength="180"
-                    @keydown.esc.stop.prevent="editingTodoId = null" />
-              <div class="todo-row-actions">
-                <button type="submit" :disabled="!editTodoTitle.trim()">Save</button>
-                <button type="button" @click="editingTodoId = null">Cancel</button>
+            <!-- HEADER -->
+            <div class="modal-header todo-modal-header">
+              <div>
+                <span class="todo-kicker">STUDYDEX / MY NOTES</span>
+                <h2 id="todo-modal-title">My To-Do List</h2>
+                <p aria-live="polite">{{ remainingTodoLabel }}</p>
               </div>
-            </form>
-            <template v-else>
-              <button type="button" class="todo-title-button" :aria-label="`Edit ${todo.title}`" @click="startEditingTodo(todo)">
-                {{ todo.title }}
+
+              <button
+                type="button"
+                class="todo-close flex-shrink-0"
+                data-bs-dismiss="modal"
+                aria-label="Close to-do list"
+              >
+                ×
               </button>
-              <div class="todo-row-actions">
-                <button type="button" :aria-label="`Edit ${todo.title}`" @click="startEditingTodo(todo)">Edit</button>
-                <button type="button" class="todo-delete" :aria-label="`Delete ${todo.title}`" @click="deleteTodo(todo)">Delete</button>
+            </div>
+
+            <!-- BODY -->
+            <div class="modal-body">
+              <form class="todo-add-form" @submit.prevent="addTodo">
+                <label class="visually-hidden" for="new-todo-title">
+                  New to-do
+                </label>
+
+                <input
+                  id="new-todo-title"
+                  ref="todoInput"
+                  v-model="newTodoTitle"
+                  maxlength="180"
+                  placeholder="What would you like to get done?"
+                  autocomplete="off"
+                />
+
+                <button type="submit" :disabled="!newTodoTitle.trim()">
+                  + Add
+                </button>
+              </form>
+
+              <p
+                v-if="todoStorageNotice"
+                class="todo-storage-note"
+                role="status"
+              >
+                {{ todoStorageNotice }}
+              </p>
+
+              <ul v-if="orderedTodos.length" class="todo-notepad-list">
+                <li
+                  v-for="todo in orderedTodos"
+                  :key="todo.id"
+                  class="todo-notepad-row"
+                  :class="{ 'is-done': todo.completedAt }"
+                >
+                  <button
+                    type="button"
+                    class="todo-check"
+                    :aria-pressed="!!todo.completedAt"
+                    :aria-label="`Mark ${todo.title} as ${todo.completedAt ? 'incomplete' : 'done'}`"
+                    @click="toggleTodo(todo)"
+                  >
+                    <svg
+                      v-if="todo.completedAt"
+                      viewBox="0 0 20 20"
+                      aria-hidden="true"
+                    >
+                      <path d="m4 10 4 4 8-8" />
+                    </svg>
+                  </button>
+
+                  <form
+                    v-if="editingTodoId === todo.id"
+                    class="todo-edit-form"
+                    @submit.prevent="saveTodoEdit(todo)"
+                  >
+                    <input
+                      v-model="editTodoTitle"
+                      class="todo-edit-input"
+                      aria-label="Edit to-do title"
+                      maxlength="180"
+                      @keydown.esc.stop.prevent="editingTodoId = null"
+                    />
+
+                    <div class="todo-row-actions">
+                      <button type="submit" :disabled="!editTodoTitle.trim()">
+                        Save
+                      </button>
+
+                      <button type="button" @click="editingTodoId = null">
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+
+                  <template v-else>
+                    <button
+                      type="button"
+                      class="todo-title-button"
+                      :aria-label="`Edit ${todo.title}`"
+                      @click="startEditingTodo(todo)"
+                    >
+                      {{ todo.title }}
+                    </button>
+
+                    <div class="todo-row-actions">
+                      <button
+                        type="button"
+                        :aria-label="`Edit ${todo.title}`"
+                        @click="startEditingTodo(todo)"
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        type="button"
+                        class="todo-delete"
+                        :aria-label="`Delete ${todo.title}`"
+                        @click="deleteTodo(todo)"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </template>
+                </li>
+              </ul>
+
+              <div v-else class="todo-notepad-empty">
+                <span aria-hidden="true">✓</span>
+                <h3>A fresh page, a fresh start.</h3>
+                <p>Add a study task or a little reminder above.</p>
               </div>
-            </template>
-          </li>
-        </ul>
-        <div v-else class="todo-notepad-empty">
-          <span aria-hidden="true">✓</span>
-          <h3>A fresh page, a fresh start.</h3>
-          <p>Add a study task or a little reminder above.</p>
+            </div>
+
+            <!-- FOOTER -->
+            <div class="modal-footer todo-modal-footer">
+              <span>{{ completedTodoCount }} completed today</span>
+              <p>Completed items clear after midnight. Unfinished items stay.</p>
+
+              <button
+                type="button"
+                class="btn btn-warning fw-bold mt-2"
+                data-bs-dismiss="modal"
+              >
+                Done!
+              </button>
+            </div>
+
+          </div>
         </div>
-        <footer class="todo-modal-footer">
-          <span>{{ completedTodoCount }} completed today</span>
-          <p>Completed items clear after midnight. Unfinished items stay.<br />Saved in this browser · Uses your device's local date.</p>
-        </footer>
-      </div>
-    </dialog>
-  </Teleport>
-
-      <!-- Development controls: remove when ready -->
-
-      <!-- INCLUDES MANUAL SHIFTING AND AUTO PREVIEW OF TIME  -->
-      <div class="preview-controls">
-        <label>
-          <input v-model="isRaining" type="checkbox" />
-          🌧️ Test rain
-        </label>
-        <label>
-          <button
-            type="button"
-            class="preview-play-button"
-            @click="toggleAutoPreview"
-          >
-            {{ autoPreview ? '⏸ Pause preview' : '▶ Run day cycle' }}
-          </button>
-          <input
-            v-model="live"
-            type="checkbox"
-            @change="stopAutoPreview"
-          />
-          Live time
-        </label>
-
-        <input
-          v-model.number="previewHour"
-          type="range"
-          min="0"
-          max="23.99"
-          step="0.01"
-          :disabled="live || autoPreview"
-          aria-label="Preview time of day"
-        />
-
-        <span>{{ displayTime }} · {{ lighting.name }}</span>
-
-        <button
-          type="button"
-          @click="setActiveBuddy({ id: 25, name: 'Pikachu' })"
-        >
-          Pikachu
-        </button>
-
-        <button
-          type="button"
-          @click="setActiveBuddy({ id: 133, name: 'Eevee' })"
-        >
-          Eevee
-        </button>
-
-        <button
-          type="button"
-          @click="setActiveBuddy({ id: 1, name: 'Bulbasaur' })"
-        >
-          Bulbasaur
-        </button>
-
-        <button
-          type="button"
-          @click="setActiveBuddy({ id: 4, name: 'Charmander' })"
-        >
-          Charmander
-        </button>
-
-        <button type="button" @click="unopenedPackCount++">
-          Earn a pack
-        </button>
-
-        <button
-          type="button"
-          :disabled="unopenedPackCount === 0"
-          @click="unopenedPackCount = Math.max(0, unopenedPackCount - 1)"
-        >
-          Open a pack
-        </button>
       </div>
       <!-- LOCATION MODAL -->
       <div
@@ -4359,95 +4487,387 @@ img.layer {
 
 
 
-/* SHARED TO-DOS — NOTEPAD AND QUEST DEVICE */
-.sd-icon-todos { background: linear-gradient(#a9e5c8, #4aaf8a); color: #294b52; }
-.todo-notepad, .todo-notepad * { box-sizing: border-box; }
+/* =====================================================
+   SHARED TO-DOS — BOOTSTRAP MODAL AND QUEST DEVICE
+===================================================== */
+
+.sd-icon-todos {
+  background: linear-gradient(#a9e5c8, #4aaf8a);
+  color: #294b52;
+}
+
+/* MODAL */
+
 .todo-notepad {
-  width: min(720px, calc(100vw - 28px)); max-height: calc(100dvh - 40px);
-  padding: 0; border: 1px solid #e6dcc4; border-radius: 22px;
-  background: #fffcf2; color: #30374a; margin: auto;
-  box-shadow: 0 24px 80px #14233d66;
+  color: #30374a;
   font-family: 'Nunito', system-ui, sans-serif;
 }
 
-.todo-notepad::backdrop { background: #12203988; backdrop-filter: blur(5px); }
+.todo-notepad .modal-dialog {
+  width: calc(100% - 28px);
+  max-width: 720px;
+  margin: 20px auto;
+  min-height: calc(100% - 40px);
+}
 
-.todo-notepad[open] { animation: todo-modal-in 180ms ease-out; }
+.todo-notepad .modal-dialog-scrollable {
+  height: calc(100% - 40px);
+}
 
-.todo-paper { padding: 30px; border-top: 10px solid #ffde59; }
+.todo-notepad .modal-content {
+  background: #fffcf2;
+  color: #30374a;
+  border: 1px solid #e6dcc4;
+  border-top: 10px solid #ffde59;
+  border-radius: 22px;
+  overflow: hidden;
+  box-shadow: 0 24px 80px #14233d66;
+}
 
-.todo-modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.todo-notepad .modal-body {
+  padding: 0 30px;
+}
 
-.todo-kicker { font: 10px 'Silkscreen', monospace; color: #887037; letter-spacing: 1px; }
+/* HEADER */
 
-.todo-modal-header h2 { margin: 9px 0 4px; font-size: clamp(24px, 4vw, 34px); font-weight: 800; }
+.todo-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 30px 30px 0;
+  border-bottom: 0;
+}
 
-.todo-modal-header p { color: #707887; margin: 0; font-size: 14px; }
+.todo-kicker {
+  font-family: 'Silkscreen', monospace;
+  font-size: 10px;
+  color: #887037;
+  letter-spacing: 1px;
+}
 
-.todo-close { border: 0; background: #eee9dd; width: 36px; height: 36px; border-radius: 50%; font-size: 25px; color: #515967; cursor: pointer; }
+.todo-modal-header h2 {
+  margin: 9px 0 4px;
+  font-size: clamp(24px, 4vw, 34px);
+  font-weight: 800;
+}
 
-.todo-add-form { display: flex; gap: 10px; margin: 24px 0 12px; }
+.todo-modal-header p {
+  margin: 0;
+  color: #707887;
+  font-size: 14px;
+}
 
-.todo-add-form input, .todo-edit-input { min-width: 0; flex: 1; padding: 12px; border: 1px solid #ded8c6; border-radius: 9px; background: #fff; color: #30374a; font: inherit; }
+.todo-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #eee9dd;
+  color: #515967;
+  font-size: 25px;
+  line-height: 1;
+  cursor: pointer;
+}
 
-.todo-add-form button { border: 0; border-radius: 9px; background: #ffde59; padding: 10px 18px; font-weight: 800; color: #30374a; cursor: pointer; }
+.todo-close:hover {
+  background: #e3dccb;
+}
 
-.todo-notepad button:disabled { opacity: .45; cursor: default; }
+/* ADD AND EDIT FORMS */
 
-.todo-notepad-list, .quest-todo-list { padding: 0; margin: 0; list-style: none; }
+.todo-add-form {
+  display: flex;
+  gap: 10px;
+  margin: 24px 0 12px;
+}
 
-.todo-notepad-row { display: flex; align-items: center; gap: 12px; padding: 16px 0; border-bottom: 1px solid #e6e1d1; }
+.todo-add-form input,
+.todo-edit-input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #ded8c6;
+  border-radius: 9px;
+  background: #fff;
+  color: #30374a;
+  font: inherit;
+}
 
-.todo-check { display: inline-flex; justify-content: center; align-items: center; flex: 0 0 24px; width: 24px; height: 24px; padding: 3px; border: 2px solid #a2b0ac; border-radius: 50%; background: transparent; cursor: pointer; color: white; }
+.todo-add-form button {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border: 0;
+  border-radius: 9px;
+  background: #ffde59;
+  color: #30374a;
+  font-weight: 800;
+  cursor: pointer;
+}
 
-.todo-check[aria-pressed="true"] { border-color: #35936d; background: #35936d; }
+.todo-add-form button:hover:not(:disabled) {
+  background: #ffcf32;
+}
 
-.todo-check svg { width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.todo-edit-form {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  min-width: 0;
+  gap: 8px;
+}
 
-.todo-title-button { flex: 1; min-width: 0; border: 0; padding: 4px 0; background: transparent; color: #30374a; text-align: left; font: inherit; overflow-wrap: anywhere; cursor: text; }
+.todo-edit-input {
+  flex-basis: 100%;
+  width: 100%;
+}
 
-.is-done .todo-title-button, .is-done .quest-todo-title { text-decoration: line-through; color: #818b88; }
+.todo-notepad button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 
-.todo-row-actions { display: flex; gap: 5px; }
+/* TASK LIST */
 
-.todo-row-actions button { padding: 7px 9px; border: 0; border-radius: 6px; background: transparent; color: #536e87; font: inherit; font-size: 12px; cursor: pointer; }
+.todo-notepad-list,
+.quest-todo-list {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
 
-.todo-row-actions button:hover { background: #eeeadc; }
+.todo-notepad-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid #e6e1d1;
+}
 
-.todo-row-actions .todo-delete { color: #a4404d; }
+.todo-title-button {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #30374a;
+  text-align: left;
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
 
-.todo-edit-form { display: flex; flex: 1; min-width: 0; flex-wrap: wrap; gap: 8px; }
+.is-done .todo-title-button,
+.is-done .quest-todo-title {
+  color: #818b88;
+  text-decoration: line-through;
+}
 
-.todo-edit-input { width: 100%; }
+/* COMPLETION BUTTON */
 
-.todo-notepad-empty { padding: 40px 12px; text-align: center; color: #7e887f; }
+.todo-check {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 3px;
+  border: 2px solid #a2b0ac;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
 
-.todo-notepad-empty > span { display: inline-grid; place-items: center; width: 52px; height: 52px; border-radius: 50%; background: #e5f1e8; color: #35936d; font-size: 28px; }
+.todo-check[aria-pressed="true"] {
+  border-color: #35936d;
+  background: #35936d;
+}
 
-.todo-notepad-empty h3 { font-size: 18px; margin: 14px 0 6px; }
+.todo-check svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
-.todo-notepad-empty p { font-size: 14px; }
+/* ROW ACTIONS */
 
-.todo-modal-footer { margin-top: 24px; font-size: 12px; color: #707887; }
+.todo-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 5px;
+}
 
-.todo-modal-footer > span { font-weight: 700; color: #35936d; }
+.todo-row-actions button {
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #536e87;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
 
-.todo-modal-footer p { margin: 8px 0 0; line-height: 1.6; }
+.todo-row-actions button:hover:not(:disabled) {
+  background: #eeeadc;
+}
 
-.todo-storage-note { font-size: 12px; color: #9b482e; margin: 10px 0; }
+.todo-row-actions .todo-delete {
+  color: #a4404d;
+}
 
-.quest-manage-todos { width: 100%; margin: 0 0 10px; padding: 9px; border: 1px solid #d9bd4e; border-radius: 8px; background: #ffed9b; color: #53451b; font: inherit; font-size: 11px; cursor: pointer; }
+/* EMPTY STATE */
 
-.quest-todo-item { display: flex; align-items: flex-start; gap: 9px; padding: 12px 2px; border-bottom: 1px solid #e1dfd0; }
+.todo-notepad-empty {
+  padding: 40px 12px;
+  text-align: center;
+  color: #7e887f;
+}
 
-.quest-todo-title { flex: 1; min-width: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.6; }
+.todo-notepad-empty > span {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: #e5f1e8;
+  color: #35936d;
+  font-size: 28px;
+}
 
-.quest-todo-item .todo-check { margin-top: 1px; }
+.todo-notepad-empty h3 {
+  margin: 14px 0 6px;
+  font-size: 18px;
+}
 
-.quest-toggle-count { white-space: normal; }
+.todo-notepad-empty p {
+  font-size: 14px;
+}
 
-.todo-notepad button:focus-visible, .todo-notepad input:focus-visible, .todo-check:focus-visible, .quest-manage-todos:focus-visible { outline: 3px solid #6489ed; outline-offset: 3px; }
+/* FOOTER AND STORAGE NOTICE */
 
+.todo-modal-footer {
+  display: block;
+  margin: 0;
+  padding: 24px 30px 30px;
+  border-top: 0;
+  font-size: 12px;
+  color: #707887;
+}
+
+.todo-modal-footer > span {
+  margin: 0;
+  font-weight: 700;
+  color: #35936d;
+}
+
+.todo-modal-footer p {
+  margin: 8px 0 0;
+  line-height: 1.6;
+}
+
+.todo-storage-note {
+  margin: 10px 0;
+  font-size: 12px;
+  color: #9b482e;
+}
+
+/* QUEST DEVICE */
+
+.quest-manage-todos {
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 9px;
+  border: 1px solid #d9bd4e;
+  border-radius: 8px;
+  background: #ffed9b;
+  color: #53451b;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.quest-manage-todos:hover {
+  background: #ffde59;
+}
+
+.quest-todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 12px 2px;
+  border-bottom: 1px solid #e1dfd0;
+}
+
+.quest-todo-title {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.quest-todo-item .todo-check {
+  margin-top: 1px;
+}
+
+.quest-toggle-count {
+  white-space: normal;
+}
+
+/* KEYBOARD FOCUS */
+
+.todo-notepad button:focus-visible,
+.todo-notepad input:focus-visible,
+.todo-check:focus-visible,
+.quest-manage-todos:focus-visible {
+  outline: 3px solid #6489ed;
+  outline-offset: 3px;
+}
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+  .todo-modal-header {
+    padding: 20px 16px 0;
+  }
+
+  .todo-notepad .modal-body {
+    padding: 0 16px;
+  }
+
+  .todo-modal-footer {
+    padding: 20px 16px;
+  }
+
+  .todo-notepad-row {
+    flex-wrap: wrap;
+    gap: 9px;
+  }
+
+  .todo-title-button {
+    flex-basis: calc(100% - 40px);
+  }
+
+  .todo-notepad-row > .todo-row-actions {
+    margin-left: 33px;
+  }
+
+  .todo-add-form button {
+    padding: 10px;
+  }
+}
 @keyframes todo-modal-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 600px) {
   .todo-paper { padding: 20px 16px; }
