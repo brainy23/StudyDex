@@ -13,6 +13,11 @@ vi.mock('vue-router', async (importOriginal) => ({
 }))
 vi.mock('../../services/registrationService', () => ({ registerUser }))
 vi.mock('../../lib/supabase', () => ({ getSupabase: () => ({ auth: { getUser } }) }))
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(async () => ({ data: { sprites: { front_default: '/test-pikachu.png' } } })),
+  },
+}))
 
 beforeEach(() => {
   registerUser.mockReset()
@@ -23,20 +28,26 @@ beforeEach(() => {
 
 async function fillRegistration(avatarChoice = 'male') {
   const wrapper = mount(RegisterView, { global: { stubs: { RouterLink: true } } })
-  expect(wrapper.get('#nextButton').attributes('disabled')).toBeDefined()
+  await wrapper.get('form').trigger('submit')
+  expect(wrapper.find('#email-input').exists()).toBe(true)
+  expect(wrapper.get('[role="status"]').text()).toContain('Please enter a valid email address')
+  expect(registerUser).not.toHaveBeenCalled()
   await wrapper.get('#email-input').setValue('learner@example.edu.sg')
-  await wrapper.get('#nextButton').trigger('click')
+  await wrapper.get('form').trigger('submit')
   await wrapper.get('#username-input').setValue('Ash')
-  await wrapper.get('#nextButton').trigger('click')
+  await wrapper.get('form').trigger('submit')
   // Going back must work even when the current step has not been completed.
   await wrapper.get('#prevButton').trigger('click')
   expect(wrapper.get('#username-input').element.value).toBe('Ash')
-  await wrapper.get('#nextButton').trigger('click')
+  await wrapper.get('form').trigger('submit')
   await wrapper.get('#level-selector').setValue('p3')
-  await wrapper.get('#nextButton').trigger('click')
-  expect(wrapper.get('#nextButton').attributes('disabled')).toBeDefined()
+  await wrapper.get('form').trigger('submit')
+  await wrapper.get('form').trigger('submit')
+  expect(wrapper.find('input[name="avatar"]').exists()).toBe(true)
+  expect(wrapper.get('[role="status"]').text()).toContain('Choose an avatar')
+  expect(registerUser).not.toHaveBeenCalled()
   await wrapper.get(`input[name="avatar"][value="${avatarChoice}"]`).setValue(true)
-  await wrapper.get('#nextButton').trigger('click')
+  await wrapper.get('form').trigger('submit')
   await wrapper.get('#password-input').setValue('Password123')
   await wrapper.get('#confirm-password-input').setValue('Password123')
   return wrapper
