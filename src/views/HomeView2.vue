@@ -418,33 +418,26 @@ async function fetchActualRain() {
 // 6. DETERMINE WEATHER IMAGE
 // ==========================================
 const weatherImg = computed(() => {
-  if (weatherCode.value === null) return null
-
-  // Rain: based on observed NEA rainfall
-  if (isRaining.value) {
+  if (rainActive.value) {
     return '/assets/rain.png'
   }
 
-  // Nighttime
+  if (weatherCode.value === null) return null
+
   if (!isDay.value) {
     return '/assets/moon.png'
   }
 
-  // Cloudy
   if (cloudCover.value >= 70) {
     return '/assets/cloud.png'
   }
 
-  // Sunny + Cloudy
   if (cloudCover.value >= 20) {
     return '/assets/suncloud.png'
   }
 
-  // Sunny
   return '/assets/sun.png'
 })
-
-
 
 
 const hour = computed(() => {
@@ -575,7 +568,10 @@ function celestialStyle(isMoon) {
     ? ((h - 19 + 24) % 24) / 11
     : (h - 6) / 13
 
-  const visible = progress > 0 && progress < 1 && !isRaining.value
+  const visible =
+  progress > 0 &&
+  progress < 1 &&
+  !rainActive.value
   const p = Math.max(0, Math.min(1, progress))
 
   return {
@@ -594,19 +590,433 @@ const displayTime = computed(() => {
   ).padStart(2, '0')}`
 })
 
-// RAININGGG
+// ==========================================
+// RAIN + UMBRELLA
+// ==========================================
 
-// Create drops once so they don't reset when the clock updates
-const rainDrops = Array.from({ length: 90 }, (_, id) => ({
-  id,
-  style: {
-    left: `${Math.random() * 110}%`,
-    height: `${14 + Math.random() * 18}px`,
-    opacity: 0.2 + Math.random() * 0.4,
-    animationDuration: `${0.7 + Math.random() * 0.5}s`,
-    animationDelay: `${-Math.random() * 3}s`,
-  },
-}))
+// Set true to test. Set false to use actual weather.
+const rainPreview = ref(false)
+
+
+const rainActive = computed(() =>
+  rainPreview.value || isRaining.value
+)
+
+const rainCanvas = ref(null)
+const umbrellaImage = ref(null)
+
+const umbrellaReady = ref(false)
+const umbrellaFailed = ref(false)
+
+const showUmbrella = computed(() =>
+  rainActive.value &&
+  !!townBuddyImage.value &&
+  !buddyError.value &&
+  !umbrellaFailed.value
+)
+
+let rainContext
+let rainObserver
+let rainMotionQuery
+
+let rainFrame = 0
+let rainLastTime = 0
+let rainWidth = 0
+let rainHeight = 0
+
+let rainParticles = []
+let rainSplashes = []
+let canopyProfile = []
+
+// Read the umbrella's top outline from the transparent PNG.
+// Only scan the upper 65% so the handle is excluded.
+function prepareUmbrella(event) {
+  const image = event.target
+
+  const sample = document.createElement('canvas')
+  sample.width = 128
+  sample.height = 86
+
+  const context = sample.getContext('2d', {
+    willReadFrequently: true
+  })
+
+  if (!context) return
+
+  context.drawImage(
+    image,
+    0,
+    0,
+    sample.width,
+    sample.height
+  )
+
+  try {
+    const pixels = context.getImageData(
+      0,
+      0,
+      sample.width,
+      sample.height
+    ).data
+
+    canopyProfile = []
+
+    for (let x = 0; x < sample.width; x++) {
+      for (let y = 0; y < sample.height * 0.65; y++) {
+        const alphaIndex =
+          (y * sample.width + x) * 4 + 3
+
+        if (pixels[alphaIndex] >= 160) {
+          canopyProfile.push({
+            x: x / sample.width,
+            y: y / sample.height
+          })
+
+          break
+        }
+      }
+    }
+  } catch {
+    // Fallback dome if a remotely hosted image cannot be sampled.
+    canopyProfile = Array.from(
+      { length: 65 },
+      (_, index) => {
+        const progress = index / 64
+
+        return {
+          x: 0.07 + progress * 0.86,
+          y: 0.08 + 0.47 * (2 * progress - 1) ** 2
+        }
+      }
+    )
+  }
+
+  umbrellaReady.value = canopyProfile.length > 1
+}
+
+// Convert the umbrella outline into canvas coordinates.
+// Reading its position each frame keeps the shield aligned.
+function getRainCanopy() {
+  if (
+    !showUmbrella.value ||
+    !umbrellaReady.value ||
+    !umbrellaImage.value ||
+    !rainCanvas.value
+  ) {
+    return null
+  }
+
+  const canvasBox =
+    rainCanvas.value.getBoundingClientRect()
+
+  const imageBox =
+    umbrellaImage.value.getBoundingClientRect()
+
+  if (!canvasBox.width || !canvasBox.height) {
+    return null
+  }
+
+  const scaleX = rainWidth / canvasBox.width
+  const scaleY = rainHeight / canvasBox.height
+
+  return canopyProfile.map(point => ({
+    x: (
+      imageBox.left -
+      canvasBox.left +
+      point.x * imageBox.width
+    ) * scaleX,
+
+    y: (
+      imageBox.top -
+      canvasBox.top +
+      point.y * imageBox.height
+    ) * scaleY
+  }))
+}
+
+// Find the canopy height directly underneath a raindrop.
+function roofHeight(points, x) {
+  if (
+    !points ||
+    x < points[0].x ||
+    x > points[points.length - 1].x
+  ) {
+    return null
+  }
+
+  for (let index = 1; index < points.length; index++) {
+    const previous = points[index - 1]
+    const current = points[index]
+
+    if (x <= current.x) {
+      const progress =
+        (x - previous.x) /
+        (current.x - previous.x)
+
+      return previous.y +
+        (current.y - previous.y) * progress
+    }
+  }
+
+  return null
+}
+
+function makeRainDrop(seed = false) {
+  return {
+    x: Math.random() * rainWidth,
+
+    y: seed
+      ? Math.random() * rainHeight
+      : -40 - Math.random() * 80,
+
+    speed: 650 + Math.random() * 400,
+    length: 14 + Math.random() * 18,
+    opacity: 0.22 + Math.random() * 0.35
+  }
+}
+
+function resizeRain() {
+  const canvas = rainCanvas.value
+
+  if (!canvas || !rainContext) return
+
+  rainWidth = canvas.clientWidth
+  rainHeight = canvas.clientHeight
+
+  const pixelRatio = Math.min(
+    window.devicePixelRatio || 1,
+    2
+  )
+
+  canvas.width = Math.round(rainWidth * pixelRatio)
+  canvas.height = Math.round(rainHeight * pixelRatio)
+
+  rainContext.setTransform(
+    pixelRatio,
+    0,
+    0,
+    pixelRatio,
+    0,
+    0
+  )
+
+  const count = Math.max(
+    35,
+    Math.min(
+      150,
+      Math.round(rainWidth * rainHeight / 12000)
+    )
+  )
+
+  rainParticles = Array.from(
+    { length: count },
+    () => makeRainDrop(true)
+  )
+
+  rainSplashes = []
+}
+
+function animateRain(time) {
+  const deltaTime = rainLastTime
+    ? Math.min((time - rainLastTime) / 1000, 0.035)
+    : 0
+
+  rainLastTime = time
+
+  const context = rainContext
+  const canopy = getRainCanopy()
+
+  context.clearRect(0, 0, rainWidth, rainHeight)
+
+  context.save()
+
+  // Draw rain everywhere except the area below the canopy.
+  // This also hides drops initially spawned inside the sheltered area.
+  context.beginPath()
+  context.rect(0, 0, rainWidth, rainHeight)
+
+  if (canopy) {
+    context.moveTo(
+      canopy[0].x,
+      rainHeight + 100
+    )
+
+    canopy.forEach(point => {
+      context.lineTo(point.x, point.y)
+    })
+
+    context.lineTo(
+      canopy[canopy.length - 1].x,
+      rainHeight + 100
+    )
+
+    context.closePath()
+  }
+
+  context.clip('evenodd')
+  context.lineWidth = 1
+  context.lineCap = 'round'
+
+  for (let index = 0; index < rainParticles.length; index++) {
+    const drop = rainParticles[index]
+    const previousY = drop.y
+
+    drop.y += drop.speed * deltaTime
+
+    const roof = roofHeight(canopy, drop.x)
+
+    // Drop hits the umbrella.
+    if (roof !== null && drop.y >= roof) {
+      if (
+        previousY < roof &&
+        rainSplashes.length < 60
+      ) {
+        for (const direction of [-1, 1]) {
+          rainSplashes.push({
+            x: drop.x,
+            y: roof - 2,
+            vx: direction * (25 + Math.random() * 35),
+            vy: -45 - Math.random() * 35,
+            life: 0.22,
+            maxLife: 0.22
+          })
+        }
+      }
+
+      // Start a new drop above the screen.
+      rainParticles[index] = makeRainDrop()
+      continue
+    }
+
+    // Drop leaves the screen.
+    if (drop.y - drop.length > rainHeight) {
+      rainParticles[index] = makeRainDrop()
+      continue
+    }
+
+    context.strokeStyle =
+      `rgba(210, 230, 255, ${drop.opacity})`
+
+    context.beginPath()
+
+    context.moveTo(
+      drop.x,
+      drop.y - drop.length
+    )
+
+    context.lineTo(drop.x, drop.y)
+    context.stroke()
+  }
+
+  // Small splash particles bounce away from the canopy.
+  rainSplashes = rainSplashes.filter(
+    splash => splash.life > 0
+  )
+
+  for (const splash of rainSplashes) {
+    splash.life -= deltaTime
+
+    splash.x += splash.vx * deltaTime
+    splash.y += splash.vy * deltaTime
+    splash.vy += 300 * deltaTime
+
+    const opacity = Math.max(
+      0,
+      splash.life / splash.maxLife
+    ) * 0.8
+
+    context.fillStyle =
+      `rgba(220, 240, 255, ${opacity})`
+
+    context.fillRect(
+      splash.x,
+      splash.y,
+      2,
+      2
+    )
+  }
+
+  context.restore()
+
+  rainFrame = requestAnimationFrame(animateRain)
+}
+
+function syncRainAnimation() {
+  cancelAnimationFrame(rainFrame)
+
+  rainFrame = 0
+  rainLastTime = 0
+
+  if (!rainContext) return
+
+  rainContext.clearRect(
+    0,
+    0,
+    rainWidth,
+    rainHeight
+  )
+
+  if (
+    rainActive.value &&
+    !document.hidden &&
+    !rainMotionQuery?.matches
+  ) {
+    rainFrame = requestAnimationFrame(animateRain)
+  } else {
+    rainParticles = rainParticles.map(
+      () => makeRainDrop(true)
+    )
+
+    rainSplashes = []
+  }
+}
+
+watch(rainActive, syncRainAnimation, {
+  flush: 'post'
+})
+
+// These can coexist with your existing lifecycle hooks.
+onMounted(() => {
+  rainContext = rainCanvas.value?.getContext('2d')
+
+  if (!rainContext) return
+
+  rainMotionQuery = window.matchMedia(
+    '(prefers-reduced-motion: reduce)'
+  )
+
+  rainMotionQuery.addEventListener(
+    'change',
+    syncRainAnimation
+  )
+
+  document.addEventListener(
+    'visibilitychange',
+    syncRainAnimation
+  )
+
+  rainObserver = new ResizeObserver(resizeRain)
+  rainObserver.observe(rainCanvas.value)
+
+  resizeRain()
+  syncRainAnimation()
+})
+
+onUnmounted(() => {
+  cancelAnimationFrame(rainFrame)
+
+  rainObserver?.disconnect()
+
+  rainMotionQuery?.removeEventListener(
+    'change',
+    syncRainAnimation
+  )
+
+  document.removeEventListener(
+    'visibilitychange',
+    syncRainAnimation
+  )
+})
 
  // TODAY'S STUDY GOALS
 const goalsOpen = ref(false)
@@ -918,7 +1328,7 @@ function setActiveBuddy(pokemon) {
 // Sleep from 10 PM until 6 AM.
 // Uses your existing clock, including the time preview.
 const buddySleeping = computed(() =>
-  hour.value >= 22 || hour.value < 6
+  hour.value >= 24 || hour.value < 6
 )
 
 const ballShaking = ref(false)
@@ -1043,6 +1453,302 @@ function chooseQuestBuddy(pokemon) {
   setActiveBuddy(pokemon)
 }
 
+
+// ==========================================
+// DRAGGABLE UMBRELLA
+// ==========================================
+
+const buddyCharacter = ref(null)
+
+const umbrellaOffset = ref({ x: 0, y: 0 })
+const umbrellaDragging = ref(false)
+const buddySheltered = ref(true)
+
+const umbrellaPosition = computed(() => ({
+  '--umbrella-x': `${umbrellaOffset.value.x}px`,
+  '--umbrella-y': `${umbrellaOffset.value.y}px`
+}))
+
+const buddyGettingWet = computed(() =>
+  showUmbrella.value &&
+  umbrellaReady.value &&
+  !buddySheltered.value
+)
+
+let umbrellaDrag = null
+let umbrellaTrackingFrame = 0
+
+function startUmbrellaDrag(event) {
+  if (
+    !showUmbrella.value ||
+    !umbrellaReady.value ||
+    !event.isPrimary ||
+    event.button !== 0
+  ) return
+
+  event.preventDefault()
+
+  umbrellaDragging.value = true
+
+  umbrellaDrag = {
+    pointerId: event.pointerId,
+    element: event.currentTarget,
+    startX: event.clientX,
+    startY: event.clientY,
+    offsetX: umbrellaOffset.value.x,
+    offsetY: umbrellaOffset.value.y
+  }
+
+  // Continue dragging even when the pointer leaves the umbrella.
+  event.currentTarget.setPointerCapture(event.pointerId)
+}
+
+// Keep the complete umbrella inside the town.
+function moveUmbrellaTo(x, y) {
+  const image = umbrellaImage.value
+  const scene = rainCanvas.value
+
+  if (!image || !scene) return
+
+  const imageBox = image.getBoundingClientRect()
+  const sceneBox = scene.getBoundingClientRect()
+
+  const current = umbrellaOffset.value
+
+  const minX = current.x + sceneBox.left - imageBox.left
+  const maxX = current.x + sceneBox.right - imageBox.right
+
+  // Allow a little space for its floating animation.
+  const minY = current.y + sceneBox.top - imageBox.top + 8
+  const maxY = current.y + sceneBox.bottom - imageBox.bottom - 8
+
+  umbrellaOffset.value = {
+    x: Math.max(minX, Math.min(maxX, x)),
+    y: Math.max(minY, Math.min(maxY, y))
+  }
+}
+
+function moveUmbrellaDrag(event) {
+  if (
+    !umbrellaDrag ||
+    event.pointerId !== umbrellaDrag.pointerId
+  ) return
+
+  moveUmbrellaTo(
+    umbrellaDrag.offsetX +
+      event.clientX -
+      umbrellaDrag.startX,
+
+    umbrellaDrag.offsetY +
+      event.clientY -
+      umbrellaDrag.startY
+  )
+}
+
+function stopUmbrellaDrag(event) {
+  if (
+    !umbrellaDrag ||
+    (event && event.pointerId !== umbrellaDrag.pointerId)
+  ) return
+
+  const { element, pointerId } = umbrellaDrag
+
+  umbrellaDrag = null
+  umbrellaDragging.value = false
+
+  if (element.hasPointerCapture(pointerId)) {
+    element.releasePointerCapture(pointerId)
+  }
+}
+
+function resetUmbrellaPosition() {
+  stopUmbrellaDrag()
+
+  umbrellaOffset.value = { x: 0, y: 0 }
+  buddySheltered.value = true
+}
+
+// Optional keyboard controls:
+// Arrow keys move it; Home returns it to the Pokémon.
+function handleUmbrellaKey(event) {
+  if (!showUmbrella.value || !umbrellaReady.value) return
+
+  if (event.key === 'Home') {
+    event.preventDefault()
+    resetUmbrellaPosition()
+    return
+  }
+
+  const directions = {
+    ArrowLeft: [-1, 0],
+    ArrowRight: [1, 0],
+    ArrowUp: [0, -1],
+    ArrowDown: [0, 1]
+  }
+
+  const direction = directions[event.key]
+
+  if (!direction) return
+
+  event.preventDefault()
+
+  const step = event.shiftKey ? 30 : 10
+
+  moveUmbrellaTo(
+    umbrellaOffset.value.x + direction[0] * step,
+    umbrellaOffset.value.y + direction[1] * step
+  )
+}
+
+// Check whether the canopy still covers the Pokémon.
+// Uses the central part of the sprite box to allow for transparent margins.
+function updateBuddyShelter() {
+  const canopy = getRainCanopy()
+  const character = buddyCharacter.value
+  const canvas = rainCanvas.value
+
+  if (!canopy || !character || !canvas) {
+    buddySheltered.value = true
+    return
+  }
+
+  const buddyBox = character.getBoundingClientRect()
+  const canvasBox = canvas.getBoundingClientRect()
+
+  if (!canvasBox.width || !canvasBox.height) return
+
+  const scaleX = rainWidth / canvasBox.width
+  const scaleY = rainHeight / canvasBox.height
+
+  const headY = (
+    buddyBox.top -
+    canvasBox.top +
+    buddyBox.height * 0.3
+  ) * scaleY
+
+  // Check the left, middle and right of the Pokémon's central area.
+  buddySheltered.value = [0.25, 0.5, 0.75].every(position => {
+    const x = (
+      buddyBox.left -
+      canvasBox.left +
+      buddyBox.width * position
+    ) * scaleX
+
+    const roofY = roofHeight(canopy, x)
+
+    return roofY !== null && roofY < headY
+  })
+}
+
+// Separate from the rain animation so dragging still updates the
+// dialogue when reduced-motion preferences disable falling rain.
+function trackUmbrellaShelter() {
+  updateBuddyShelter()
+
+  umbrellaTrackingFrame =
+    requestAnimationFrame(trackUmbrellaShelter)
+}
+
+function syncUmbrellaTracking() {
+  cancelAnimationFrame(umbrellaTrackingFrame)
+  umbrellaTrackingFrame = 0
+
+  if (
+    showUmbrella.value &&
+    umbrellaReady.value &&
+    !document.hidden
+  ) {
+    umbrellaTrackingFrame =
+      requestAnimationFrame(trackUmbrellaShelter)
+  }
+}
+
+watch(
+  [showUmbrella, umbrellaReady],
+  () => {
+    if (!showUmbrella.value) {
+      resetUmbrellaPosition()
+    }
+
+    syncUmbrellaTracking()
+  },
+  { flush: 'post' }
+)
+
+function handleUmbrellaVisibility() {
+  if (document.hidden) {
+    stopUmbrellaDrag()
+  }
+
+  syncUmbrellaTracking()
+}
+
+onMounted(() => {
+  document.addEventListener(
+    'visibilitychange',
+    handleUmbrellaVisibility
+  )
+
+  // Return it to the Pokémon after a screen-size change.
+  window.addEventListener('resize', resetUmbrellaPosition)
+
+  syncUmbrellaTracking()
+})
+
+onUnmounted(() => {
+  stopUmbrellaDrag()
+  cancelAnimationFrame(umbrellaTrackingFrame)
+
+  document.removeEventListener(
+    'visibilitychange',
+    handleUmbrellaVisibility
+  )
+
+  window.removeEventListener(
+    'resize',
+    resetUmbrellaPosition
+  )
+})
+
+// Messages
+const buddyMessage = ref('What are we going to do today?')
+const hoveredBuilding = ref(null)
+
+const buildingMessages = {
+  trainer: 'Hmmm go see your home?',
+  laboratory: 'Wanna go hit some decks?',
+  arena: 'Wanna go destroy some quizzes?'
+}
+
+watch(
+  [
+    buddyLoading,
+    buddyError,
+    buddyGettingWet,
+    buddySleeping,
+    showUmbrella,
+    umbrellaReady,
+    hoveredBuilding
+  ],
+  () => {
+    if (buddyLoading.value) {
+      buddyMessage.value = 'Your buddy is on the way…'
+    } else if (buddyError.value) {
+      buddyMessage.value = buddyError.value
+    } else if (buddyGettingWet.value) {
+      buddyMessage.value = 'HEY! Put the umbrella back! 🌧️'
+    } else if (buddySleeping.value) {
+      buddyMessage.value = 'Zzz… Time to recharge.'
+    } else if (hoveredBuilding.value) {
+      buddyMessage.value = buildingMessages[hoveredBuilding.value]
+    } else if (showUmbrella.value && umbrellaReady.value) {
+      buddyMessage.value = 'Ahh… nice and dry! ☂️'
+    } else {
+      buddyMessage.value = 'What are we going to do today?'
+    }
+  },
+  { immediate: true }
+)
 
 </script>
 
@@ -1498,8 +2204,15 @@ function chooseQuestBuddy(pokemon) {
           alt=""
         />
 
-        <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.stars }">
-          <img class="layer stars" :src="asset + 'bg_stars.png'" alt="" />
+        <div
+          class="layer"
+          :style="{ opacity: rainActive ? 0 : lighting.stars }"
+        >
+          <img
+            class="layer stars"
+            :src="asset + 'bg_stars.png'"
+            alt=""
+          />
         </div>
 
         <div
@@ -1530,7 +2243,10 @@ function chooseQuestBuddy(pokemon) {
 
 
 
-        <div class="layer" :style="{ opacity: isRaining ? 0 : lighting.fireflies }">
+        <div
+          class="layer"
+          :style="{ opacity: rainActive ? 0 : lighting.fireflies }"
+        >
           <img
             class="layer fireflies"
             :src="asset + 'bg_firefly.png'"
@@ -1538,67 +2254,93 @@ function chooseQuestBuddy(pokemon) {
           />
         </div>
 
-        <!-- Darkening layer: separate from the rain -->
+        <!-- Darken the town while raining -->
         <div
           class="layer rain-shade"
-          :class="{ 'rain-active': isRaining }"
+          :class="{ 'rain-active': rainActive }"
         ></div>
 
-        <!-- Raindrops must be INSIDE this container -->
-        <div
+        <!-- Rain with umbrella collision detection -->
+        <canvas
+          ref="rainCanvas"
           class="layer rain-overlay"
-          :class="{ 'rain-active': isRaining }"
+          :class="{ 'rain-active': rainActive }"
           aria-hidden="true"
-        >
-          <span
-            v-for="drop in rainDrops"
-            :key="drop.id"
-            class="rain-drop"
-            :style="drop.style"
-          ></span>
-        </div>
+        ></canvas>
 
-        <!-- ACTIVE BUDDY: speech, sprite, sleeping Poké Ball -->
+        <!-- ACTIVE BUDDY -->
         <div
           class="town-buddy"
-          :class="{ 'is-sleeping': buddySleeping }"
+          :class="{
+            'is-sleeping': buddySleeping,
+            'has-umbrella': showUmbrella && umbrellaReady
+          }"
         >
-          <div class="buddy-speech">
+          <div
+            class="buddy-speech"
+            :class="{ 'is-getting-wet': buddyGettingWet }"
+          >
             <span class="buddy-speaker">
               {{ activeBuddy.name }}
             </span>
 
-            <p v-if="buddyLoading" role="status">
-              Your buddy is on the way…
-            </p>
-
-            <p v-else-if="buddyError" role="status">
-              {{ buddyError }}
-            </p>
-
-            <p v-else-if="buddySleeping">
-              Zzz… Time to recharge.
-            </p>
-
-            <p v-else>
-              What are we going to do today?
+            <p aria-live="polite">
+              {{ buddyMessage }}
             </p>
           </div>
 
-          <div class="buddy-character">
+          <div ref="buddyCharacter" class="buddy-character">
+            <!-- Preloaded, then shown when rain starts -->
+            <div
+              class="umbrella-drag"
+              :class="{
+                'is-visible': showUmbrella && umbrellaReady,
+                'is-dragging': umbrellaDragging
+              }"
+              :style="umbrellaPosition"
+              role="button"
+              :tabindex="showUmbrella && umbrellaReady ? 0 : -1"
+              :aria-hidden="!(showUmbrella && umbrellaReady)"
+              aria-label="Move umbrella. Drag or use arrow keys. Press Home to return it."
+              @pointerdown="startUmbrellaDrag"
+              @pointermove="moveUmbrellaDrag"
+              @pointerup="stopUmbrellaDrag"
+              @pointercancel="stopUmbrellaDrag"
+              @lostpointercapture="stopUmbrellaDrag"
+              @keydown="handleUmbrellaKey"
+            >
+              <img
+                ref="umbrellaImage"
+                class="buddy-umbrella"
+                src="/assets/umbrella.png"
+                alt=""
+                draggable="false"
+                @load="prepareUmbrella"
+                @error="umbrellaFailed = true; umbrellaReady = false"
+              />
+            </div>
+
             <template v-if="townBuddyImage && !buddyError">
               <span
                 class="buddy-ground-shadow"
                 aria-hidden="true"
               ></span>
 
-              <Transition name="buddy-swap" mode="out-in" type="transition">
+              <Transition
+                name="buddy-swap"
+                mode="out-in"
+                type="transition"
+              >
                 <img
                   :key="townBuddyImage"
                   class="buddy-image"
                   :class="{ 'is-shaking': ballShaking }"
                   :src="townBuddyImage"
-                  :alt="`${activeBuddy.name}, ${buddySleeping ? 'resting' : 'your active study buddy'}`"
+                  :alt="`${activeBuddy.name}, ${
+                    buddySleeping
+                      ? 'resting'
+                      : 'your active study buddy'
+                  }`"
                   draggable="false"
                   @click="shakePokeball"
                   @animationend="ballShaking = false"
@@ -1635,6 +2377,8 @@ function chooseQuestBuddy(pokemon) {
 
             :disabled="buddySleeping && building.id !== 'trainer'"
             @click="selectBuilding(building)"
+            @mouseenter="hoveredBuilding = building.id"
+            @mouseleave="hoveredBuilding = null"
           >
 
           <span class="building-button-icon">
@@ -2279,39 +3023,145 @@ img.layer {
   opacity: 1;
 }
 
-.rain-drop {
-  position: absolute;
-  top: -40px;
-  width: 1px;
-  border-radius: 2px;
+/* =========================================
+   RAIN + UMBRELLA
+   ========================================= */
 
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    rgba(210, 230, 255, 0.85)
-  );
-
-  animation: rainfall linear infinite;
-  animation-play-state: paused;
+.rain-shade {
+  z-index: 6;
+  background: rgba(27, 40, 61, 0.3);
+  opacity: 0;
+  transition: opacity 2s ease;
 }
 
-.rain-active .rain-drop {
+.rain-overlay {
+  z-index: 14;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rain-shade.rain-active,
+.rain-overlay.rain-active {
+  opacity: 1;
+}
+
+/* The shaft sits behind the Pokémon.
+   The canopy is positioned above its head. */
+/* Position and drag the umbrella */
+.umbrella-drag {
+  position: absolute;
+
+  left: 50%;
+  top: -78%;
+
+  width: 165%;
+
+  transform:
+    translateX(-50%)
+    translate(
+      var(--umbrella-x, 0px),
+      var(--umbrella-y, 0px)
+    );
+
+  z-index: 3;
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+
+  cursor: grab;
+}
+
+.umbrella-drag.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.umbrella-drag.is-dragging {
+  cursor: grabbing;
+}
+
+.umbrella-drag:focus-visible {
+  outline: 2px dashed #ffde59;
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+/* Float the image inside the draggable wrapper */
+.buddy-umbrella {
+  display: block;
+
+  width: 100%;
+  max-width: none;
+  height: auto;
+
+  pointer-events: none;
+  image-rendering: pixelated;
+
+  animation: umbrella-float 3s ease-in-out infinite;
+  animation-play-state: paused;
+  z-index: -1;
+}
+
+.umbrella-drag.is-visible .buddy-umbrella {
   animation-play-state: running;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .rain-drop {
-    display: none;
+/* Freeze at its current float position while dragging.
+   Resume smoothly when released. */
+.umbrella-drag.is-dragging .buddy-umbrella {
+  animation-play-state: paused;
+}
+
+@keyframes umbrella-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
   }
 }
 
-@keyframes rainfall {
-  from {
-    transform: translate(0, 0) rotate(12deg);
-  }
+/* Keep the dialogue above the umbrella */
+.buddy-speech {
+  z-index: 4;
+}
 
-  to {
-    transform: translate(-80px, calc(100cqh + 80px)) rotate(12deg);
+.town-buddy.has-umbrella .buddy-speech {
+  bottom: calc(178% + 12px);
+}
+
+/* Complaint colours */
+.buddy-speech.is-getting-wet {
+  background: #fff0e8;
+  border-color: #cf6549;
+  color: #963b2b;
+}
+
+.buddy-speech.is-getting-wet::after {
+  background: #fff0e8;
+  border-color: #cf6549;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .buddy-umbrella {
+    animation: none;
+  }
+}
+/* Raise the speech bubble above the umbrella */
+.town-buddy.has-umbrella .buddy-speech {
+  bottom: calc(178% + 12px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rain-shade {
+    transition: none;
   }
 }
 
