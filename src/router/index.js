@@ -10,6 +10,7 @@ import { getSupabase } from '../lib/supabase'
 import TimerView from '../views/timerView.vue'
 import RewardsView from '../views/rewardsView.vue'
 import QuizView from '../views/quizView.vue'
+import StudyView from '../views/studyView.vue'
 
 export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
   const router = createRouter({
@@ -68,6 +69,12 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         path: '/rewards',
         name: 'rewards',
         component: RewardsView,
+      },
+      {
+        path: '/study-decks',
+        name: 'study-decks',
+        component: StudyView,
+        meta: { requiresAuth: true },
       },
       {
         path: '/quiz',

@@ -69,8 +69,8 @@ function reset() {
                 <div class="sprite-shadow"></div>
             </div>
         </div>
-        <img class="pack-body" src="../../public/assets/pack_unopened.png" alt="pack" />
-        <img class="pack-top" src="../../public/assets/pack_unopened.png" alt="pack" />
+        <img class="pack-body" src="/assets/pack_unopened.png" alt="pack" />
+        <img class="pack-top" src="/assets/pack_unopened.png" alt="pack" />
         <div class="tear-line"></div>
       </div>
 
