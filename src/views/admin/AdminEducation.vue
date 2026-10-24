@@ -12,7 +12,7 @@ const sampleData = [
    'subjects': 'Mathematics',
    'difficulty': 'Hard',
    'school_level_id': 1,
-   'pages': '50',
+   'pages': 50,
   },
   {
    'id':2,
@@ -20,15 +20,15 @@ const sampleData = [
    'subjects': 'Mathematics',
    'difficulty': 'Easy',
    'school_level_id': 3,
-   'pages': '33',
+   'pages': 33,
   },
   {
-   'id':1,
+   'id':3,
    'deck_name': "human",
    'subjects': 'Science',
    'difficulty': 'Hard',
    'school_level_id': 2,
-   'pages': '89',
+   'pages': 89,
   },
   
 ];
@@ -56,7 +56,7 @@ function toggleSort(key) {
   }
 }
 
-const displayedUsers = computed(() => {
+const displayedDecks = computed(() => {
   const list = [...filteredData.value]
   if (!sortKey.value) return list
 
@@ -64,7 +64,9 @@ const displayedUsers = computed(() => {
     let result
     if (sortKey.value === 'school_level_id') {
       result = a.school_level_id - b.school_level_id;
-    } else {
+    } else if (sortKey.value === 'pages'){
+      result = a.pages - b.pages;
+    } else if (sortKey.value === 'deck_name'){
       result = (a.deck_name ?? '').localeCompare(b.deck_name ?? '')
     }
     return sortOrder.value === 'asc' ? result : -result
@@ -73,8 +75,8 @@ const displayedUsers = computed(() => {
 })
 
 function arrow(key) {
-  if (sortKey.value !== key) return '↕'
-  return sortOrder.value === 'asc' ? '↑' : '↓'
+  if (sortKey.value !== key) return '↕';
+  return sortOrder.value === 'asc' ? '↑' : '↓';
 }
 </script>
 
@@ -152,8 +154,8 @@ function arrow(key) {
               <!-- STUDENT ROWS -->
 
               <div
-                v-for="user in displayedUsers"
-                :key="user.id"
+                v-for="deck in displayedDecks"
+                :key="deck.id"
                 class="row user-row align-items-center"
               >
 
@@ -161,46 +163,46 @@ function arrow(key) {
                 <div class="col-2">
                   <div class="user-profile">
                     <div class="user-avatar">
-                      {{ user.deck_name.charAt(0).toUpperCase() }}
+                      {{ deck.deck_name.charAt(0).toUpperCase() }}
                     </div>
 
                     <span class="username">
-                      {{ user.deck_name }}
+                      {{ deck.deck_name }}
                     </span>
                   </div>
                 </div>
 
                 <!-- EMAIL -->
                 <div class="col-2 email-cell">
-                  {{ user.subjects }}
+                  {{ deck.subjects }}
                 </div>
 
                 <!-- GENDER -->
                 <div class="col-1">
                   {{
-                    user.difficulty
+                    deck.difficulty
                   }}
                 </div>
 
                 <!-- LEVEL -->
                 <div class="col-1">
                   <span class="level-badge">
-                    P{{ user.school_level_id }}
+                    P{{ deck.school_level_id }}
                   </span>
                 </div>
 
                 <!-- DATE JOINED -->
                 <div class="col-2 date-cell">
-                  {{ user.pages }}
+                  {{ deck.pages }}
                 </div>
 
                 <!-- ACCOUNT STATUS -->
                 <div class="col-2">
                   <span
                     class="account-status"
-                    :class="user.banned ? 'status-banned' : 'status-active'"
+                    :class="deck.banned ? 'status-banned' : 'status-active'"
                   >
-                    {{ user.banned ? 'Banned' : 'Not Banned' }}
+                    {{ deck.banned ? 'Banned' : 'Not Banned' }}
                   </span>
                 </div>
 
@@ -210,18 +212,18 @@ function arrow(key) {
 
                     <button
                       class="action-btn unban-btn"
-                      :disabled="!user.banned"
+                      :disabled="!deck.banned"
 
-                      @click="banUser(user,false)"
+                      @click="banUser(deck,false)"
                     >
                       Unban
                     </button>
 
                     <button
                       class="action-btn ban-btn"
-                      :disabled="user.banned"
+                      :disabled="deck.banned"
 
-                      @click="banUser(user,true)"
+                      @click="banUser(deck,true)"
                     >
                       Ban
                     </button>
@@ -238,7 +240,7 @@ function arrow(key) {
 
               <!-- EMPTY SEARCH RESULT -->
               <div
-                v-if="displayedUsers.length === 0"
+                v-if="displayedDecks.length === 0"
                 class="empty-state"
               >
                 No students found. Try another username.
@@ -247,7 +249,7 @@ function arrow(key) {
             </div>
 
             <div class="table-footer">
-              Showing {{ displayedUsers.length }}
+              Showing {{ displayedDecks.length }}
               of {{ sampleData.length }} students
             </div>
 
