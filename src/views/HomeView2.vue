@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
+import { DEFAULT_WEATHER_LOCATION, useWeatherLocation } from '../composables/useWeatherLocation'
 
 // VUE TYPERR
 import VueTyper from 'vue3-typer'
@@ -16,6 +17,7 @@ import 'vue3-typer/dist/vue-typer.css'
 
 
 const router = useRouter()
+const { getSavedLocation, selectLocation } = useWeatherLocation()
 
 const asset = '/town/'
 
@@ -163,52 +165,26 @@ const isRaining = ref(false)
 const rainDataAvailable = ref(false)
 
 // Default: Singapore (fallback location)
-const latitude = ref(1.3521)
-const longitude = ref(103.8198)
+const latitude = ref(DEFAULT_WEATHER_LOCATION.latitude)
+const longitude = ref(DEFAULT_WEATHER_LOCATION.longitude)
 
 let weatherInterval
 let rainInterval
 
 // ==========================================
-// 2. GET USER'S DEVICE LOCATION
+// 2. REUSE THE LOCATION CHOSEN FOR THIS APP VISIT
 // ==========================================
-function getUserLocation() {
-  return new Promise((resolve) => {
-    if (!navigator.geolocation) {
-      console.warn('Geolocation not supported')
-      resolve()
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        latitude.value = position.coords.latitude
-        longitude.value = position.coords.longitude
-
-        console.log('Device location:', latitude.value, longitude.value)
-        resolve()
-      },
-      (error) => {
-        console.warn('Using default Singapore location:', error.message)
-        resolve()
-      },
-      {
-        enableHighAccuracy: false,
-        timeout: 10000,
-        maximumAge: 300000
-      }
-    )
-  })
-}
-
 const showLocationModal = ref(false)
 
 let weatherStarted = false
 let weatherPageActive = false
 
 
-async function chooseLocation(useDeviceLocation) {
-  console.log('hai in choose location')
+function chooseLocation(useDeviceLocation) {
+  startWeather(selectLocation(useDeviceLocation))
+}
+
+async function startWeather(locationPromise) {
   if (weatherStarted) return
 
   weatherStarted = true
@@ -216,12 +192,10 @@ async function chooseLocation(useDeviceLocation) {
   // Close location modal
   showLocationModal.value = false
 
-  // Request device location if user agrees
-  if (useDeviceLocation) {
-    await getUserLocation()
-  }
-
+  const location = await locationPromise
   if (!weatherPageActive) return
+  latitude.value = location.latitude
+  longitude.value = location.longitude
 
   // Fetch weather using selected location
   fetchWeather()
@@ -1100,9 +1074,12 @@ function deleteTodo(todo) {
 
 onMounted(() => {
   weatherPageActive = true
-  // Show location modal
-  showLocationModal.value = true
-  console.log('Page mounted — location modal:', showLocationModal.value)
+  const savedLocation = getSavedLocation()
+  if (savedLocation) {
+    startWeather(savedLocation)
+  } else {
+    showLocationModal.value = true
+  }
 
   // Existing to-do setup
   loadTodos()
@@ -1315,20 +1292,35 @@ const unopenedPackLabel = computed(() =>
 // Trainer identity always comes from the authenticated student's saved profile.
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
 const profileMenuOpen = ref(false)
-const homeAvatarImages = { male: '/avatars/male.png', female: '/avatars/female.png' }
 const trainerAvatarImage = computed(() =>
-  homeAvatarImages[trainerProfile.value.avatar] ||
   avatarOptions.find(option => option.value === trainerProfile.value.avatar)?.image || ''
 )
 
-onMounted(async () => {
+let trainerProfileLoading = false
+let trainerProfileActive = true
+async function refreshTrainerProfile() {
+  if (trainerProfileLoading) return
+  trainerProfileLoading = true
   try {
     const profile = await getCurrentProfile()
-    trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
+    if (trainerProfileActive)
+      trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
   } catch {
-    trainerProfile.value.name = 'Trainer'
-    profileNotice.value = 'Your profile could not load. Refresh the page to try again.'
+    if (trainerProfileActive) {
+      trainerProfile.value.name = 'Trainer'
+      profileNotice.value = 'Your profile could not load. Refresh the page to try again.'
+    }
+  } finally {
+    trainerProfileLoading = false
   }
+}
+onMounted(() => {
+  refreshTrainerProfile()
+  window.addEventListener('focus', refreshTrainerProfile)
+})
+onUnmounted(() => {
+  trainerProfileActive = false
+  window.removeEventListener('focus', refreshTrainerProfile)
 })
 
 // Sample progress per Pokémon.

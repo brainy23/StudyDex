@@ -27,13 +27,17 @@
   max-width: 1640px;
   margin-inline: auto;
 }
-.study-panel { min-width: 0; padding: 22px; border: 2px solid #d6dfeb; border-radius: 24px; background: #fffffff5; box-shadow: 0 6px 18px #17324d20; }
-.study-header { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr minmax(200px, .7fr); align-items: center; gap: 24px; border-color: #d3a723; border-top: 6px solid #ffd000; }
+.study-panel { min-width: 0; padding: 40px; border: 2px solid #d6dfeb; border-radius: 24px; background: #fffffff5; box-shadow: 0 6px 18px #17324d20; }
+.study-header { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(200px, 1fr) minmax(0, 1fr); grid-template-areas: 'title progress actions'; align-items: center; gap: 24px; border-color: #d3a723; border-top: 6px solid #ffd000; }
+.study-header-title { grid-area: title; min-width: 0; }
 .study-header p { margin-bottom: 4px; }
 .study-header-context { text-align: center; }
 .study-level { font-weight: 650; font-size: 20px; }
 .study-town-link { font-weight: 600; text-decoration: none; }
+.study-header-progress { grid-area: progress; width: min(100%, 420px); justify-self: center; text-align: center; font-size: larger;}
 .study-header-progress label { display: block; }
+.study-header-actions { grid-area: actions; min-width: 0; max-width: 260px; justify-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; text-align: right; }
+.study-header-actions p { margin-bottom: 0; }
 .study-page-state { grid-column: 1 / -1; padding: 36px; }
 .study-eyebrow { font-size: 14px; font-weight: 650; color: #53657c; }
 .study-note { font-size: 14px; line-height: 1.5; color: #526278; }
@@ -105,14 +109,13 @@
 }
 @media (max-width: 53rem) {
   .study-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .study-header { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .study-header { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'title actions' 'progress progress'; gap: 16px; }
   .study-header-context { text-align: right; }
-  .study-header-progress { grid-column: 1 / -1; }
   .study-utilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 }
 @media (max-width: 36rem) {
   .study-panel { padding: 18px; border-radius: 18px; }
-  .study-header { grid-template-columns: minmax(0, 1fr); }
+  .study-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'title' 'progress' 'actions'; }
   .study-header-context { text-align: left; }
   .study-utilities { grid-template-columns: minmax(0, 1fr); }
   .study-buddy { gap: 16px; }

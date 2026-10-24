@@ -7,6 +7,7 @@ import {
   studyErrorMessage,
   resolveStudyImage,
 } from '../studyService'
+import { revisionCards } from '../../test/studyFixtures'
 
 const { from } = vi.hoisted(() => ({ from: vi.fn() }))
 vi.mock('../../lib/supabase', () => ({ getSupabase: () => ({ from }) }))
@@ -105,4 +106,17 @@ it('only accepts safe image paths without guessing a bucket', () => {
   expect(resolveStudyImage('')).toBe('')
   expect(resolveStudyImage('javascript:alert(1)')).toBe('')
   expect(resolveStudyImage('//example.com/card.png')).toBe('')
+})
+
+it('returns all 15 flashcard records with matching front/back content and topic/concept IDs', async () => {
+  responses.flashcards = { data: structuredClone(revisionCards), error: null }
+  const result = await getTopicFlashcards('topic-1')
+  expect(result).toEqual(revisionCards)
+  expect(result.map((card) => card.card_order)).toEqual(Array.from({ length: 15 }, (_, i) => i + 1))
+  const { query } = requests.find((request) => request.table === 'flashcards')
+  expect(query.eq).toHaveBeenCalledWith('topic_id', 'topic-1')
+  expect(query.order).toHaveBeenCalledWith('card_order')
+  expect(query.select).toHaveBeenCalledWith(
+    'id, topic_id, concept_id, front_text, back_text, front_image_path, back_image_path, card_order',
+  )
 })

@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import BackToHome from '../components/common/BackToHome.vue'
 
 const stage = ref('idle')
 const rx = ref(0)
@@ -55,6 +56,7 @@ function reset() {
 
 <template>
   <main @pointermove="onMove">
+    <BackToHome class="rewards-home-link" />
     <div class="packopen">
       <div
         class="pack-wrap"
@@ -90,6 +92,12 @@ function reset() {
 </template>
 
 <style scoped>
+    .rewards-home-link {
+        position: fixed;
+        top: max(16px, env(safe-area-inset-top));
+        left: max(16px, env(safe-area-inset-left));
+        z-index: 5;
+    }
     main{
         min-height: 100vh;
         background-image: url('/backgrounds/rewards_bg.png');

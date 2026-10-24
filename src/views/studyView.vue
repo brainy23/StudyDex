@@ -6,21 +6,23 @@ import {
   getStudyCatalogue,
   getTopicLesson,
   getTopicFlashcards,
-  getStudyQuestions,
   getSelectedStudyBuddy,
   studyErrorMessage,
 } from '../services/studyService'
 import { useTimer } from '../components/timer/useTimer'
 import StudyLearn from '../components/study/StudyLearn.vue'
 import StudyFlashcards from '../components/study/StudyFlashcards.vue'
-import StudyQuiz from '../components/study/StudyQuiz.vue'
 import StudyTimerPanel from '../components/study/StudyTimerPanel.vue'
 import StudyImage from '../components/study/StudyImage.vue'
+import BackToHome from '../components/common/BackToHome.vue'
+import { useTopicCompletion } from '../composables/useTopicCompletion'
 import '../assets/study.css'
 
 const route = useRoute()
 const router = useRouter()
 const timer = useTimer()
+const topicCompletion = useTopicCompletion()
+const { savedInBrowser } = topicCompletion
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
@@ -34,9 +36,8 @@ let alive = true
 let generation = 0
 
 const mode = computed(() =>
-  ['learn', 'flashcards', 'quiz'].includes(route.query.mode) ? route.query.mode : 'learn',
+  ['learn', 'flashcards'].includes(route.query.mode) ? route.query.mode : 'learn',
 )
-const purpose = computed(() => (route.query.battle === 'boss' ? 'boss_battle' : 'quiz'))
 const subject = computed(() => {
   const subjects = catalogue.value.subjects
   if (route.query.subject) return subjects.find((item) => item.id === route.query.subject) || null
@@ -52,6 +53,14 @@ const topic = computed(() =>
     ? availableTopics.value.find((item) => item.id === route.query.topic) || null
     : availableTopics.value[0] || null,
 )
+const arenaLocation = computed(() => ({
+  name: 'quiz',
+  query: {
+    ...(subject.value ? { subject: subject.value.id } : {}),
+    ...(topic.value ? { topic: topic.value.id } : {}),
+  },
+}))
+const quizUnlocked = computed(() => topicCompletion.isComplete(topic.value?.id))
 const currentResources = computed(() => resources[topic.value?.id])
 const readingProgress = computed(
   () =>
@@ -68,22 +77,19 @@ const progressPercent = computed(() =>
 const activeResource = computed(() => {
   const data = currentResources.value
   if (!data) return null
-  if (mode.value === 'learn') return data.lesson
-  if (mode.value === 'flashcards') return data.flashcards
-  return data[purpose.value]
+  return mode.value === 'learn' ? data.lesson : data.flashcards
 })
 const modeComponent = computed(
-  () => ({ learn: StudyLearn, flashcards: StudyFlashcards, quiz: StudyQuiz })[mode.value],
+  () => ({ learn: StudyLearn, flashcards: StudyFlashcards })[mode.value],
 )
-const modeKey = computed(
-  () => `${topic.value?.id}:${mode.value}:${mode.value === 'quiz' ? purpose.value : ''}`,
-)
+const modeKey = computed(() => `${topic.value?.id}:${mode.value}`)
 
 async function initialise() {
   const request = ++generation
   loading.value = true
   error.value = null
   profile.value = null
+  topicCompletion.bindStudent(null, null)
   catalogue.value = { subjects: [], topics: [] }
   Object.keys(resources).forEach((id) => delete resources[id])
   Object.keys(progress).forEach((id) => delete progress[id])
@@ -91,6 +97,7 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
+    topicCompletion.bindStudent(student.id, student.school_level_id)
     timer.bindUser(student.id)
     loadBuddy(student.id, request)
     if (student.school_level_id) {
@@ -127,8 +134,6 @@ async function loadResource(topicId, name) {
     const data = await {
       lesson: getTopicLesson,
       flashcards: getTopicFlashcards,
-      quiz: (id) => getStudyQuestions(id, 'quiz'),
-      boss_battle: (id) => getStudyQuestions(id, 'boss_battle'),
     }[name](topicId)
     if (alive && resources[topicId]?.[name] === target) target.data = data
   } catch (cause) {
@@ -141,21 +146,28 @@ async function loadResource(topicId, name) {
 function loadTopic(id) {
   if (!id || resources[id]) return
   resources[id] = Object.fromEntries(
-    ['lesson', 'flashcards', 'quiz', 'boss_battle'].map((name) => [
+    ['lesson', 'flashcards'].map((name) => [
       name,
       { loading: false, data: null, error: null },
     ]),
   )
-  // Start independently: a denied/empty quiz bank must not delay Learn mode.
+  // Load lesson and revision independently; formal assessments belong to Arena.
   for (const name of Object.keys(resources[id])) loadResource(id, name)
 }
 
 function setMode(nextMode) {
-  const boss = nextMode === 'boss_battle'
-  const query = { ...route.query, mode: boss ? 'quiz' : nextMode }
-  if (boss) query.battle = 'boss'
-  else delete query.battle
+  if (!['learn', 'flashcards'].includes(nextMode)) return
+  const query = { ...route.query, mode: nextMode }
+  delete query.battle
   router.push({ name: 'study-decks', query })
+}
+
+function goToArena() {
+  if (quizUnlocked.value) router.push(arenaLocation.value)
+}
+
+function completeTopic(id) {
+  if (id === topic.value?.id) topicCompletion.markComplete(id)
 }
 
 function chooseSubject(id) {
@@ -179,14 +191,7 @@ function updateProgress(value) {
 
 function retryMode() {
   if (topic.value)
-    loadResource(
-      topic.value.id,
-      mode.value === 'learn'
-        ? 'lesson'
-        : mode.value === 'flashcards'
-          ? 'flashcards'
-          : purpose.value,
-    )
+    loadResource(topic.value.id, mode.value === 'learn' ? 'lesson' : 'flashcards')
 }
 
 watch(() => topic.value?.id, loadTopic)
@@ -205,23 +210,32 @@ onUnmounted(() => {
     <div class="study-layout study-screen">
       <header class="study-header study-panel">
         <div class="study-header-title">
-          <RouterLink to="/home" class="study-town-link">← Back to Town</RouterLink>
+          <BackToHome variant="text" class="study-town-link" />
           <h1>Poké Lab</h1>
           <p>Explore a little. Remember a little more.</p>
         </div>
-        <div v-if="profile" class="study-header-context">
+        <!-- <div v-if="profile" class="study-header-context">
           <p class="study-level">{{ profile.school_level?.name || 'School level not set' }}</p>
           <p>
             {{ subject?.name || 'Choose a subject' }} <span v-if="topic">· {{ topic.name }}</span>
           </p>
           <a href="#study-topics">Choose subject or topic</a>
-        </div>
+        </div> -->
         <div v-if="topic" class="study-header-progress">
           <label for="topic-reading-progress"
             >{{ readingProgress.read }} / {{ readingProgress.total }} concepts read</label
           >
           <progress id="topic-reading-progress" :value="progressPercent" max="100" />
           <span class="study-note">Progress for this visit</span>
+        </div>
+        <div class="study-header-actions">
+          <button class="study-button" :disabled="!quizUnlocked" @click="goToArena">Quiz me!</button>
+          <p v-if="topic" class="study-note">
+            {{ quizUnlocked ? 'Topic covered — your quiz is unlocked.' : 'Finish this topic to unlock its quiz.' }}
+          </p>
+          <p v-if="!savedInBrowser" class="study-note" role="status">
+            Browser storage is unavailable. Completed topics will stay unlocked for this app visit only.
+          </p>
         </div>
       </header>
 
@@ -272,7 +286,6 @@ onUnmounted(() => {
               v-for="item in [
                 { id: 'learn', label: 'Learn' },
                 { id: 'flashcards', label: 'Flashcards' },
-                { id: 'quiz', label: 'Quiz' },
               ]"
               :key="item.id"
               :aria-pressed="mode === item.id"
@@ -281,22 +294,25 @@ onUnmounted(() => {
               {{ item.label }}
             </button>
           </nav>
-          <template v-if="topic && activeResource">
-            <p class="study-eyebrow study-topic-label">{{ subject?.name }} · {{ topic.name }}</p>
-            <KeepAlive>
-              <component
-                :is="modeComponent"
-                :key="modeKey"
-                :topic="topic"
-                :resource="activeResource"
-                :purpose="purpose"
-                @progress="updateProgress"
-                @mode="setMode"
-                @retry="retryMode"
-              />
-            </KeepAlive>
-          </template>
-          <div v-else class="study-empty">
+          <p v-if="topic && activeResource" class="study-eyebrow study-topic-label">
+            {{ subject?.name }} · {{ topic.name }}
+          </p>
+          <!-- Keep the cache alive when browsing a subject with no available topic. -->
+          <KeepAlive>
+            <component
+              v-if="topic && activeResource"
+              :is="modeComponent"
+              :key="modeKey"
+              :topic="topic"
+              :resource="activeResource"
+              @progress="updateProgress"
+              @complete="completeTopic"
+              @mode="setMode"
+              @retry="retryMode"
+              @arena="goToArena"
+            />
+          </KeepAlive>
+          <div v-if="!topic || !activeResource" class="study-empty">
             <h2>
               {{
                 route.query.topic ? 'This topic is unavailable' : 'No study content is available'

@@ -6,6 +6,7 @@ import StudyQuestion from './StudyQuestion.vue'
 const props = defineProps({
   resource: { type: Object, required: true },
   purpose: { type: String, default: 'quiz' },
+  locked: { type: Boolean, default: false },
 })
 defineEmits(['retry', 'mode'])
 const index = ref(0)
@@ -43,7 +44,11 @@ function reviewQuestions() {
       </button>
     </div>
     <h2>{{ title }}</h2>
-    <p v-if="resource.loading" role="status">Loading questions…</p>
+    <div v-if="locked" class="study-empty">
+      <p>Finish this topic in Poké Lab to unlock its quiz.</p>
+      <button class="study-button" @click="$emit('mode', 'study')">Study this topic</button>
+    </div>
+    <p v-else-if="resource.loading" role="status">Loading questions…</p>
     <div v-else-if="resource.error" class="study-message" role="alert">
       <p>{{ studyErrorMessage(resource.error, title) }}</p>
       <button class="study-button" @click="$emit('retry')">Try again</button>
@@ -61,13 +66,13 @@ function reviewQuestions() {
           class="study-button"
           @click="$emit('mode', purpose === 'quiz' ? 'boss_battle' : 'learn')"
         >
-          {{ purpose === 'quiz' ? 'View Boss Battle' : 'Back to Learn' }}
+          {{ purpose === 'quiz' ? 'View Boss Battle' : 'Revise in Poké Lab' }}
         </button>
       </div>
     </div>
     <template v-else>
       <p class="study-message">
-        You can practise choosing answers. Scoring and battle rewards are not available yet.
+        Assessment preview: answers are not graded or saved. Scores and rewards are not available yet.
       </p>
       <template v-if="reviewing">
         <h3>Your answer choices</h3>

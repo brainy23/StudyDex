@@ -1,7 +1,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import BackToHome from '../components/common/BackToHome.vue'
 import { avatarOptions } from '../data/avatarOptions'
+import { getCurrentProfile } from '../services/profileService'
 import {
   getAccountSettings,
   getCurrentEmailSettings,
@@ -28,6 +29,8 @@ const emailError = ref('')
 const profileMessage = ref('')
 const emailMessage = ref('')
 const checkingEmail = ref(false)
+let refreshingAvatar = false
+let accountPageActive = true
 const isLocalDevelopment = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
 
 const profileDirty = computed(
@@ -149,17 +152,45 @@ async function resendConfirmation() {
   }
 }
 
+async function refreshAvatar() {
+  if (loading.value || savingProfile.value || savingEmail.value || refreshingAvatar || !profile.value) return
+  refreshingAvatar = true
+  const accountId = profile.value.id
+  const previousAvatar = profile.value.avatar_choice
+  try {
+    const saved = await getCurrentProfile()
+    if (!accountPageActive || savingProfile.value || savingEmail.value || profile.value?.id !== accountId || saved.id !== accountId) return
+    // Keep unsaved name/level changes, and preserve an explicitly edited avatar too.
+    const avatarEdited = avatarChoice.value !== previousAvatar
+    profile.value = { ...profile.value, avatar_choice: saved.avatar_choice }
+    if (!avatarEdited) avatarChoice.value = saved.avatar_choice
+  } catch (error) {
+    if (accountPageActive)
+      profileError.value = error.message || 'We couldn’t refresh your avatar. Please try again.'
+  } finally {
+    refreshingAvatar = false
+  }
+}
+
+function refreshAccountOnFocus() {
+  refreshEmailStatus()
+  refreshAvatar()
+}
+
 onMounted(() => {
   loadAccount()
-  window.addEventListener('focus', refreshEmailStatus)
+  window.addEventListener('focus', refreshAccountOnFocus)
 })
-onUnmounted(() => window.removeEventListener('focus', refreshEmailStatus))
+onUnmounted(() => {
+  accountPageActive = false
+  window.removeEventListener('focus', refreshAccountOnFocus)
+})
 </script>
 
 <template>
   <main class="account-page">
     <div class="account-shell">
-      <RouterLink class="back-link" to="/home">← Back to Town</RouterLink>
+      <BackToHome variant="text" class="back-link" />
       <header>
         <p class="eyebrow">YOUR TRAINER</p>
         <h1>Account settings</h1>

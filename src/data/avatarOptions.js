@@ -1,6 +1,6 @@
 export const avatarOptions = [
-  { value: 'male', label: 'Male', image: '/assets/male.png' },
-  { value: 'female', label: 'Female', image: '/assets/female.png' },
+  { value: 'male', label: 'Male', image: '/avatars/male.png', idleImage: '/avatars/male-idle.png' },
+  { value: 'female', label: 'Female', image: '/avatars/female.png', idleImage: '/avatars/female-idle.png' },
   {
     value: 'prefer_not_to_say',
     label: 'Prefer not to say',

@@ -3,8 +3,12 @@ import { createMemoryHistory } from 'vue-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAppRouter } from '../index'
 import App from '../../App.vue'
+import axios from 'axios'
 import { studentProfile, studyCatalogue, studyLesson } from '../../test/studyFixtures'
 import { getCurrentProfile } from '../../services/profileService'
+import { useTimer } from '../../components/timer/useTimer'
+import { getStudyCatalogue, getTopicLesson, getStudyQuestions } from '../../services/studyService'
+import { useTopicCompletion } from '../../composables/useTopicCompletion'
 
 const { getSession, signInWithPassword, getUser, signOut } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -18,13 +22,21 @@ vi.mock('../../lib/supabase', () => ({
 vi.mock('../../services/profileService', () => ({
   getCurrentProfile: vi.fn(async () => structuredClone(studentProfile)),
 }))
-// Chart rendering, canvas animation and remote weather calls are outside these route checks.
+// Use deterministic API responses; the weather flow still runs without network access.
 vi.mock('vue3-apexcharts', () => ({
   default: { name: 'VueApexCharts', template: '<div class="test-chart" />' },
 }))
 vi.mock('axios', () => ({
   default: {
-    get: vi.fn(async () => ({ data: { sprites: { default: '/test-pokeball.png' } } })),
+    get: vi.fn(async (url) => {
+      if (url.includes('api.open-meteo.com')) {
+        return { data: { current: { temperature_2m: 29, weather_code: 0, cloud_cover: 10, is_day: 1 } } }
+      }
+      if (url.includes('api-open.data.gov.sg')) {
+        return { data: { data: { stations: [], readings: [] } } }
+      }
+      return { data: { sprites: { default: '/test-pokeball.png' } } }
+    }),
   },
 }))
 vi.mock('../../services/studyService', async () => ({
@@ -39,6 +51,7 @@ vi.mock('../../services/studyService', async () => ({
 let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
+  localStorage.clear()
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
   vi.stubGlobal(
     'fetch',
@@ -51,6 +64,7 @@ beforeEach(() => {
   getSession.mockResolvedValue({ data: { session: null }, error: null })
 })
 afterEach(() => {
+  useTimer().endSession()
   wrapper?.unmount()
   vi.useRealTimers()
   vi.restoreAllMocks()
@@ -65,6 +79,117 @@ async function open(path) {
   await flushPromises()
   return router
 }
+
+function mockGeolocation(implementation) {
+  const getCurrentPosition = vi.fn(implementation)
+  vi.stubGlobal('navigator', { geolocation: { getCurrentPosition } })
+  return getCurrentPosition
+}
+
+async function returnToTown(router) {
+  await router.push('/quiz')
+  await flushPromises()
+  await router.push('/home')
+  await flushPromises()
+}
+
+function expectWeatherLocation(latitude, longitude) {
+  expect(axios.get).toHaveBeenCalledWith(
+    'https://api.open-meteo.com/v1/forecast',
+    expect.objectContaining({ params: expect.objectContaining({ latitude, longitude }) }),
+  )
+}
+
+it('remembers Not Now when returning to Town without requesting device location', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const getCurrentPosition = mockGeolocation()
+  const router = await open('/home')
+  expect(wrapper.find('.location-modal').exists()).toBe(true)
+  await wrapper.get('.location-skip').trigger('click')
+  await flushPromises()
+  expectWeatherLocation(1.3521, 103.8198)
+  axios.get.mockClear()
+  await returnToTown(router)
+  expect(wrapper.find('.location-modal').exists()).toBe(false)
+  expect(getCurrentPosition).not.toHaveBeenCalled()
+  expectWeatherLocation(1.3521, 103.8198)
+})
+
+it('reuses device coordinates on return without another geolocation request', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const getCurrentPosition = mockGeolocation((success) => {
+    success({ coords: { latitude: 1.3, longitude: 103.8 } })
+  })
+  const router = await open('/home')
+  await wrapper.get('.location-allow').trigger('click')
+  await flushPromises()
+  expectWeatherLocation(1.3, 103.8)
+  axios.get.mockClear()
+  await returnToTown(router)
+  expect(wrapper.find('.location-modal').exists()).toBe(false)
+  expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+  expectWeatherLocation(1.3, 103.8)
+})
+
+it.each([
+  ['denied', (_success, failure) => failure({ code: 1 })],
+  ['unavailable', (_success, failure) => failure({ code: 2 })],
+  ['timed out', (_success, failure) => failure({ code: 3 })],
+  ['blocked synchronously', () => { throw new Error('Location blocked') }],
+])('keeps Singapore weather after device location is %s, without asking again', async (_label, implementation) => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const getCurrentPosition = mockGeolocation(implementation)
+  const router = await open('/home')
+  await wrapper.get('.location-allow').trigger('click')
+  await flushPromises()
+  expectWeatherLocation(1.3521, 103.8198)
+  axios.get.mockClear()
+  await returnToTown(router)
+  expect(wrapper.find('.location-modal').exists()).toBe(false)
+  expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+  expectWeatherLocation(1.3521, 103.8198)
+})
+
+it('uses Singapore when the browser has no geolocation support', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  vi.stubGlobal('navigator', {})
+  const router = await open('/home')
+  await wrapper.get('.location-allow').trigger('click')
+  await flushPromises()
+  await returnToTown(router)
+  expect(wrapper.find('.location-modal').exists()).toBe(false)
+  expectWeatherLocation(1.3521, 103.8198)
+})
+
+it('shares an unfinished location request across Town visits and starts weather only on the active page', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  let finishLocation
+  const getCurrentPosition = mockGeolocation((success) => { finishLocation = success })
+  const router = await open('/home')
+  await wrapper.get('.location-allow').trigger('click')
+  await returnToTown(router)
+  expect(wrapper.find('.location-modal').exists()).toBe(false)
+  expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+  axios.get.mockClear()
+  finishLocation({ coords: { latitude: 1.3, longitude: 103.8 } })
+  await flushPromises()
+  expectWeatherLocation(1.3, 103.8)
+  expect(axios.get.mock.calls.filter(([url]) => url.includes('api.open-meteo.com'))).toHaveLength(1)
+})
+
+it('asks again in a fresh app instance, as it would after a page reload', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const getCurrentPosition = mockGeolocation()
+  await open('/home')
+  await wrapper.get('.location-skip').trigger('click')
+  await flushPromises()
+  wrapper.unmount()
+  axios.get.mockClear()
+  await open('/home')
+  expect(wrapper.find('.location-modal').exists()).toBe(true)
+  expect(getCurrentPosition).not.toHaveBeenCalled()
+  expect(axios.get.mock.calls.some(([url]) => url.includes('api.open-meteo.com'))).toBe(false)
+})
 
 it('starts at landing-info, logs in to landing, and waits for Start before opening home', async () => {
   const router = await open('/')
@@ -109,7 +234,7 @@ it('keeps failed logins on the login page with feedback', async () => {
   expect(wrapper.get('[role="alert"]').text()).toBe('Invalid login credentials')
 })
 
-it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard'])(
+it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard', '/quiz'])(
   'sends visitors without a session from %s to login',
   async (path) => {
     const router = await open(path)
@@ -147,7 +272,7 @@ it('logs out from the town menu and blocks protected pages afterward', async () 
   await flushPromises()
   expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
   expect(router.currentRoute.value.name).toBe('login')
-  for (const path of ['/home', '/account', '/landing', '/study-decks', '/trainer', '/dashboard']) {
+  for (const path of ['/home', '/account', '/landing', '/study-decks', '/trainer', '/dashboard', '/quiz']) {
     await router.push(path)
     expect(router.currentRoute.value.name).toBe('login')
   }
@@ -170,6 +295,22 @@ it('supports the saved Prefer not to say avatar without requesting a missing loc
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
   await open('/home')
   expect(wrapper.get('.trainer-avatar').attributes('src')).toContain('/pokemon/132.png')
+})
+
+it('refreshes Town’s profile avatar when returning from another tab', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  await open('/home')
+  expect(wrapper.get('.trainer-avatar').attributes('src')).toBe('/avatars/female.png')
+  getCurrentProfile.mockResolvedValueOnce({ ...studentProfile, avatar_choice: 'male' })
+  window.dispatchEvent(new Event('focus'))
+  await flushPromises()
+  expect(wrapper.get('.trainer-avatar').attributes('src')).toBe('/avatars/male.png')
+  wrapper.unmount()
+  getCurrentProfile.mockClear()
+  window.dispatchEvent(new Event('focus'))
+  await flushPromises()
+  expect(getCurrentProfile).not.toHaveBeenCalled()
+  wrapper = null
 })
 
 it('keeps the new Trainer House and dashboard reachable behind login', async () => {
@@ -237,7 +378,7 @@ it('opens profile-level lessons from Poké Lab and supports learning mode naviga
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/study-decks')
   expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
-  expect(wrapper.get('.study-level').text()).toBe('Primary 3')
+  expect(getStudyCatalogue).toHaveBeenCalledWith('level-3')
   const revision = wrapper
     .findAll('.study-mode-nav button')
     .find((button) => button.text() === 'Flashcards')
@@ -289,4 +430,75 @@ it('keeps Poké Lab and Arena available when the buddy is sleeping at night', as
   await lab.trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/study-decks')
+})
+
+it.each(['/quiz', '/study-decks', '/trainer', '/account', '/dashboard', '/rewards'])(
+  'returns directly from %s to Town with the shared home link',
+  async (path) => {
+    getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+    const router = await open(path)
+    await vi.dynamicImportSettled()
+    await flushPromises()
+    const home = wrapper.get('a.back-to-home')
+    expect(home.attributes('href')).toBe('/home')
+    await home.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/home')
+    expect(wrapper.find('.world-page').exists()).toBe(true)
+  },
+)
+
+it('pauses the running study timer when returning to Town with the shared link', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const router = await open('/study-decks')
+  await wrapper.findAll('button').find((button) => button.text() === 'Start Study Session').trigger('click')
+  expect(useTimer().state.status).toBe('running')
+  await wrapper.get('a.back-to-home').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/home')
+  expect(useTimer().state.status).toBe('paused')
+})
+
+it('keeps Town behind login when a signed-out visitor follows the shared link', async () => {
+  const router = await open('/rewards')
+  await wrapper.get('a.back-to-home').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('login')
+  expect(wrapper.find('.world-page').exists()).toBe(false)
+})
+
+it('uses Quiz me! for a covered topic and pauses the Lab timer on the way to Arena', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const completion = useTopicCompletion()
+  completion.bindStudent(studentProfile.id, studentProfile.school_level_id)
+  completion.markComplete('topic-1')
+  const router = await open('/study-decks')
+  expect(getStudyQuestions).not.toHaveBeenCalled()
+  await wrapper.findAll('button').find((button) => button.text() === 'Start Study Session').trigger('click')
+  await wrapper.findAll('button').find((button) => button.text() === 'Quiz me!').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('quiz')
+  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1' })
+  expect(useTimer().state.status).toBe('paused')
+  expect(getStudyQuestions).toHaveBeenCalledWith('topic-1', 'quiz')
+  await wrapper.get('a[href^="/study-decks"]').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1', mode: 'flashcards' })
+  expect(wrapper.find('.study-flashcards').exists()).toBe(true)
+  expect(useTimer().state.status).toBe('paused')
+})
+
+it.each([
+  ['mode=quiz', []],
+  ['mode=quiz&battle=boss', [['topic-1', 'boss_battle']]],
+  ['mode=boss_battle', [['topic-1', 'boss_battle']]],
+])('redirects the old Lab assessment URL %s into Arena', async (query, expectedQuestionCalls) => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const router = await open(`/study-decks?subject=maths&topic=topic-1&${query}`)
+  expect(router.currentRoute.value.name).toBe('quiz')
+  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1' })
+  expect(getTopicLesson).not.toHaveBeenCalled()
+  expect(getStudyQuestions.mock.calls).toEqual(expectedQuestionCalls)
+  expect(wrapper.text().includes('Finish this topic in Poké Lab to unlock its quiz')).toBe(!expectedQuestionCalls.length)
+  expect(wrapper.find('.study-screen').exists()).toBe(false)
 })

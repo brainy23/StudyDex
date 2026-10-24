@@ -1,6 +1,10 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { getCurrentProfile } from '../services/profileService'
+import { updateCurrentAvatar } from '../services/accountService'
+import { avatarOptions } from '../data/avatarOptions'
+import BackToHome from '../components/common/BackToHome.vue'
 
 const router = useRouter()
 
@@ -270,11 +274,8 @@ function celestialStyle(isMoon) {
       : 0,
   }
 }
-const emit = defineEmits(['trainer-change'])
-
-// Use the same saved profile and active buddy as the town.
+// Buddy preview remains local; avatar selection uses the authenticated profile.
 const STORAGE = {
-  trainer: 'studydex-trainer-profile',
   buddy: 'studydex-active-buddy',
 }
 
@@ -287,49 +288,23 @@ function readSaved(key, fallback) {
 }
 
 const saveError = ref('')
+const saveMessage = ref('')
+const avatarLoading = ref(false)
+const avatarSaving = ref(false)
+const avatarLoadError = ref('')
+const profile = ref(null)
+let avatarPageActive = true
 
-function saveSelection(key, value) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-    saveError.value = ''
-  } catch {
-    saveError.value =
-      'Selection updated, but this browser could not save it.'
-  }
-}
-// Add future outfits here with a unique id, gender, label and image.
-const trainerVariants = [
-  {
-    id: 'male-classic',
-    gender: 'male',
-    label: 'Classic trainer',
-    image: `${base}avatars/male.png`,
-    idleImage: `${base}avatars/male-idle.png`,
-  },
-  {
-    id: 'female-classic',
-    gender: 'female',
-    label: 'Classic trainer',
-    image: `${base}avatars/female.png`,
-    idleImage: `${base}avatars/female-idle.png`,
-  },
-]
-
-const savedTrainer = readSaved(STORAGE.trainer, {})
-const selectedVariantId = ref(
-  trainerVariants.some(item => item.id === savedTrainer.variantId)
-    ? savedTrainer.variantId
-    : savedTrainer.gender === 'female' ? 'female-classic' : 'male-classic',
-)
+const trainerVariants = avatarOptions.map(option => ({ ...option, id: option.value }))
 
 const selectedTrainer = computed(() =>
-  trainerVariants.find(item => item.id === selectedVariantId.value)
-  ?? trainerVariants[0],
+  trainerVariants.find(item => item.value === profile.value?.avatar_choice) || null,
 )
+const selectedVariantId = computed(() => selectedTrainer.value?.id || '')
 
 // Fall back to the original avatar if an idle sheet is unavailable.
 const loadedIdle = ref('')
-watch(() => selectedTrainer.value.idleImage, (src, previous, onCleanup) => {
+watch(() => selectedTrainer.value?.idleImage, (src, previous, onCleanup) => {
   loadedIdle.value = ''
   if (!src) return
   const image = new Image()
@@ -339,24 +314,55 @@ watch(() => selectedTrainer.value.idleImage, (src, previous, onCleanup) => {
   image.src = src
 }, { immediate: true })
 
-const genderFilter = ref(selectedTrainer.value.gender)
+const genderFilter = ref('male')
 
 const visibleVariants = computed(() =>
-  trainerVariants.filter(item => item.gender === genderFilter.value),
+  trainerVariants.filter(item => item.value === genderFilter.value),
 )
 
-function selectTrainer(variant) {
-  selectedVariantId.value = variant.id
-
-  const profile = {
-    ...readSaved(STORAGE.trainer, {}),
-    gender: variant.gender,
-    variantId: variant.id,
+async function loadTrainerProfile() {
+  if (avatarLoading.value || avatarSaving.value) return
+  avatarLoading.value = true
+  avatarLoadError.value = ''
+  try {
+    const saved = await getCurrentProfile()
+    if (!avatarPageActive) return
+    profile.value = saved
+    genderFilter.value = saved.avatar_choice
+  } catch (error) {
+    if (avatarPageActive)
+      avatarLoadError.value = error.message || 'Your avatar could not load. Please try again.'
+  } finally {
+    if (avatarPageActive) avatarLoading.value = false
   }
-
-  saveSelection(STORAGE.trainer, profile)
-  emit('trainer-change', profile)
 }
+
+async function selectTrainer(variant) {
+  if (avatarLoading.value || avatarSaving.value || !profile.value || selectedVariantId.value === variant.id) return
+  avatarSaving.value = true
+  saveError.value = ''
+  saveMessage.value = ''
+  try {
+    const saved = await updateCurrentAvatar(variant.value)
+    if (!avatarPageActive) return
+    profile.value = saved
+    saveMessage.value = 'Avatar saved to your profile.'
+  } catch (error) {
+    if (avatarPageActive)
+      saveError.value = error.message || 'Your avatar could not be saved. Please try again.'
+  } finally {
+    if (avatarPageActive) avatarSaving.value = false
+  }
+}
+
+onMounted(() => {
+  loadTrainerProfile()
+  window.addEventListener('focus', loadTrainerProfile)
+})
+onUnmounted(() => {
+  avatarPageActive = false
+  window.removeEventListener('focus', loadTrainerProfile)
+})
 const savedBuddy = readSaved(STORAGE.buddy, null)
 const savedBuddyId = Number(savedBuddy?.id)
 
@@ -477,8 +483,6 @@ const wardrobeArea = {
   hitArea: 'M 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634 L 1596 592 L 1580 577 L 1550 574 Q 1545 554 1526 555 Q 1507 556 1506 574 L 1474 574 L 1462 589 L 1404 577 Z',
 }
 
-// Change this path if your town page uses a different route.
-const exitLink = { label: 'Back to town', path: '/home' }
 // Visible door leaf above the desk, measured in the 1672 × 941 artwork.
 const exitDoorStyle = {
   left: `${334 / 1672 * 100}%`, top: `${195 / 941 * 100}%`,
@@ -582,23 +586,26 @@ function openRoomPage(link) {
       <div class="room-characters">
 
         <div class="carpet-party">
-          <div class="trainer-figure">
+          <div v-if="selectedTrainer" class="trainer-figure">
             <div
               v-if="loadedIdle"
               :key="loadedIdle"
               class="trainer-idle"
               :style="{ backgroundImage: `url('${loadedIdle}')` }"
               role="img"
-              :aria-label="`${selectedTrainer.gender} trainer — ${selectedTrainer.label}`"
+              :aria-label="`${selectedTrainer.label} avatar`"
             ></div>
             <img
               v-else
               :src="selectedTrainer.image"
-              :alt="`${selectedTrainer.gender} trainer — ${selectedTrainer.label}`"
+              :alt="selectedTrainer.imageAlt || `${selectedTrainer.label} avatar`"
               class="trainer-sprite"
               draggable="false"
               @error="reportImageError"
             />
+          </div>
+          <div v-else class="trainer-figure scene-message">
+            {{ avatarLoading ? 'Loading your avatar…' : 'Avatar unavailable. Open the wardrobe to retry.' }}
           </div>
 
           <div class="buddy-figure" aria-live="polite">
@@ -625,18 +632,17 @@ function openRoomPage(link) {
           </div>
         </div>
 
-        <button
-          type="button"
+        <BackToHome
+          variant="custom"
           class="exit-door"
           :style="exitDoorStyle"
           aria-label="Leave room and return to town"
-          @click="openRoomPage(exitLink)"
         >
           <svg class="door-outline" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">
             <path d="M 0 0 L 100 8 L 100 100 L 0 100 Z" vector-effect="non-scaling-stroke" />
           </svg>
           <span class="hotspot-label" aria-hidden="true">Back to town</span>
-        </button>
+        </BackToHome>
 
         <button
           v-for="link in roomLinks"
@@ -697,39 +703,55 @@ function openRoomPage(link) {
           </header>
 
           <template v-if="openPanel === 'wardrobe'">
-            <div class="gender-options" aria-label="Trainer options">
-              <button
-                v-for="gender in ['male', 'female']"
-                :key="gender"
-                type="button"
-                :aria-pressed="genderFilter === gender"
-                @click="genderFilter = gender"
-              >
-                {{ gender }}
-              </button>
+            <p v-if="avatarLoading" role="status">Loading your saved avatar…</p>
+            <div v-else-if="avatarLoadError" role="alert">
+              <p>{{ avatarLoadError }}</p>
+              <button type="button" @click="loadTrainerProfile">Try again</button>
             </div>
+            <template v-else-if="profile">
+              <div class="gender-options" aria-label="Trainer options">
+                <button
+                  v-for="option in avatarOptions"
+                  :key="option.value"
+                  type="button"
+                  :aria-pressed="genderFilter === option.value"
+                  :disabled="avatarSaving"
+                  @click="genderFilter = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
 
-            <div class="variant-grid">
-              <button
-                v-for="variant in visibleVariants"
-                :key="variant.id"
-                type="button"
-                class="variant-card"
-                :aria-pressed="selectedVariantId === variant.id"
-                @click="selectTrainer(variant)"
-              >
-                <img :src="variant.image" :alt="variant.gender" @error="reportImageError" />
-                <strong>{{ variant.label }}</strong>
-                <small>
-                  {{ selectedVariantId === variant.id ? 'Equipped ✓' : 'Equip' }}
-                </small>
-              </button>
-            </div>
+              <div class="variant-grid">
+                <button
+                  v-for="variant in visibleVariants"
+                  :key="variant.id"
+                  type="button"
+                  class="variant-card"
+                  :aria-pressed="selectedVariantId === variant.id"
+                  :aria-label="`Equip ${variant.label} avatar`"
+                  :disabled="avatarSaving || selectedVariantId === variant.id"
+                  @click="selectTrainer(variant)"
+                >
+                  <img
+                    :src="variant.image"
+                    :alt="variant.imageAlt || `${variant.label} avatar`"
+                    @error="reportImageError"
+                  />
+                  <strong>{{ variant.label }}</strong>
+                  <small>
+                    {{ selectedVariantId === variant.id ? 'Equipped ✓' : 'Equip' }}
+                  </small>
+                </button>
+              </div>
+            </template>
           </template>
 
-          <p v-if="saveError" class="save-error" role="status">
+          <p v-if="saveError" class="save-error" role="alert">
             {{ saveError }}
           </p>
+          <p v-if="avatarSaving" role="status">Saving avatar…</p>
+          <p v-else-if="saveMessage" role="status">{{ saveMessage }}</p>
         </section>
       </div>
 

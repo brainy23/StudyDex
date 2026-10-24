@@ -1,6 +1,9 @@
 # StudyDex
 WAD2 Group Project
 
+For the current integration branch, setup steps and feedback checklist, see
+[Team testing](docs/team-testing.md).
+
 StudyDex/
 │
 ├── public/

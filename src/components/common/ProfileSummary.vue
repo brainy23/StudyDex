@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getCurrentProfile } from '../../services/profileService'
 import { avatarOptions } from '../../data/avatarOptions'
 
@@ -23,7 +23,11 @@ async function loadProfile() {
   }
 }
 
-onMounted(loadProfile)
+onMounted(() => {
+  loadProfile()
+  window.addEventListener('focus', loadProfile)
+})
+onUnmounted(() => window.removeEventListener('focus', loadProfile))
 </script>
 
 <template>

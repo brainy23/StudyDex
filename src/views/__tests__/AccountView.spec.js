@@ -9,6 +9,7 @@ const {
   requestEmailChange,
   resendEmailChange,
   updateCurrentProfile,
+  getCurrentProfile,
 } = vi.hoisted(() => ({
   getAccountSettings: vi.fn(),
   getCurrentEmailSettings: vi.fn(),
@@ -16,7 +17,9 @@ const {
   requestEmailChange: vi.fn(),
   resendEmailChange: vi.fn(),
   updateCurrentProfile: vi.fn(),
+  getCurrentProfile: vi.fn(),
 }))
+vi.mock('../../services/profileService', () => ({ getCurrentProfile }))
 vi.mock('../../services/accountService', () => ({
   getAccountSettings,
   getCurrentEmailSettings,
@@ -30,11 +33,12 @@ let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
   getAccountSettings.mockResolvedValue({
-    profile: { display_name: 'Ash', school_level_id: 'level-1', avatar_choice: 'male' },
+    profile: { id: 'student-ash', display_name: 'Ash', school_level_id: 'level-1', avatar_choice: 'male' },
     email: 'old@example.com',
     pendingEmail: 'new@example.com',
   })
   getSchoolLevels.mockResolvedValue([{ id: 'level-1', name: 'Primary 1' }])
+  getCurrentProfile.mockResolvedValue({ id: 'student-ash', display_name: 'Ash', school_level_id: 'level-1', avatar_choice: 'male' })
 })
 afterEach(() => wrapper?.unmount())
 

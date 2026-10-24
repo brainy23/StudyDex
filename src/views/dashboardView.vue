@@ -2,14 +2,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { getCurrentProfile } from '../services/profileService'
-import { useRouter } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
-
-const router = useRouter()
-
-function goBack() {
-  router.back()
-}
+import BackToHome from '../components/common/BackToHome.vue'
 
 // ========================================
 // STUDENT DATA (SAMPLE)
@@ -393,13 +387,7 @@ const visibleQuizzes = computed(() =>
     <header class="welcome-banner">
       <div class="welcome-content">
 
-        <button
-          type="button"
-          class="back-button"
-          @click="goBack"
-        >
-          ← Back
-        </button>
+        <BackToHome variant="custom" class="back-button" />
 
         <div class="welcome-title">
           <h1>Hello, {{ student.name }}!</h1>

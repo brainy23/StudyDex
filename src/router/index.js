@@ -92,11 +92,24 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         path: '/quiz',
         name: 'quiz',
         component: QuizView,
+        meta: { requiresAuth: true },
       },
     ],
   })
 
   router.beforeEach(async (to) => {
+    // Keep existing Lab assessment bookmarks working in the dedicated Arena route.
+    if (to.name === 'study-decks' && ['quiz', 'boss_battle'].includes(to.query.mode)) {
+      return {
+        name: 'quiz',
+        replace: true,
+        query: {
+          ...(typeof to.query.subject === 'string' ? { subject: to.query.subject } : {}),
+          ...(typeof to.query.topic === 'string' ? { topic: to.query.topic } : {}),
+          ...(to.query.mode === 'boss_battle' || to.query.battle === 'boss' ? { battle: 'boss' } : {}),
+        },
+      }
+    }
     if (!to.meta.requiresAuth) return true
     try {
       const { data, error } = await getSupabase().auth.getSession()

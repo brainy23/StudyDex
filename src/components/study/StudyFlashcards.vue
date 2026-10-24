@@ -1,5 +1,5 @@
 <script setup>
-import { watch } from 'vue'
+import { computed, watch } from 'vue'
 import { useFlashcardReview } from '../../composables/useFlashcardReview'
 import { studyErrorMessage } from '../../services/studyService'
 import StudyImage from './StudyImage.vue'
@@ -8,6 +8,7 @@ const props = defineProps({ resource: { type: Object, required: true } })
 defineEmits(['retry', 'mode'])
 const { cards, queue, remembered, reviews, flipped, current, complete, start, rate } =
   useFlashcardReview()
+const cardNumber = computed(() => cards.value.findIndex((card) => card.id === current.value?.id) + 1)
 watch(
   () => props.resource.data,
   (source) => {
@@ -35,18 +36,20 @@ watch(
       <p>You remembered {{ remembered.length }} cards after {{ reviews }} reviews.</p>
       <p class="study-note">This revision progress is kept for this visit only.</p>
       <div class="study-button-row">
-        <button class="study-button" @click="start(cards)">Start new revision</button>
+        <button class="study-button" @click="start(cards)">Restart Deck</button>
         <button class="study-button study-button-secondary" @click="$emit('mode', 'learn')">
           Back to Learn
         </button>
       </div>
     </div>
     <template v-else-if="current">
+      <p class="study-card-position">Card {{ cardNumber }} of {{ cards.length }}</p>
       <p class="study-review-progress">
         {{ remembered.length }} / {{ cards.length }} remembered · {{ queue.length }} still to review
       </p>
       <progress :value="remembered.length" :max="cards.length" aria-label="Cards remembered" />
       <button
+        type="button"
         class="study-flip-card"
         :class="{ 'is-flipped': flipped }"
         :aria-pressed="flipped"

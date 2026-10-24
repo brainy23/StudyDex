@@ -66,6 +66,22 @@ export async function updateCurrentProfile(fields) {
   return data
 }
 
+export async function updateCurrentAvatar(avatarChoice) {
+  if (!avatarOptions.some((option) => option.value === avatarChoice))
+    throw new Error('Choose an avatar option.')
+  const client = getSupabase()
+  const user = await requireUser(client)
+  const { data, error } = await client
+    .from('profiles')
+    .update({ avatar_choice: avatarChoice })
+    .eq('id', user.id)
+    .select(PROFILE_FIELDS)
+    .single()
+  if (error) throw error
+  if (!data) throw new Error('Your avatar could not be saved. Please try again.')
+  return data
+}
+
 export async function requestEmailChange(email) {
   const nextEmail = email.trim()
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nextEmail)) throw new Error('Enter a valid email address.')

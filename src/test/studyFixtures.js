@@ -54,3 +54,15 @@ export const bossQuestions = studyLesson.questions.slice(0, 2).map((question) =>
   id: `boss-${question.id}`,
   question_purpose: 'boss_battle',
 }))
+
+// Shape/size fixtures for QA, never imported by production components or services.
+export const revisionCards = Array.from({ length: 15 }, (_, index) => ({
+  id: `flashcard-${index + 1}`,
+  topic_id: 'topic-1',
+  concept_id: `concept-${index % 7}`,
+  front_text: `Fixture question ${index + 1}`,
+  back_text: `Fixture answer ${index + 1}`,
+  front_image_path: null,
+  back_image_path: null,
+  card_order: index + 1,
+}))

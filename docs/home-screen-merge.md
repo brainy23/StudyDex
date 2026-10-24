@@ -11,6 +11,10 @@ Merged branch: `origin/Home-Screen` (`6a02f8b`) into
 - Trainer name and avatar come from the existing authenticated profile service.
   Male/female use the incoming portrait images; Prefer not to say still uses the
   existing Ditto option. The sample Jake profile was removed from trainer identity.
+- Wardrobe and Account Settings now share `profiles.avatar_choice` and the same
+  avatar images. Wardrobe saves only that field for the authenticated student;
+  pages reload the saved avatar on entry or tab focus. Failed saves retain the
+  previous equipped avatar. All three profile choices are supported.
 - There is one **Edit Profile** action pointing to `/account`. Logout uses the
   existing service, shows pending state, prevents duplicate requests, handles
   errors/retry and returns to Login.
@@ -33,11 +37,11 @@ Merged branch: `origin/Home-Screen` (`6a02f8b`) into
 
 ## Prototype features
 
-The incoming home Pokémon collection/XP and pack count, Trainer House outfit
-selection, and dashboard statistics remain local/sample features. They are not
-connected to real inventory, study history, rewards, or persistent profile avatar
-updates. The home prototype collection owner is separate from authenticated
-trainer identity. This merge makes no Supabase data or permission changes.
+The incoming home Pokémon collection/XP and pack count, Trainer House buddy
+preview, and dashboard statistics remain local/sample features. They are not
+connected to real inventory, study history or rewards. The home prototype
+collection owner is separate from authenticated trainer identity. Avatar changes
+use the existing profile update permissions; no new SQL or policies are needed.
 
 The StudyDeck implementation, applied read-access SQL record, SQL rollback,
 and study timer work are retained. StudyDeck itself reads real lesson content
@@ -63,9 +67,11 @@ discovery. The old StudyDeck-only rollback script remains separate from this mer
 Route tests cover login/start/home, saved trainer identity and avatar (including
 Prefer not to say), a single Edit Profile action, logout/retry,
 login protection for new routes, Trainer House/Dashboard navigation, Poké Lab vs
-Arena routing, and nighttime access. Existing StudyDeck tests are preserved.
+Arena routing, and nighttime access. Avatar tests cover both save directions,
+reload/focus refresh, failed-save recovery, account ownership, and preserving
+unsaved profile edits. Existing StudyDeck tests are preserved.
 
-- All **100 tests passed across 13 files**.
+- All **151 tests passed across 16 files**.
 - The production build passed. Large main/chart bundles still produce size warnings;
   the chart views are loaded on demand.
 - ESLint and Oxlint passed for the changed integration files.

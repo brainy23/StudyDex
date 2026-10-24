@@ -7,7 +7,7 @@ const props = defineProps({
   topic: { type: Object, required: true },
   resource: { type: Object, required: true },
 })
-const emit = defineEmits(['progress', 'mode', 'retry'])
+const emit = defineEmits(['progress', 'complete', 'mode', 'retry', 'arena'])
 const step = ref(-1)
 const completedIds = ref([])
 const answers = reactive({})
@@ -27,7 +27,10 @@ function next() {
   if (!completedIds.value.includes(concept.value.id)) completedIds.value.push(concept.value.id)
   emit('progress', { read: completedIds.value.length, total: concepts.value.length })
   if (step.value < concepts.value.length - 1) step.value++
-  else finished.value = true
+  else {
+    finished.value = true
+    emit('complete', props.topic.id)
+  }
 }
 
 function readAgain() {
@@ -56,7 +59,7 @@ function readAgain() {
           <button class="study-button" @click="$emit('mode', 'flashcards')">
             Flashcard Revision
           </button>
-          <button class="study-button" @click="$emit('mode', 'boss_battle')">Boss Battle</button>
+          <button class="study-button" @click="$emit('arena')">Quiz me!</button>
           <button class="study-button study-button-secondary" @click="readAgain">Read again</button>
         </div>
       </div>
@@ -95,7 +98,7 @@ function readAgain() {
           </p>
           <template v-else-if="checks.length">
             <p class="study-note">
-              Choose an answer to think it through. Scoring is not available yet.
+              Choose an answer to think it through. These understanding checks are ungraded.
             </p>
             <StudyQuestion
               v-for="question in checks"
