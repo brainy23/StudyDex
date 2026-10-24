@@ -1,436 +1,369 @@
 <script setup>
-import { ref, computed } from 'vue'
-import { useTimer } from '../components/timer/useTimer.js'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
+import { getCurrentProfile } from '../services/profileService'
+import {
+  getStudyCatalogue,
+  getTopicLesson,
+  getTopicFlashcards,
+  getStudyQuestions,
+  getSelectedStudyBuddy,
+  studyErrorMessage,
+} from '../services/studyService'
+import { useTimer } from '../components/timer/useTimer'
+import StudyLearn from '../components/study/StudyLearn.vue'
+import StudyFlashcards from '../components/study/StudyFlashcards.vue'
+import StudyQuiz from '../components/study/StudyQuiz.vue'
+import StudyTimerPanel from '../components/study/StudyTimerPanel.vue'
+import StudyImage from '../components/study/StudyImage.vue'
+import '../assets/study.css'
 
-// ---------- flashcards ----------
-const decks = [
-    {
-        id: 'science',
-        name: 'Science',
-        cards: [
-            { q: 'What do plants need to make food?', a: 'Sunlight, water and carbon dioxide (photosynthesis)' },
-            { q: 'At what temperature does water boil?', a: '100°C' },
-            { q: 'Which part of a plant absorbs water?', a: 'The roots' },
-            { q: 'What force pulls objects towards the Earth?', a: 'Gravity' },
-        ],
+const route = useRoute()
+const router = useRouter()
+const timer = useTimer()
+const profile = ref(null)
+const catalogue = ref({ subjects: [], topics: [] })
+const loading = ref(true)
+const error = ref(null)
+const buddy = ref(null)
+const buddyError = ref(null)
+const buddyLoading = ref(false)
+const resources = reactive({})
+const progress = reactive({})
+let alive = true
+let generation = 0
+
+const mode = computed(() =>
+  ['learn', 'flashcards', 'quiz'].includes(route.query.mode) ? route.query.mode : 'learn',
+)
+const purpose = computed(() => (route.query.battle === 'boss' ? 'boss_battle' : 'quiz'))
+const subject = computed(() => {
+  const subjects = catalogue.value.subjects
+  if (route.query.subject) return subjects.find((item) => item.id === route.query.subject) || null
+  const requestedTopic = catalogue.value.topics.find((item) => item.id === route.query.topic)
+  const initialSubjectId = requestedTopic?.subject_id || catalogue.value.topics[0]?.subject_id
+  return subjects.find((item) => item.id === initialSubjectId) || subjects[0] || null
+})
+const availableTopics = computed(() =>
+  catalogue.value.topics.filter((item) => item.subject_id === subject.value?.id),
+)
+const topic = computed(() =>
+  route.query.topic
+    ? availableTopics.value.find((item) => item.id === route.query.topic) || null
+    : availableTopics.value[0] || null,
+)
+const currentResources = computed(() => resources[topic.value?.id])
+const readingProgress = computed(
+  () =>
+    progress[topic.value?.id] || {
+      read: 0,
+      total: currentResources.value?.lesson.data?.concepts.length || 0,
     },
-    {
-        id: 'english',
-        name: 'English',
-        cards: [
-            { q: 'What is a noun?', a: 'A word that names a person, place or thing' },
-            { q: 'What is the plural of "child"?', a: 'Children' },
-            { q: 'Give an antonym of "happy".', a: 'Sad' },
-            { q: 'What is a verb?', a: 'A word that shows an action' },
-        ],
-    },
-]
+)
+const progressPercent = computed(() =>
+  readingProgress.value.total
+    ? Math.round((readingProgress.value.read / readingProgress.value.total) * 100)
+    : 0,
+)
+const activeResource = computed(() => {
+  const data = currentResources.value
+  if (!data) return null
+  if (mode.value === 'learn') return data.lesson
+  if (mode.value === 'flashcards') return data.flashcards
+  return data[purpose.value]
+})
+const modeComponent = computed(
+  () => ({ learn: StudyLearn, flashcards: StudyFlashcards, quiz: StudyQuiz })[mode.value],
+)
+const modeKey = computed(
+  () => `${topic.value?.id}:${mode.value}:${mode.value === 'quiz' ? purpose.value : ''}`,
+)
 
-const activeDeckId = ref('science')
-const queue = ref([...decks[0].cards])
-const index = ref(0)
-const flipped = ref(false)
-
-const activeDeck = computed(() => decks.find((d) => d.id === activeDeckId.value))
-const current = computed(() => queue.value[index.value])
-const frontText = computed(() => current.value ? current.value.q : 'Deck complete! Press Again to go through it once more.')
-const backText = computed(() => current.value ? current.value.a : '')
-
-function flip() {
-    if (current.value) flipped.value = !flipped.value
-}
-
-// flips the card face-down first so the next answer never peeks through
-function go(change) {
-    if (flipped.value) {
-        flipped.value = false
-        setTimeout(change, 300)
-    } else {
-        change()
+async function initialise() {
+  const request = ++generation
+  loading.value = true
+  error.value = null
+  profile.value = null
+  catalogue.value = { subjects: [], topics: [] }
+  Object.keys(resources).forEach((id) => delete resources[id])
+  Object.keys(progress).forEach((id) => delete progress[id])
+  try {
+    const student = await getCurrentProfile()
+    if (!alive || request !== generation) return
+    profile.value = student
+    timer.bindUser(student.id)
+    loadBuddy(student.id, request)
+    if (student.school_level_id) {
+      const data = await getStudyCatalogue(student.school_level_id)
+      if (alive && request === generation) catalogue.value = data
     }
+  } catch (cause) {
+    if (alive && request === generation) error.value = cause
+  } finally {
+    if (alive && request === generation) loading.value = false
+  }
 }
 
-function loadDeck(id) {
-    activeDeckId.value = id
-    queue.value = [...decks.find((d) => d.id === id).cards]
-    index.value = 0
-    flipped.value = false
+async function loadBuddy(userId, request) {
+  buddyLoading.value = true
+  buddy.value = null
+  buddyError.value = null
+  try {
+    const data = await getSelectedStudyBuddy(userId)
+    if (alive && request === generation) buddy.value = data
+  } catch (cause) {
+    if (alive && request === generation) buddyError.value = cause
+  } finally {
+    if (alive && request === generation) buddyLoading.value = false
+  }
 }
 
-function switchDeck(id) {
-    go(() => loadDeck(id))
+async function loadResource(topicId, name) {
+  const target = resources[topicId]?.[name]
+  if (!target || target.loading) return
+  target.loading = true
+  target.error = null
+  try {
+    const data = await {
+      lesson: getTopicLesson,
+      flashcards: getTopicFlashcards,
+      quiz: (id) => getStudyQuestions(id, 'quiz'),
+      boss_battle: (id) => getStudyQuestions(id, 'boss_battle'),
+    }[name](topicId)
+    if (alive && resources[topicId]?.[name] === target) target.data = data
+  } catch (cause) {
+    if (alive && resources[topicId]?.[name] === target) target.error = cause
+  } finally {
+    if (alive && resources[topicId]?.[name] === target) target.loading = false
+  }
 }
 
-function next() {
-    go(() => { if (index.value < queue.value.length - 1) index.value++ })
+function loadTopic(id) {
+  if (!id || resources[id]) return
+  resources[id] = Object.fromEntries(
+    ['lesson', 'flashcards', 'quiz', 'boss_battle'].map((name) => [
+      name,
+      { loading: false, data: null, error: null },
+    ]),
+  )
+  // Start independently: a denied/empty quiz bank must not delay Learn mode.
+  for (const name of Object.keys(resources[id])) loadResource(id, name)
 }
 
-function prev() {
-    go(() => { if (index.value > 0) index.value-- })
+function setMode(nextMode) {
+  const boss = nextMode === 'boss_battle'
+  const query = { ...route.query, mode: boss ? 'quiz' : nextMode }
+  if (boss) query.battle = 'boss'
+  else delete query.battle
+  router.push({ name: 'study-decks', query })
 }
 
-// Again: restart the whole deck, including cards marked Easy
-function again() {
-    go(() => loadDeck(activeDeckId.value))
+function chooseSubject(id) {
+  const firstTopic = catalogue.value.topics.find((item) => item.subject_id === id)
+  router.push({
+    name: 'study-decks',
+    query: { subject: id, ...(firstTopic ? { topic: firstTopic.id } : {}), mode: 'learn' },
+  })
 }
 
-// Easy: remove this card from the queue
-function easy() {
-    if (!current.value) return
-    go(() => {
-        queue.value.splice(index.value, 1)
-        if (index.value >= queue.value.length) index.value = Math.max(0, queue.value.length - 1)
-    })
+function chooseTopic(selected) {
+  router.push({
+    name: 'study-decks',
+    query: { subject: selected.subject_id, topic: selected.id, mode: 'learn' },
+  })
 }
 
-// Hard: put a copy of this card back in the queue 4 cards ahead, then move on
-function hard() {
-    if (!current.value) return
-    const card = current.value
-    go(() => {
-        const insertAt = Math.min(index.value + 4, queue.value.length)
-        queue.value.splice(insertAt, 0, card)
-        index.value++
-    })
+function updateProgress(value) {
+  if (topic.value) progress[topic.value.id] = value
 }
 
-// ---------- study timer ----------
-const { DAILY_LIMIT, sessionsDone, running, display, timerLabel, timerDisabled, toggleTimer, resetDay } = useTimer()
-const isDev = import.meta.env.DEV
+function retryMode() {
+  if (topic.value)
+    loadResource(
+      topic.value.id,
+      mode.value === 'learn'
+        ? 'lesson'
+        : mode.value === 'flashcards'
+          ? 'flashcards'
+          : purpose.value,
+    )
+}
 
+watch(() => topic.value?.id, loadTopic)
+onMounted(initialise)
+onBeforeRouteLeave(() => {
+  timer.pause('Your session was paused when you left Poké Lab. Resume when you return.')
+})
+onUnmounted(() => {
+  alive = false
+  generation++
+})
 </script>
 
 <template>
-    <main>
-        <div class="study-screen">
-            <div class="nav"></div>
-            <aside class="buddy">
-                <div class="b-circle">
-                    icon
-                </div>
-                <div class="b-info">
-                    info for pokemon
-                    includes xp bar and level
-                </div>
-
-            </aside>
-            <section class="main-study">
-                <h1 class="deck-name">
-                    {{ activeDeck.name }}
-                </h1>
-                <div class="card" :class="{ flipped }" @click="flip">
-                    <div class="card-inner">
-                        <div class="card-face card-front">
-                            <div>
-                                {{ frontText }}
-                                <small v-if="current" class="flip-hint">Click the card to flip!</small>
-                            </div>
-                        </div>
-                        <div class="card-face card-back">{{ backText }}</div>
-                    </div>
-                </div>
-                <div class="selector">
-                    <button class='back' :disabled="index === 0" @click="prev">←</button>
-                    <p class="page-count">{{ current ? index + 1 : 0 }} / {{ queue.length }}</p>
-                    <button class='next' :disabled="index >= queue.length - 1" @click="next">→</button>
-                </div>
-                <div class="actions">
-                    <button class="again" @click="again">Again</button>
-                    <button class="hard" :disabled="!current" @click="hard">Hard</button>
-                    <button class="easy" :disabled="!current" @click="easy">Easy</button>
-                </div>
-
-            </section>
-            <aside class="util">
-                <div class="timer-box">
-                    <h2>Study Block Timer</h2>
-                    <div class="time">{{ display }}</div>
-                    <button class="start" :class="{ pressed: running }" :disabled="timerDisabled" @click="toggleTimer">{{ timerLabel }}</button>
-                    <p>{{ sessionsDone }} out of {{ DAILY_LIMIT }} study sessions done!</p>
-                    <div class="dots">
-                        <span v-for="n in DAILY_LIMIT" :key="n" class="dot" :class="{ done: n <= sessionsDone }"></span>
-                        <!-- dev function -->
-                        <button v-if="isDev" @click="resetDay">Reset day</button>
-                    </div>
-                </div>
-                <div class="deck-box">
-                    <h2>Current Study Decks</h2>
-                    <div v-for="d in decks" :key="d.id" class="deck-row" :class="{ active: d.id === activeDeckId }">
-                        <span>{{ d.name }}</span>
-                        <button @click="switchDeck(d.id)">{{ d.id === activeDeckId ? 'Active' : 'Toggle' }}</button>
-                    </div>
-                </div>
-            </aside>
+  <main class="study-page">
+    <div class="study-layout study-screen">
+      <header class="study-header study-panel">
+        <div class="study-header-title">
+          <RouterLink to="/home" class="study-town-link">← Back to Town</RouterLink>
+          <h1>Poké Lab</h1>
+          <p>Explore a little. Remember a little more.</p>
         </div>
-    </main>
+        <div v-if="profile" class="study-header-context">
+          <p class="study-level">{{ profile.school_level?.name || 'School level not set' }}</p>
+          <p>
+            {{ subject?.name || 'Choose a subject' }} <span v-if="topic">· {{ topic.name }}</span>
+          </p>
+          <a href="#study-topics">Choose subject or topic</a>
+        </div>
+        <div v-if="topic" class="study-header-progress">
+          <label for="topic-reading-progress"
+            >{{ readingProgress.read }} / {{ readingProgress.total }} concepts read</label
+          >
+          <progress id="topic-reading-progress" :value="progressPercent" max="100" />
+          <span class="study-note">Progress for this visit</span>
+        </div>
+      </header>
+
+      <section v-if="loading" class="study-page-state study-panel" role="status">
+        Loading your Poké Lab…
+      </section>
+      <section v-else-if="error" class="study-page-state study-panel" role="alert">
+        <h2>We could not open your study content</h2>
+        <p>{{ studyErrorMessage(error, 'Your study content') }}</p>
+        <button class="study-button" @click="initialise">Try again</button>
+      </section>
+      <section v-else-if="!profile?.school_level_id" class="study-page-state study-panel">
+        <h2>Set your school level first</h2>
+        <p>Add your Primary level in Account Settings so we can show you the right topics.</p>
+        <RouterLink to="/account" class="study-button">Open Account Settings</RouterLink>
+      </section>
+      <template v-else>
+        <aside class="study-buddy study-panel" aria-labelledby="study-buddy-heading">
+          <div class="study-buddy-art">
+            <StudyImage
+              v-if="buddy?.pokemon?.sprite_url"
+              :path="buddy.pokemon.sprite_url"
+              :alt="buddy.pokemon.name"
+            />
+            <img v-else src="/assets/quiz_buddy.png" alt="" />
+          </div>
+          <div>
+            <p class="study-eyebrow">Your study companion</p>
+            <h2 id="study-buddy-heading">{{ buddy?.pokemon?.name || 'Pokémon Buddy' }}</h2>
+            <p v-if="buddyLoading" class="study-note" role="status">Looking for your buddy…</p>
+            <p v-else-if="buddyError" class="study-note" role="alert">
+              {{ studyErrorMessage(buddyError, 'Your buddy') }}
+            </p>
+            <template v-else-if="buddy">
+              <p>Level {{ buddy.level }} · {{ buddy.xp }} XP</p>
+              <p class="study-note">Your saved buddy stats. Studying does not award XP yet.</p>
+            </template>
+            <p v-else class="study-note">
+              Buddy preview — your selected Pokémon will appear here when your collection is
+              connected.
+            </p>
+          </div>
+        </aside>
+
+        <section class="main-study study-panel" aria-label="Learning content">
+          <nav v-if="topic" class="study-mode-nav" aria-label="Learning modes">
+            <button
+              v-for="item in [
+                { id: 'learn', label: 'Learn' },
+                { id: 'flashcards', label: 'Flashcards' },
+                { id: 'quiz', label: 'Quiz' },
+              ]"
+              :key="item.id"
+              :aria-pressed="mode === item.id"
+              @click="setMode(item.id)"
+            >
+              {{ item.label }}
+            </button>
+          </nav>
+          <template v-if="topic && activeResource">
+            <p class="study-eyebrow study-topic-label">{{ subject?.name }} · {{ topic.name }}</p>
+            <KeepAlive>
+              <component
+                :is="modeComponent"
+                :key="modeKey"
+                :topic="topic"
+                :resource="activeResource"
+                :purpose="purpose"
+                @progress="updateProgress"
+                @mode="setMode"
+                @retry="retryMode"
+              />
+            </KeepAlive>
+          </template>
+          <div v-else class="study-empty">
+            <h2>
+              {{
+                route.query.topic ? 'This topic is unavailable' : 'No study content is available'
+              }}
+            </h2>
+            <p v-if="!catalogue.subjects.length">
+              No subjects are visible to your account. Content may not be published yet, or read
+              access may not have been enabled.
+            </p>
+            <p v-else>
+              {{
+                route.query.topic
+                  ? 'Choose a topic available for your registered school level.'
+                  : `There are no available ${subject?.name || ''} topics for ${profile.school_level?.name || 'your school level'} yet.`
+              }}
+            </p>
+            <p class="study-note">
+              Content may also be unavailable if your account has not been granted read access.
+            </p>
+            <a href="#study-topics" class="study-button">Browse available topics</a>
+          </div>
+        </section>
+
+        <aside class="study-utilities" aria-label="Study tools">
+          <StudyTimerPanel :topic-id="topic?.id || null" />
+          <section
+            id="study-topics"
+            class="study-panel study-topic-browser"
+            aria-labelledby="topic-browser-heading"
+          >
+            <h2 id="topic-browser-heading">Your study topics</h2>
+            <label for="study-subject">Subject</label>
+            <select
+              id="study-subject"
+              :value="subject?.id || ''"
+              @change="chooseSubject($event.target.value)"
+            >
+              <option v-if="!subject" value="" disabled>Choose a subject</option>
+              <option v-for="item in catalogue.subjects" :key="item.id" :value="item.id">
+                {{ item.name }}
+              </option>
+            </select>
+            <ul v-if="availableTopics.length" class="study-topic-list">
+              <li v-for="item in availableTopics" :key="item.id">
+                <button
+                  :aria-current="topic?.id === item.id ? 'true' : undefined"
+                  @click="chooseTopic(item)"
+                >
+                  {{ item.name }}
+                </button>
+              </li>
+            </ul>
+            <p v-else class="study-note">
+              No topics are available for this subject at your level yet.
+            </p>
+            <div v-if="topic" class="study-topic-progress">
+              <h3>Current learning progress</h3>
+              <p>{{ readingProgress.read }} of {{ readingProgress.total }} concepts read</p>
+              <progress :value="progressPercent" max="100" aria-label="Topic reading progress" />
+              <p class="study-note">
+                Reading progress and answer choices stay for this visit. They reset after leaving or
+                refreshing.
+              </p>
+            </div>
+          </section>
+        </aside>
+      </template>
+    </div>
+  </main>
 </template>
-
-<style scoped>
-
-    html, body { margin: 0; }
-    main{
-        height: 100dvh;
-        background-image: url('/backgrounds/morning_homepage.png');
-        background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        font-family:Verdana, Geneva, Tahoma, sans-serif;
-
-    }
-
-    .study-screen {
-        display: grid;
-        grid-template-columns: 360px 1fr 290px;
-        grid-template-rows: auto minmax(0, 1fr);
-        gap: 16px;
-        height: 100%;
-        box-sizing: border-box;
-        padding: 16px;
-    }
-
-    .buddy {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap:20px;
-    }
-
-    .b-circle {
-        background-color: rgba(255, 255, 255, 0.8);
-        width: 360px;
-        height: 360px;
-        border-radius: 180px;
-        text-align: center;
-        align-content: center;
-        padding: 10px;
-        box-shadow: rgba(100, 100, 111, 0.7) 0px 7px 29px 0px;
-    }
-
-    .b-info {
-        background-color: rgba(255, 255, 255, 0.8);
-        height: 140px;
-        width: 360px;
-        border-radius: 30px;
-        text-align: center;
-        align-content: center;
-        padding: 10px;
-        box-shadow: rgba(100, 100, 111, 0.7) 0px 7px 29px 0px;
-    }
-
-    .main-study {
-        background-color: rgba(255, 255, 255, 0.8);
-        border-radius: 50px;
-        display: flex;
-        flex-direction: column;
-        margin: 0;
-        padding: 35px;
-        box-shadow: rgba(100, 100, 111, 0.7) 0px 7px 29px 0px;
-    }
-
-    .card{
-        height: 350px;
-        background-color: transparent;
-        border-radius: 30px;
-        text-align: center;
-        align-content: center;
-        font-size: 30px;
-        perspective: 1000px;
-        cursor: pointer;
-    }
-
-    .selector {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        padding: 10px;
-        gap: 40px;
-    }
-
-    .actions{
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: center;
-        gap: 60px;
-    }
-
-    .actions button{
-        font-family:Verdana, Geneva, Tahoma, sans-serif;
-        font-size: 20px;
-        padding: 25px;
-        width: 130px;
-        border-radius: 25px;
-        color: white;
-    }
-
-    .actions .easy{
-        background-color: green;
-        border: 3px solid rgb(4, 184, 4)
-    }
-
-    .actions .hard{
-        background-color: rgb(206, 0, 0);
-        border: 3px solid red
-    }
-
-    .actions .again{
-        background-color: rgb(0, 0, 190);
-        border: 3px solid rgb(33, 33, 238);
-    }
-    .util {
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        box-sizing: border-box;
-        overflow-y: auto;
-    }
-
-    .nav {
-        border: 5px solid orange;
-        background-color: gold;
-        height: 80px;
-        grid-column: 1 / -1;
-    }
-
-    .study-screen > nav { grid-column: 1 / -1; }
-
-    .card-inner {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        transition: transform 0.4s;
-        transform-style: preserve-3d;
-    }
-
-    .card.flipped .card-inner {
-        transform: rotateY(180deg);
-    }
-
-    .card-face {
-        position: absolute;
-        inset: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        box-sizing: border-box;
-        background-color: white;
-        border-radius: 30px;
-        backface-visibility: hidden;
-        -webkit-backface-visibility: hidden;
-    }
-
-    .card-back {
-        background-color: rgb(255, 248, 214);
-        transform: rotateY(180deg);
-    }
-
-    .flip-hint {
-        display: block;
-        margin-top: 20px;
-        font-size: 16px;
-        color: gray;
-    }
-
-    .selector button, .actions button {
-        cursor: pointer;
-    }
-
-    .selector button:disabled, .actions button:disabled {
-        opacity: 0.4;
-        cursor: default;
-    }
-
-    .timer-box, .deck-box {
-        text-align: center;
-        justify-content: center;
-        background-color: rgba(255, 255, 255, 0.8);
-        border-radius: 30px;
-        box-shadow: rgba(100, 100, 111, 0.7) 0px 7px 29px 0px;
-        padding: 30px;
-        flex-shrink: 0;
-    }
-
-    .deck-box{
-        flex-grow:1;
-    }
-
-    .timer-box h2, .deck-box h2 {
-        margin: 0 0 10px;
-        font-size: 20px;
-    }
-
-    .time {
-        font-size: 70px;
-        font-weight: bold;
-    }
-
-    .timer-box .start {
-        font-family: inherit;
-        font-size: 18px;
-        padding: 10px 20px;
-        border: 0;
-        border-radius: 15px;
-        background-color: rgb(255, 215, 37);
-        box-shadow: 0 5px 0 rgb(200, 160, 0);
-        cursor: pointer;
-        transition: transform 150ms ease, box-shadow 150ms ease;
-    }
-
-    .timer-box .start.pressed {
-        transform: translateY(5px);
-        box-shadow: 0 0 0 rgb(200, 160, 0);
-    }
-
-    .timer-box .start:disabled {
-        opacity: 0.6;
-        cursor: default;
-    }
-
-    .dots {
-        display: flex;
-        justify-content: center;
-        gap: 15px;
-
-    }
-
-    .dot {
-        width: 20px;
-        height: 20px;
-        border-radius: 50%;
-        background-color: gray;
-        border: 3px solid white;
-        box-shadow: rgba(100, 100, 111, 0.7) 0px 7px 29px 0px;
-    }
-
-    .dot.done {
-        background-color: rgb(255, 215, 37);
-    }
-
-    .deck-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 8px 12px;
-        margin-top: 8px;
-        border-radius: 10px;
-        background-color: rgba(0, 0, 0, 0.08);
-    }
-
-    .deck-row.active {
-        background-color: rgb(255, 230, 120);
-        font-weight: bold;
-    }
-
-    .deck-row button {
-        font-family: inherit;
-        border: 0;
-        border-radius: 8px;
-        padding: 4px 12px;
-        background-color: rgb(255, 215, 37);
-        cursor: pointer;
-    }
-
-</style>

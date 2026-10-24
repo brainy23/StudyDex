@@ -3,6 +3,8 @@ import { createMemoryHistory } from 'vue-router'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createAppRouter } from '../index'
 import App from '../../App.vue'
+import { studentProfile, studyCatalogue, studyLesson } from '../../test/studyFixtures'
+import { getCurrentProfile } from '../../services/profileService'
 
 const { getSession, signInWithPassword, getUser, signOut } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -14,16 +16,30 @@ vi.mock('../../lib/supabase', () => ({
   getSupabase: () => ({ auth: { getSession, signInWithPassword, getUser, signOut } }),
 }))
 vi.mock('../../services/profileService', () => ({
-  getCurrentProfile: vi.fn(async () => ({
-    display_name: 'Ash',
-    avatar_choice: 'female',
-    school_level: { name: 'Primary 3' },
-  })),
+  getCurrentProfile: vi.fn(async () => structuredClone(studentProfile)),
+}))
+// Chart rendering, canvas animation and remote weather calls are outside these route checks.
+vi.mock('vue3-apexcharts', () => ({
+  default: { name: 'VueApexCharts', template: '<div class="test-chart" />' },
+}))
+vi.mock('axios', () => ({
+  default: {
+    get: vi.fn(async () => ({ data: { sprites: { default: '/test-pokeball.png' } } })),
+  },
+}))
+vi.mock('../../services/studyService', async () => ({
+  ...(await vi.importActual('../../services/studyService')),
+  getStudyCatalogue: vi.fn(async () => structuredClone(studyCatalogue)),
+  getTopicLesson: vi.fn(async () => structuredClone(studyLesson)),
+  getTopicFlashcards: vi.fn(async () => []),
+  getStudyQuestions: vi.fn(async () => []),
+  getSelectedStudyBuddy: vi.fn(async () => null),
 }))
 
 let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({
@@ -36,6 +52,8 @@ beforeEach(() => {
 })
 afterEach(() => {
   wrapper?.unmount()
+  vi.useRealTimers()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -74,7 +92,7 @@ it('starts at landing-info, logs in to landing, and waits for Start before openi
   expect(router.currentRoute.value.path).toBe('/home')
   expect(wrapper.find('.world-page').exists()).toBe(true)
   expect(wrapper.get('.trainer-name').text()).toBe('Ash')
-  expect(wrapper.get('.trainer-avatar').attributes('src')).toBe('/assets/female.png')
+  expect(wrapper.get('.trainer-avatar').attributes('src')).toBe('/avatars/female.png')
 })
 
 it('keeps failed logins on the login page with feedback', async () => {
@@ -91,7 +109,7 @@ it('keeps failed logins on the login page with feedback', async () => {
   expect(wrapper.get('[role="alert"]').text()).toBe('Invalid login credentials')
 })
 
-it.each(['/landing', '/home', '/account', '/study-decks'])(
+it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard'])(
   'sends visitors without a session from %s to login',
   async (path) => {
     const router = await open(path)
@@ -129,10 +147,55 @@ it('logs out from the town menu and blocks protected pages afterward', async () 
   await flushPromises()
   expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
   expect(router.currentRoute.value.name).toBe('login')
-  for (const path of ['/home', '/account', '/landing', '/study-decks']) {
+  for (const path of ['/home', '/account', '/landing', '/study-decks', '/trainer', '/dashboard']) {
     await router.push(path)
     expect(router.currentRoute.value.name).toBe('login')
   }
+})
+
+it('keeps a single Edit Profile action and opens the existing Account Settings page', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const router = await open('/home')
+  await wrapper.get('.trainer-profile-trigger').trigger('click')
+  const actions = wrapper.findAll('.trainer-dropdown button')
+  expect(actions.filter((button) => button.text().includes('Edit Profile'))).toHaveLength(1)
+  expect(actions.some((button) => /Edit name|Change avatar/.test(button.text()))).toBe(false)
+  await actions.find((button) => button.text().includes('Edit Profile')).trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('account')
+})
+
+it('supports the saved Prefer not to say avatar without requesting a missing local image', async () => {
+  getCurrentProfile.mockResolvedValueOnce({ ...studentProfile, avatar_choice: 'prefer_not_to_say' })
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  await open('/home')
+  expect(wrapper.get('.trainer-avatar').attributes('src')).toContain('/pokemon/132.png')
+})
+
+it('keeps the new Trainer House and dashboard reachable behind login', async () => {
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const router = await open('/home')
+  const trainer = wrapper
+    .findAll('.building-button')
+    .find((button) => button.text().includes('Trainer House'))
+  await trainer.trigger('click')
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/trainer')
+  expect(wrapper.find('.trainer-page').exists()).toBe(true)
+  await router.push('/home')
+  await flushPromises()
+  await wrapper.get('.trainer-profile-trigger').trigger('click')
+  await wrapper
+    .findAll('.trainer-dropdown button')
+    .find((button) => button.text().includes('My Progress'))
+    .trigger('click')
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/dashboard')
+  expect(wrapper.find('.student-dashboard').exists()).toBe(true)
+  expect(wrapper.get('.welcome-title h1').text()).toBe('Hello, Ash!')
+  expect(wrapper.text()).toContain('Sample progress preview')
 })
 
 it('keeps a failed logout on home and allows retrying without duplicate requests', async () => {
@@ -164,7 +227,7 @@ it('keeps a failed logout on home and allows retrying without duplicate requests
   expect(router.currentRoute.value.name).toBe('login')
 })
 
-it('opens study flashcards from Poké Lab and allows flipping cards and changing decks', async () => {
+it('opens profile-level lessons from Poké Lab and supports learning mode navigation', async () => {
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
   const router = await open('/home')
   const lab = wrapper
@@ -173,20 +236,15 @@ it('opens study flashcards from Poké Lab and allows flipping cards and changing
   await lab.trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/study-decks')
-  expect(wrapper.get('.deck-name').text()).toBe('Science')
-  expect(wrapper.get('.card-front').text()).toContain('What do plants need to make food?')
-  expect(wrapper.get('.page-count').text()).toBe('1 / 4')
-
-  const card = wrapper.get('.main-study .card')
-  await card.trigger('click')
-  expect(card.classes()).toContain('flipped')
-  expect(wrapper.get('.card-back').text()).toContain('photosynthesis')
-  await card.trigger('click')
-
-  const english = wrapper.findAll('.deck-row').find((row) => row.text().includes('English'))
-  await english.get('button').trigger('click')
-  expect(wrapper.get('.deck-name').text()).toBe('English')
-  expect(wrapper.get('.card-front').text()).toContain('What is a noun?')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
+  expect(wrapper.get('.study-level').text()).toBe('Primary 3')
+  const revision = wrapper
+    .findAll('.study-mode-nav button')
+    .find((button) => button.text() === 'Flashcards')
+  await revision.trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query.mode).toBe('flashcards')
+  expect(wrapper.text()).toContain('There are no flashcards for this topic yet')
 })
 
 it('keeps Poké Arena separate from the Poké Lab study screen', async () => {
@@ -210,5 +268,25 @@ it('keeps Poké Arena separate from the Poké Lab study screen', async () => {
   await lab.trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/study-decks')
-  expect(wrapper.get('.deck-name').text()).toBe('Science')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
+})
+
+it('keeps Poké Lab and Arena available when the buddy is sleeping at night', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 24, 1, 0))
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const router = await open('/home')
+  expect(wrapper.find('.buddy-zzz').exists()).toBe(true)
+  for (const title of ['Poké Lab', 'Poké Arena']) {
+    const building = wrapper
+      .findAll('.building-button')
+      .find((button) => button.text().includes(title))
+    expect(building.attributes('disabled')).toBeUndefined()
+  }
+  const lab = wrapper
+    .findAll('.building-button')
+    .find((button) => button.text().includes('Poké Lab'))
+  await lab.trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/study-decks')
 })

@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import HomeView from '../views/HomeView2.vue'
 import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import Landing from '../components/landing/landing.vue'
 import Landinginfo from '../components/landing-info/landing-info.vue'
@@ -42,6 +42,18 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         path: '/home',
         name: 'home',
         component: HomeView,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/trainer',
+        name: 'trainer',
+        component: () => import('../views/TrainerView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/dashboard',
+        name: 'studentdashboard',
+        component: () => import('../views/dashboardView.vue'),
         meta: { requiresAuth: true },
       },
       {
