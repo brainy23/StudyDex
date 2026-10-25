@@ -2,11 +2,11 @@
 
 * {
   box-sizing: border-box;
-  font-family: 'Fredoka';
 }
 
 body {
   margin: 0;
+  font-family: 'Fredoka';
 }
 
 #app {

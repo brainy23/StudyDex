@@ -120,7 +120,7 @@ const buildingButtons = [
     subtitle: 'Take a Quiz',
     icon: asset+ 'poke_arena.png',
     left: '21%',
-    top: '55%',
+    top: '50%',
     path: '/quiz',
   },
   {
@@ -129,7 +129,7 @@ const buildingButtons = [
     subtitle: 'Study Your Decks',
     icon: asset+ 'poke_study.png',
     left: '54.5%',
-    top: '53%',
+    top: '49%',
     path: '/study-decks',
   },
   {
@@ -138,7 +138,7 @@ const buildingButtons = [
     subtitle: 'View Your Progress',
     icon: asset+ 'poke_home.png',
     left: '83%',
-    top: '67%',
+    top: '65%',
     path: '/trainer',
   },
 ]
@@ -272,6 +272,7 @@ async function fetchActualRain() {
     const { stations, readings } = response.data.data
 
     const latest = readings?.[0]
+    console.log(latest)
 
     if (!latest) {
       rainDataAvailable.value = false
@@ -1260,7 +1261,7 @@ function setActiveBuddy(pokemon) {
 // Sleep from 10 PM until 6 AM.
 // Uses your existing clock, including the time preview.
 const buddySleeping = computed(() =>
-  hour.value >= 22 || hour.value < 6
+  hour.value >= 24 || hour.value < 6
 )
 
 const ballShaking = ref(false)
@@ -3016,7 +3017,7 @@ img.layer {
   position: absolute;
 
   left: 50%;
-  top: -78%;
+  bottom: 40%;
 
   width: 165%;
 
@@ -3097,9 +3098,6 @@ img.layer {
   z-index: 4;
 }
 
-.town-buddy.has-umbrella .buddy-speech {
-  bottom: calc(178% + 12px);
-}
 
 /* Complaint colours */
 .buddy-speech.is-getting-wet {
@@ -3120,7 +3118,7 @@ img.layer {
 }
 /* Raise the speech bubble above the umbrella */
 .town-buddy.has-umbrella .buddy-speech {
-  bottom: calc(178% + 12px);
+  bottom: calc(148% + 12px);
 }
 
 @media (prefers-reduced-motion: reduce) {
