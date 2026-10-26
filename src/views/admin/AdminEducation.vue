@@ -2,44 +2,50 @@
 <script setup>
 import '@/assets/admincommon.css'
 import AdminNav from '@/components/common/adminNav.vue';
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, reactive } from 'vue';
 
 // DB team please get rid of sampleData and use Supabase data THANKS
-const sampleData = [
+const sampleData = ref([
   {
    'id':1,
    'deck_name': "plus or minus?",
    'subjects': 'Mathematics',
-   'difficulty': 'Hard',
+   'difficulty': 3,
    'school_level_id': 1,
    'pages': 50,
+   'question_purpose': 'quick_check',
+   'question_type': 'T/F'   // ******** T/F means true or false
   },
   {
    'id':2,
    'deck_name': "multiply",
    'subjects': 'Mathematics',
-   'difficulty': 'Easy',
+   'difficulty': 1,
    'school_level_id': 3,
    'pages': 33,
+   'question_purpose': 'quick_check',
+   'question_type': 'T/F'
   },
   {
    'id':3,
    'deck_name': "human",
    'subjects': 'Science',
-   'difficulty': 'Hard',
+   'difficulty': 3,
    'school_level_id': 2,
    'pages': 89,
+   'question_purpose': 'quick_check',
+   'question_type': 'T/F'
   },
   
-];
+]);
 
 const searchQuery = ref('')
 
 const filteredData = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
-  if (!query) return sampleData;
+  if (!query) return sampleData.value;
 
-  return sampleData.filter(user =>
+  return sampleData.value.filter(user =>
     user.deck_name.toLowerCase().includes(query)
   )
 })
@@ -68,6 +74,8 @@ const displayedDecks = computed(() => {
       result = a.pages - b.pages;
     } else if (sortKey.value === 'deck_name'){
       result = (a.deck_name ?? '').localeCompare(b.deck_name ?? '')
+    } else if (sortKey.value === 'difficulty'){
+      result = a.difficulty - b.difficulty
     }
     return sortOrder.value === 'asc' ? result : -result
   })
@@ -77,6 +85,70 @@ const displayedDecks = computed(() => {
 function arrow(key) {
   if (sortKey.value !== key) return '↕';
   return sortOrder.value === 'asc' ? '↑' : '↓';
+}
+
+const showPanel = ref(false)
+const errorMsg = ref('')
+
+// options: label shown to user, value stored in the data
+const subjectOptions = ['Mathematics', 'Science']
+const difficultyOptions = ['1', '2', '3']
+const levelOptions = [1, 2, 3, 4, 5, 6].map(n => ({ label: `P${n}`, value: n }))
+const typeOptions = [
+  { label: 'True or False', value: 'T/F' },
+  { label: 'MCQ', value: 'MCQ' },
+]
+const purposeOptions = [
+  { label: 'Quick Check', value: 'quick_check' },
+  { label: 'Quiz', value: 'quiz' },
+  { label: 'Boss Battle', value: 'boss_battle' },
+]
+
+const emptyForm = () => ({
+  deck_name: '',
+  subjects: '',
+  difficulty: '',
+  school_level_id: '',
+  question_type: '',
+  question_purpose: '',
+})
+const form = reactive(emptyForm())
+
+function openPanel() {
+  Object.assign(form, emptyForm())
+  errorMsg.value = ''
+  showPanel.value = true
+}
+
+function closePanel() {
+  showPanel.value = false
+}
+
+function publish() {
+  // check for missing fields
+  const missing = Object.entries(form)
+    .filter(([key, val]) => val === '' || val === null || (typeof val === 'string' && !val.trim()))
+    .map(([key]) => key)
+
+  if (missing.length > 0) {
+    errorMsg.value = 'Please fill in all fields.'
+    return
+  }
+
+  // next id = highest existing id + 1
+  const nextId = sampleData.value.reduce((max, d) => Math.max(max, d.id), 0) + 1
+
+  sampleData.value.push({
+    id: nextId,
+    deck_name: form.deck_name.trim(),
+    subjects: form.subjects,
+    difficulty: form.difficulty,
+    school_level_id: form.school_level_id,
+    question_purpose: form.question_purpose,
+    question_type: form.question_type,
+  })
+
+  closePanel()
 }
 </script>
 
@@ -88,8 +160,13 @@ function arrow(key) {
 
     <!-- Main Content -->
     <main class="admin-content">
-      <h1 style="font-weight: 800; font-size: 30px;">StudyDeck Overview</h1>
-      <p style="font-size: 14px; color: #7D8095;">View and manage StudyDecks</p>
+      <div class="top-header">
+        <div>
+          <h1 style="font-weight: 800; font-size: 30px;">StudyDeck Overview</h1>
+          <p style="font-size: 14px; color: #7D8095;">View and manage StudyDecks</p>
+        </div>
+        <button class="add-quiz-button" @click="openPanel()">+ Add Deck</button>
+      </div>
         <div class="overview-panel">
 
 
@@ -123,7 +200,14 @@ function arrow(key) {
 
                 <div class="col-2">Subjects</div>
 
-                <div class="col-1">Difficulty</div>
+                <div class="col-1">
+                  <button
+                    class="sort-button"
+                    @click="toggleSort('difficulty')"
+                  >
+                  Difficulty {{ arrow('difficulty') }}
+                  </button>
+                </div>
 
                 <div class="col-1">
                   <button
@@ -134,7 +218,7 @@ function arrow(key) {
                   </button>
                 </div>
 
-                <div class="col-2">
+                <div class="col-1">
                   <button
                     class="sort-button"
                     @click="toggleSort('pages')"
@@ -144,7 +228,9 @@ function arrow(key) {
                 </div>
 
                 <!-- NEW COLUMN -->
-                <div class="col-2">Deck Status</div>
+                <div class="col-1">Question Type</div>
+
+                <div class="col-1">Question Purpose</div>
 
                 <div class="col-2">Actions</div>
 
@@ -192,17 +278,19 @@ function arrow(key) {
                 </div>
 
                 <!-- DATE JOINED -->
-                <div class="col-2 date-cell">
+                <div class="col-1 date-cell">
                   {{ deck.pages }}
                 </div>
 
+                <div class="col-1">{{ deck.question_type }}</div>
+
                 <!-- ACCOUNT STATUS -->
-                <div class="col-2">
+                <div class="col-1">
                   <span
                     class="account-status"
                     :class="deck.banned ? 'status-banned' : 'status-active'"
                   >
-                    {{ deck.banned ? 'Banned' : 'Not Banned' }}
+                    {{ deck.question_purpose }}
                   </span>
                 </div>
 
@@ -243,18 +331,69 @@ function arrow(key) {
                 v-if="displayedDecks.length === 0"
                 class="empty-state"
               >
-                No students found. Try another username.
+                No decks found. Try another deck.
               </div>
 
             </div>
 
             <div class="table-footer">
               Showing {{ displayedDecks.length }}
-              of {{ sampleData.length }} students
+              of {{ sampleData.length }} decks
             </div>
 
           </div>
+          <!-- overlay + panel -->
+          <div v-if="showPanel" class="overlay" @click.self="closePanel">
+            <div class="panel">
+              <h3>New Quiz Deck</h3>
 
+              <label>Deck Name
+                <input type="text" v-model="form.deck_name" placeholder="Enter deck name" />
+              </label>
+
+              <label>Subject
+                <select v-model="form.subjects">
+                  <option disabled value="">Select subject</option>
+                  <option v-for="s in subjectOptions" :key="s" :value="s">{{ s }}</option>
+                </select>
+              </label>
+
+              <label>Difficulty
+                <select v-model="form.difficulty">
+                  <option disabled value="">Select difficulty</option>
+                  <option v-for="d in difficultyOptions" :key="d" :value="d">{{ d }}</option>
+                </select>
+              </label>
+
+              <label>Level
+                <select v-model="form.school_level_id">
+                  <option disabled value="">Select level</option>
+                  <option v-for="l in levelOptions" :key="l.value" :value="l.value">{{ l.label }}</option>
+                </select>
+              </label>
+
+              <label>Question Type
+                <select v-model="form.question_type">
+                  <option disabled value="">Select type</option>
+                  <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
+                </select>
+              </label>
+
+              <label>Question Purpose
+                <select v-model="form.question_purpose">
+                  <option disabled value="">Select purpose</option>
+                  <option v-for="p in purposeOptions" :key="p.value" :value="p.value">{{ p.label }}</option>
+                </select>
+              </label>
+
+              <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+
+              <div class="actions">
+                <button class="cancel-button" @click="closePanel">Cancel</button>
+                <button class="publish-button" @click="publish">Publish</button>
+              </div>
+            </div>
+          </div>
     </main>
 
   </div>
@@ -262,6 +401,21 @@ function arrow(key) {
 
 
 <style scoped>
+.top-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.add-quiz-button {
+  border: 0;
+  border-radius: 20px;
+  background-color: #fad336;
+  padding-left: 20px;
+  padding-right: 20px;
+  height: 50px;
+  font-weight: 700;
+}
 
 /* OVERVIEW PANEL */
 
@@ -582,6 +736,67 @@ function arrow(key) {
   color: #aaaaaa;
   border-color: #dddddd;
   transform: none;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.panel {
+  background: #fff;
+  color: #000;
+  border-radius: 12px;
+  padding: 20px;
+  width: 360px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+}
+
+.panel input,
+.panel select {
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.error {
+  color: #c0392b;
+  margin: 0;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cancel-button{
+  border: 1px solid grey;
+  background-color: #dbdbdb;
+  border-radius: 8px;
+  padding: 10px;
+}
+.publish-button{
+  border: 1px solid #be9e00;
+  background-color: #ffd21f;
+  border-radius: 8px;
+  padding: 10px;
 }
 
 </style>
