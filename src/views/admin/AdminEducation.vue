@@ -2,7 +2,7 @@
 <script setup>
 import '@/assets/admincommon.css'
 import AdminNav from '@/components/common/adminNav.vue';
-import { ref, onMounted, computed, reactive } from 'vue';
+import { ref, onMounted, computed, reactive, watch } from 'vue';
 
 // DB team please get rid of sampleData and use Supabase data THANKS
 const sampleData = ref([
@@ -116,6 +116,7 @@ const form = reactive(emptyForm())
 
 function openPanel() {
   Object.assign(form, emptyForm())
+  questions.value = [];
   errorMsg.value = ''
   showPanel.value = true
 }
@@ -125,20 +126,48 @@ function closePanel() {
 }
 
 function publish() {
-  // check for missing fields
-  const missing = Object.entries(form)
-    .filter(([key, val]) => val === '' || val === null || (typeof val === 'string' && !val.trim()))
-    .map(([key]) => key)
-
+  // 1. existing check for the six main fields
+  const missing = Object.values(form)
+    .filter(val => val === '' || val === null || (typeof val === 'string' && !val.trim()))
   if (missing.length > 0) {
     errorMsg.value = 'Please fill in all fields.'
     return
   }
 
-  // next id = highest existing id + 1
-  const nextId = sampleData.value.reduce((max, d) => Math.max(max, d.id), 0) + 1
+  // 2. check the questions
+  const isMCQ = form.question_type === 'MCQ'
 
-  sampleData.value.push({
+  if (questions.value.length === 0) {
+    errorMsg.value = 'Add at least one question.'
+    return
+  }
+
+  for (let i = 0; i < questions.value.length; i++) {
+    const q = questions.value[i]
+    if (!q.text.trim()) {
+      errorMsg.value = `Question ${i + 1} is missing its question text.`
+      return
+    }
+    if (isMCQ) {
+      if (q.options.some(o => !o.trim())) {
+        errorMsg.value = `Question ${i + 1} needs all four options filled in.`
+        return
+      }
+      if (q.correct === '') {
+        errorMsg.value = `Select the correct option for question ${i + 1}.`
+        return
+      }
+    } else if (q.answer === '') {
+      errorMsg.value = `Select True or False for question ${i + 1}.`
+      return
+    }
+  }
+
+  // 3. build and add the deck
+  const list = sampleData.value ?? []
+  const nextId = list.reduce((max, d) => Math.max(max, d.id), 0) + 1
+
+  sampleData.value = [...list, {
     id: nextId,
     deck_name: form.deck_name.trim(),
     subjects: form.subjects,
@@ -146,10 +175,40 @@ function publish() {
     school_level_id: form.school_level_id,
     question_purpose: form.question_purpose,
     question_type: form.question_type,
-  })
 
+    pages: questions.value.length,
+    questions: questions.value.map(q => q.text.trim()),
+    question_options: questions.value.map(q => isMCQ ? q.options.map(o => o.trim()) : []),
+    question_answers: questions.value.map(q => isMCQ ? q.options[q.correct].trim() : q.answer),
+    correct_option: questions.value.map(q => isMCQ ? q.correct : null),
+  }]
+
+  errorMsg.value = ''
   closePanel()
 }
+
+const questions = ref([])
+
+function newQuestion() {
+  if (form.question_type === 'MCQ') {
+    return { text: '', options: ['', '', '', ''], correct: '' }
+  }
+  return { text: '', answer: '' }   // T/F
+}
+
+function addQuestion() {
+  questions.value.push(newQuestion())
+}
+
+function removeQuestion(index) {
+  questions.value.splice(index, 1)
+}
+
+// when the user picks / changes the question type, start fresh with one question
+watch(() => form.question_type, (type) => {
+  questions.value = type ? [newQuestion()] : []
+})
+
 </script>
 
 <template>
@@ -385,6 +444,39 @@ function publish() {
                   <option v-for="p in purposeOptions" :key="p.value" :value="p.value">{{ p.label }}</option>
                 </select>
               </label>
+
+              <!-- questions: only appears once a question type is chosen -->
+              <div v-if="form.question_type" class="questions">
+                <div v-for="(q, qi) in questions" :key="qi" class="question-card">
+                  <div class="question-header">
+                    <strong>Question {{ qi + 1 }}</strong>
+                    <button type="button" class="remove-button" @click="removeQuestion(qi)">✕</button>
+                  </div>
+
+                  <input type="text" v-model="q.text" placeholder="Enter question" />
+
+                  <!-- True or False -->
+                  <div v-if="form.question_type === 'T/F'" class="tf-answer">
+                    <label class="inline">
+                      <input type="radio" :name="'answer-' + qi" :value="true" v-model="q.answer" /> True
+                    </label>
+                    <label class="inline">
+                      <input type="radio" :name="'answer-' + qi" :value="false" v-model="q.answer" /> False
+                    </label>
+                  </div>
+
+                  <!-- MCQ -->
+                  <div v-else class="mcq-options">
+                    <label v-for="(opt, oi) in q.options" :key="oi" class="inline">
+                      <input type="radio" :name="'correct-' + qi" :value="oi" v-model="q.correct" />
+                      <input type="text" v-model="q.options[oi]" :placeholder="'Option ' + (oi + 1)" />
+                    </label>
+                    <small>Select the radio button next to the correct option.</small>
+                  </div>
+                </div>
+
+                <button type="button" class="add-question-button" @click="addQuestion">+ Add question</button>
+              </div>
 
               <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
 
@@ -758,6 +850,8 @@ function publish() {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  max-height: 90vh;
+  overflow-y: auto;
 }
 
 .panel label {
@@ -797,6 +891,54 @@ function publish() {
   background-color: #ffd21f;
   border-radius: 8px;
   padding: 10px;
+}
+
+.question-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.question-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.questions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mcq-options,
+.tf-answer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panel label.inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  font-weight: normal;
+}
+
+.panel label.inline input[type="text"] {
+  flex: 1;
+}
+
+.remove-button, .add-question-button{
+  border: 0;
+  border-radius: 8px;
+}
+
+.remove-button{
+  border: 1px solid grey;
 }
 
 </style>
