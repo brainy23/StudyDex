@@ -52,7 +52,7 @@ const route = useRoute()
         Manage Quizzes
       </RouterLink>
       <RouterLink
-        to="/admin-rewards"
+        to="/admin-quiz"
         class="nav-item"
         :class="{ active: route.path === '/admin-rewards' }"
       >

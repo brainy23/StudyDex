@@ -1,63 +1,26 @@
 
 <script setup>
-import AdminNav from '@/components/common/adminNav.vue';
-import { computed, ref } from 'vue';
+import AdminNav from '@/components/common/adminNav.vue'
+import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
 
-// =====================================================
-// 1. SAMPLE QUIZ DATA
-// Replace with API data later
-// =====================================================
-const quizzes = ref([
-  {
-    id: 1,
-    title: 'Fractions Challenge',
-    subject: 'Mathematics',
-    level: 'P4',
-    difficulty: 'Medium',
-    questions: 15,
-    active: true
-  },
-  {
-    id: 2,
-    title: 'Living Things Quiz',
-    subject: 'Science',
-    level: 'P3',
-    difficulty: 'Easy',
-    questions: 10,
-    active: true
-  },
-  {
-    id: 3,
-    title: 'Forces & Motion',
-    subject: 'Science',
-    level: 'P6',
-    difficulty: 'Hard',
-    questions: 20,
-    active: false
-  },
-  {
-    id: 4,
-    title: 'Area and Perimeter',
-    subject: 'Mathematics',
-    level: 'P5',
-    difficulty: 'Medium',
-    questions: 12,
-    active: true
-  },
-  {
-    id: 5,
-    title: 'Plant Systems',
-    subject: 'Science',
-    level: 'P4',
-    difficulty: 'Easy',
-    questions: 10,
-    active: false
-  }
-])
+import {
+  adminQuizzes,
+  toggleAdminQuiz
+} from '/src/data/adminQuizData'
 
-// =====================================================
-// 2. SEARCH AND FILTERS
-// =====================================================
+const router = useRouter()
+
+// ========================================
+// SHARED QUIZ DATA
+// ========================================
+
+const quizzes = adminQuizzes
+
+// ========================================
+// SEARCH AND FILTERS
+// ========================================
+
 const search = ref('')
 const selectedSubject = ref('')
 const selectedLevel = ref('')
@@ -92,9 +55,9 @@ const filteredQuizzes = computed(() => {
   })
 })
 
-const activeCount = computed(() => {
-  return quizzes.value.filter(quiz => quiz.active).length
-})
+const activeCount = computed(() =>
+  quizzes.value.filter(quiz => quiz.active).length
+)
 
 function clearFilters() {
   search.value = ''
@@ -103,22 +66,53 @@ function clearFilters() {
   selectedStatus.value = ''
 }
 
+// ========================================
+// NAVIGATION
+// ========================================
 
+function goToAddQuiz() {
+  router.push({ name: 'adminAddQuiz' })
+}
 
+function viewQuiz(quiz) {
+  router.push({
+    name: 'adminQuizDetails',
+    params: { id: quiz.id }
+  })
+}
+
+// ========================================
+// QUIZ ACTIONS
+// ========================================
+
+function toggleQuiz(quiz) {
+  toggleAdminQuiz(quiz.id)
+}
+
+function getDifficulty(quiz) {
+  const difficulties = [
+    ...new Set(
+      quiz.questions.map(q => q.difficulty)
+    )
+  ].sort((a, b) => a - b)
+
+  return difficulties
+    .map(value => ({
+      1: 'Easy',
+      2: 'Medium',
+      3: 'Hard'
+    })[value] || 'Unknown')
+    .join(', ') || '—'
+}
 </script>
 
 <template>
   <div class="admin-layout">
+    <AdminNav />
 
-    <!-- Sidebar Component -->
-     <AdminNav/>
-
-    <!-- Main Content -->
     <main class="admin-content">
 
-      <!-- =========================================
-           2. PAGE HEADER
-      ========================================== -->
+      <!-- PAGE HEADER -->
       <header
         class="quiz-page-header d-flex justify-content-between align-items-center flex-wrap gap-3"
       >
@@ -130,18 +124,14 @@ function clearFilters() {
         <button
           class="quiz-primary-btn"
           type="button"
-          @click="showAddQuiz = true"
+          @click="goToAddQuiz"
         >
           ＋ Add Quiz
         </button>
       </header>
 
-      <!-- =========================================
-           3. OVERVIEW CARDS
-      ========================================== -->
+      <!-- OVERVIEW CARDS -->
       <div class="row g-3 mb-4">
-
-        <!-- Total Quizzes -->
         <div class="col-12 col-sm-6">
           <div class="quiz-summary-card total-card">
             <span class="summary-label">
@@ -154,7 +144,6 @@ function clearFilters() {
           </div>
         </div>
 
-        <!-- Active Quizzes -->
         <div class="col-12 col-sm-6">
           <div class="quiz-summary-card active-card">
             <span class="summary-label">
@@ -166,65 +155,44 @@ function clearFilters() {
             </strong>
           </div>
         </div>
-
       </div>
 
-      <!-- =========================================
-           4. SEARCH AND FILTERS
-      ========================================== -->
+      <!-- SEARCH AND FILTERS -->
       <section class="quiz-panel mb-4">
 
-        <!-- Search -->
         <div class="quiz-search-row">
-          <label
-            class="visually-hidden"
-            for="quiz-search"
-          >
-            Search quizzes
-          </label>
-
           <input
-            id="quiz-search"
             v-model="search"
             class="form-control quiz-input"
             type="search"
             placeholder="🔍 Search quizzes by name..."
           />
         </div>
-        <!-- Filter Dropdowns -->
+
         <div class="row g-3 mt-1">
 
-          <!-- Subject -->
           <div class="col-12 col-md-4">
-            <label
-              for="quiz-subject"
-              class="quiz-field-label"
-            >
+            <label class="quiz-field-label">
               Subject
             </label>
 
             <select
-              id="quiz-subject"
               v-model="selectedSubject"
               class="form-select quiz-input"
             >
               <option value="">All Subjects</option>
               <option value="Science">Science</option>
               <option value="Mathematics">Mathematics</option>
+              <option value="English">English</option>
             </select>
           </div>
 
-          <!-- Level -->
           <div class="col-12 col-md-4">
-            <label
-              for="quiz-level"
-              class="quiz-field-label"
-            >
+            <label class="quiz-field-label">
               Level
             </label>
 
             <select
-              id="quiz-level"
               v-model="selectedLevel"
               class="form-select quiz-input"
             >
@@ -240,17 +208,12 @@ function clearFilters() {
             </select>
           </div>
 
-          <!-- Status -->
           <div class="col-12 col-md-4">
-            <label
-              for="quiz-status"
-              class="quiz-field-label"
-            >
+            <label class="quiz-field-label">
               Status
             </label>
 
             <select
-              id="quiz-status"
               v-model="selectedStatus"
               class="form-select quiz-input"
             >
@@ -259,10 +222,8 @@ function clearFilters() {
               <option value="Inactive">Inactive</option>
             </select>
           </div>
-
         </div>
 
-        <!-- Filter Results -->
         <div
           class="filter-footer d-flex justify-content-between align-items-center gap-2 mt-3"
         >
@@ -272,19 +233,16 @@ function clearFilters() {
           </span>
 
           <button
-            type="button"
             class="quiz-text-btn"
+            type="button"
             @click="clearFilters"
           >
             Clear Filters
           </button>
         </div>
-
       </section>
 
-      <!-- =========================================
-           5. QUIZ LIBRARY TABLE
-      ========================================== -->
+      <!-- QUIZ LIBRARY -->
       <section class="quiz-panel">
 
         <div class="quiz-section-heading">
@@ -294,7 +252,6 @@ function clearFilters() {
 
         <div class="table-responsive">
           <table class="table quiz-table align-middle">
-
             <thead>
               <tr>
                 <th>Quiz Name</th>
@@ -308,25 +265,24 @@ function clearFilters() {
             </thead>
 
             <tbody>
-
-              <!-- Quiz Rows -->
               <tr
                 v-for="quiz in filteredQuizzes"
                 :key="quiz.id"
               >
                 <td class="quiz-title-cell">
                   {{ quiz.title }}
+                  <span class="quiz-topic">
+                    {{ quiz.topic }}
+                  </span>
                 </td>
 
                 <td>{{ quiz.subject }}</td>
-
                 <td>{{ quiz.level }}</td>
 
-                <td>{{ quiz.questions }}</td>
+                <td>{{ quiz.questions.length }}</td>
 
-                <td>{{ quiz.difficulty }}</td>
+                <td>{{ getDifficulty(quiz) }}</td>
 
-                <!-- Active / Inactive Badge -->
                 <td>
                   <span
                     class="quiz-status"
@@ -338,10 +294,8 @@ function clearFilters() {
                   </span>
                 </td>
 
-                <!-- Action Buttons -->
                 <td>
                   <div class="quiz-actions">
-
                     <button
                       class="quiz-outline-btn"
                       type="button"
@@ -357,34 +311,25 @@ function clearFilters() {
                     >
                       {{ quiz.active ? 'Deactivate' : 'Activate' }}
                     </button>
-
                   </div>
                 </td>
               </tr>
 
-              <!-- No Results -->
               <tr v-if="filteredQuizzes.length === 0">
                 <td colspan="7" class="empty-state">
                   No quizzes found. Try clearing your filters.
                 </td>
               </tr>
-
             </tbody>
-
           </table>
         </div>
       </section>
-    </main>
 
+    </main>
   </div>
 </template>
 
 <style scoped>
-
-/* =====================================================
-   2. PAGE HEADER & BUTTONS
-===================================================== */
-
 .quiz-page-header {
   margin-bottom: 26px;
 }
@@ -393,6 +338,7 @@ function clearFilters() {
   font-size: 30px;
   font-weight: 800;
   margin: 0 0 5px;
+  color: #30304b;
 }
 
 .quiz-page-header p,
@@ -401,8 +347,6 @@ function clearFilters() {
   color: #7b8095;
   font-size: 14px;
 }
-
-/* Primary Button */
 
 .quiz-primary-btn {
   border: 0;
@@ -418,8 +362,6 @@ function clearFilters() {
   background: #f4c500;
 }
 
-/* Outline Button */
-
 .quiz-outline-btn {
   border: 1px solid #dedee5;
   border-radius: 8px;
@@ -433,8 +375,6 @@ function clearFilters() {
   background: #f5f5f9;
 }
 
-/* Text Button */
-
 .quiz-text-btn {
   border: 0;
   background: none;
@@ -447,10 +387,6 @@ function clearFilters() {
 .quiz-text-btn:hover {
   text-decoration: underline;
 }
-
-/* =====================================================
-   3. OVERVIEW CARDS
-===================================================== */
 
 .quiz-summary-card {
   display: flex;
@@ -479,10 +415,6 @@ function clearFilters() {
   font-size: 38px;
   line-height: 1;
 }
-
-/* =====================================================
-   4. SEARCH & FILTERS
-===================================================== */
 
 .quiz-panel {
   padding: 22px;
@@ -516,10 +448,6 @@ function clearFilters() {
   font-size: 12px;
 }
 
-/* =====================================================
-   5. QUIZ LIBRARY TABLE
-===================================================== */
-
 .quiz-section-heading {
   margin-bottom: 18px;
 }
@@ -549,7 +477,13 @@ function clearFilters() {
   font-weight: 700;
 }
 
-/* Status Badges */
+.quiz-topic {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 400;
+  color: #7b8095;
+}
 
 .quiz-status {
   font-size: 12px;
@@ -565,8 +499,6 @@ function clearFilters() {
   color: #85858b;
 }
 
-/* Action Buttons */
-
 .quiz-actions {
   display: flex;
   align-items: center;
@@ -574,87 +506,13 @@ function clearFilters() {
   white-space: nowrap;
 }
 
-/* No Results */
-
 .empty-state {
   text-align: center;
   padding: 35px !important;
   color: #7b8095;
 }
 
-/* =====================================================
-   6. VIEW / ADD QUIZ MODALS
-===================================================== */
-
-.quiz-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1050;
-  background: rgba(30, 30, 48, 0.55);
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  padding: 16px;
-}
-
-.quiz-modal {
-  width: min(100%, 540px);
-  max-height: 90vh;
-  overflow-y: auto;
-
-  border-radius: 16px;
-  background: white;
-  padding: 26px;
-
-  box-shadow: 0 20px 65px rgba(0, 0, 0, 0.2);
-}
-
-.quiz-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.quiz-modal-header h2 {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-}
-
-.quiz-close-btn {
-  border: 0;
-  background: none;
-  font-size: 28px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.quiz-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 13px;
-}
-
-.quiz-help-text {
-  color: #7b8095;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-/* =====================================================
-   7. RESPONSIVE LAYOUT
-===================================================== */
-
 @media (max-width: 767px) {
-  .admin-quiz-content {
-    padding: 18px;
-  }
-
   .quiz-page-header h1 {
     font-size: 25px;
   }
@@ -666,11 +524,5 @@ function clearFilters() {
   .quiz-summary-card {
     padding: 17px;
   }
-
-  .quiz-modal {
-    padding: 20px;
-  }
 }
-
-
 </style>
