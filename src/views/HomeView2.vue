@@ -1750,6 +1750,41 @@ watch(
   { immediate: true }
 )
 
+
+// TIME TESTER — set false when you finish testing.
+const showTimeTester = true
+const timeTesterOpen = ref(true)
+const timePresets = [
+  { label: 'Dawn', hour: 6 },
+  { label: 'Morning', hour: 8 },
+  { label: 'Noon', hour: 12 },
+  { label: 'Afternoon', hour: 15.5 },
+  { label: 'Sunset', hour: 18.5 },
+  { label: 'Dusk', hour: 19.25 },
+  { label: 'Evening', hour: 20.5 },
+  { label: 'Night', hour: 22 },
+  { label: 'Midnight', hour: 0 },
+]
+
+function setTestTime(value) {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return
+  stopAutoPreview()
+  live.value = false
+  previewHour.value = ((parsed % 24) + 24) % 24
+}
+
+function restoreLiveTime() {
+  stopAutoPreview()
+  currentTime.value = new Date()
+  live.value = true
+}
+
+function isTestTimeSelected(value) {
+  return !live.value && !autoPreview.value &&
+    Math.abs(Number(previewHour.value) - value) < 0.001
+}
+
 </script>
 
 <template>
@@ -1757,6 +1792,58 @@ watch(
        STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
        ================================================= -->
   <div class="world-page">
+
+    <!-- TIME TESTER: ordinary buttons inside the page -->
+    <div v-if="showTimeTester" class="time-tester">
+      <button
+        type="button"
+        class="time-tester-heading"
+        :aria-expanded="timeTesterOpen"
+        aria-controls="time-tester-content"
+        @click="timeTesterOpen = !timeTesterOpen"
+      >
+        <span>Time tester {{ timeTesterOpen ? '−' : '+' }}</span>
+        <strong>{{ displayTime }}</strong>
+      </button>
+
+      <div v-show="timeTesterOpen" id="time-tester-content" class="time-tester-content">
+        <div class="time-tester-modes">
+          <button type="button" :aria-pressed="live" @click="restoreLiveTime">
+            Live time
+          </button>
+          <button type="button" :aria-pressed="autoPreview" @click="toggleAutoPreview">
+            {{ autoPreview ? 'Pause cycle' : 'Cycle full day' }}
+          </button>
+        </div>
+
+        <div class="time-tester-presets">
+          <button
+            v-for="preset in timePresets"
+            :key="preset.label"
+            type="button"
+            :aria-pressed="isTestTimeSelected(preset.hour)"
+            @click="setTestTime(preset.hour)"
+          >
+            {{ preset.label }}
+          </button>
+        </div>
+
+        <label class="time-tester-slider">
+          <span>Choose time: {{ displayTime }}</span>
+          <input
+            type="range"
+            min="0"
+            max="1439"
+            step="1"
+            :value="Math.floor(hour * 60)"
+            :aria-valuetext="displayTime"
+            @input="setTestTime(Number($event.target.value) / 60)"
+          />
+        </label>
+        <p>{{ live ? 'Following your device clock.' : autoPreview ? 'One full day plays in 60 seconds.' : 'Time is paused for testing.' }}</p>
+      </div>
+    </div>
+
 
     <!-- STUDYDEX LOGO AND CLOCK -->
   <header class="sd-hud">
@@ -5813,5 +5900,57 @@ img.layer {
 .location-skip:hover {
   background: #f5ecd4;
 }
+
+
+/* TIME TESTER */
+.time-tester {
+  position: fixed;
+  left: 14px;
+  bottom: 14px;
+  z-index: 1900;
+  width: min(330px, calc(100vw - 28px));
+  overflow: hidden;
+  border: 2px solid #dfbd65;
+  border-radius: 16px;
+  background: rgba(19, 38, 61, 0.97);
+  color: #fff5d9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  font-family: 'Nunito', system-ui, sans-serif;
+}
+.time-tester, .time-tester * { box-sizing: border-box; }
+.time-tester .time-tester-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 12px 14px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 13px;
+}
+.time-tester-heading strong { color: #ffde59; font-variant-numeric: tabular-nums; }
+.time-tester-content { max-height: 55dvh; padding: 0 12px 12px; overflow-y: auto; }
+.time-tester-modes, .time-tester-presets { display: grid; gap: 7px; }
+.time-tester-modes { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 10px; }
+.time-tester-presets { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.time-tester button {
+  min-height: 40px;
+  padding: 6px 4px;
+  border: 1px solid #65758b;
+  border-radius: 8px;
+  background: #2c425e;
+  color: #fff5d9;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.time-tester button:hover { background: #405b7e; }
+.time-tester button[aria-pressed='true'] { border-color: #ffde59; background: #ffde59; color: #263955; }
+.time-tester-slider { display: grid; gap: 9px; margin-top: 14px; font-size: 12px; }
+.time-tester-slider input { width: 100%; margin: 0; accent-color: #ffde59; cursor: pointer; }
+.time-tester p { margin: 12px 0 0; color: #c3d1e3; font-size: 11px; line-height: 1.5; }
+.time-tester button:focus-visible, .time-tester input:focus-visible { outline: 3px solid #ffde59; outline-offset: -3px; }
 
 </style>
