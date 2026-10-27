@@ -4,6 +4,7 @@ import AdminHome from '@/views/admin/AdminHome.vue'
 import AdminUsers from '@/views/admin/AdminUsers.vue'
 import AdminEducation from '@/views/admin/AdminEducation.vue'
 import AdminQuiz from '@/views/admin/AdminQuiz.vue'
+import AdminAddQuiz from '@/views/admin/AdminAddQuiz.vue'
 
 
 const router = createRouter({
@@ -35,6 +36,11 @@ const router = createRouter({
       path: '/admin-quiz',
       name: 'adminQuiz',
       component: AdminQuiz
+    },
+     {
+      path: '/admin-addquiz',
+      name: 'adminAddQuiz',
+      component: AdminAddQuiz
     }
 
   ],
