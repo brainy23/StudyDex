@@ -15,6 +15,7 @@
     "format": "prettier --write --experimental-cli src/"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.118.0",
     "apexcharts": "^8.3.1",
     "bootstrap": "^5.3.8",
     "pinia": "^4.0.3",
