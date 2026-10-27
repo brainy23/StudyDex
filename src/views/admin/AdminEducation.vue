@@ -358,6 +358,11 @@ watch(() => form.question_type, (type) => {
                   <div class="action-buttons">
 
                     <button
+                      class="view-btn"
+                    >
+                      ⏿ View
+                    </button>
+                    <button
                       class="action-btn unban-btn"
                       :disabled="!deck.banned"
 
@@ -717,6 +722,21 @@ watch(() => form.question_type, (type) => {
   padding: 7px 11px;
   border: 1px solid transparent;
   border-radius: 8px;
+
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.view-btn {
+  padding: 7px 11px;
+  border: 1px solid rgb(101, 232, 252);
+  border-radius: 8px;
+
+  background-color: rgb(204, 243, 255);
 
   font-family: inherit;
   font-size: 11px;
