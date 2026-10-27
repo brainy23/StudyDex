@@ -26,6 +26,7 @@ const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/a
 // to be updated to match user
 const MAX_XP = 200
 
+
 // The incoming collection is a local prototype, separate from the real trainer profile.
 const demoCollectionOwnerId = '11111111-1111-4111-8111-111111111111'
 
@@ -2722,9 +2723,6 @@ watch(
 </template>
 
 <style scoped>
-
-@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Silkscreen:wght@400;700&display=swap');
-
 /* =====================================================
    01. WORLD SCENE — BASE, LIGHTING, SKY, CLOUDS
    ===================================================== */
