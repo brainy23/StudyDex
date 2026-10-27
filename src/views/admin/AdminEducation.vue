@@ -1,4 +1,3 @@
-
 <script setup>
 import '@/assets/admincommon.css'
 import AdminNav from '@/components/common/adminNav.vue';
@@ -36,8 +35,60 @@ const sampleData = ref([
    'question_purpose': 'quick_check',
    'question_type': 'T/F'
   },
-  
+  {
+    id: 4,
+    deck_name: 'Plants and Their Parts',
+    subjects: 'Science',
+    difficulty: '2',
+    school_level_id: 4,
+    question_purpose: 'quiz',
+    question_type: 'MCQ',
+    pages: 5,
+    questions: [
+      'Which part of a plant absorbs water and minerals from the soil?',
+      'What is the main function of the leaves?',
+      'Which part of the plant carries water from the roots to the leaves?',
+      'What do plants need to make food during photosynthesis?',
+      'Which part of a flower develops into a fruit?'
+    ],
+    question_options: [
+      ['Stem', 'Roots', 'Leaves', 'Flowers'],
+      ['To make food', 'To absorb water', 'To hold the plant upright', 'To produce seeds'],
+      ['Roots', 'Petals', 'Stem', 'Fruit'],
+      ['Sunlight, water and carbon dioxide', 'Soil, oxygen and sugar', 'Sunlight, oxygen and sugar', 'Water, soil and nitrogen'],
+      ['Petal', 'Ovary', 'Stigma', 'Sepal']
+    ],
+    question_answers: [
+      'Roots',
+      'To make food',
+      'Stem',
+      'Sunlight, water and carbon dioxide',
+      'Ovary'
+    ],
+    correct_option: [1, 0, 2, 0, 1]
+  }
 ]);
+
+const showViewPanel = ref(false)
+const selectedDeck = ref(null)
+
+function openViewPanel(deck) {
+  selectedDeck.value = deck
+  showViewPanel.value = true
+}
+
+function closeViewPanel() {
+  showViewPanel.value = false
+  selectedDeck.value = null
+}
+
+// turn stored values back into readable labels
+const typeLabels = { 'T/F': 'True or False', 'MCQ': 'MCQ' }
+const purposeLabels = {
+  quick_check: 'Quick Check',
+  quiz: 'Quiz',
+  boss_battle: 'Boss Battle',
+}
 
 const searchQuery = ref('')
 
@@ -294,8 +345,72 @@ watch(() => form.question_type, (type) => {
                 <div class="col-2">Actions</div>
 
               </div>
+              <!-- view panel -->
+               <div v-if="showViewPanel && selectedDeck" class="overlay" @click.self="closeViewPanel">
+                <div class="panel">
+                  <h3>{{ selectedDeck.deck_name }}</h3>
 
+                  <div class="detail-grid">
+                    <span class="detail-label">Subject</span>
+                    <span>{{ selectedDeck.subjects }}</span>
 
+                    <span class="detail-label">Level</span>
+                    <span>P{{ selectedDeck.school_level_id }}</span>
+
+                    <span class="detail-label">Difficulty</span>
+                    <span>{{ selectedDeck.difficulty }}</span>
+
+                    <span class="detail-label">Question Type</span>
+                    <span>{{ typeLabels[selectedDeck.question_type] ?? selectedDeck.question_type }}</span>
+
+                    <span class="detail-label">Question Purpose</span>
+                    <span>{{ purposeLabels[selectedDeck.question_purpose] ?? selectedDeck.question_purpose }}</span>
+
+                    <span class="detail-label">Pages</span>
+                    <span>{{ selectedDeck.pages }}</span>
+                  </div>
+
+                  <hr>
+                  <h4>Questions</h4>
+
+                  <p v-if="!selectedDeck.questions?.length" class="muted">
+                    This deck has no questions yet.
+                  </p>
+
+                  <div
+                    v-for="(question, qi) in selectedDeck.questions ?? []"
+                    :key="qi"
+                    class="question-card"
+                  >
+                    <strong>{{ qi + 1 }}. {{ question }}</strong>
+
+                    <!-- True or False -->
+                    <p v-if="selectedDeck.question_type === 'T/F'" class="answer-line">
+                      Answer:
+                      <span class="correct">
+                        {{ selectedDeck.question_answers?.[qi] ? 'True' : 'False' }}
+                      </span>
+                    </p>
+
+                    <!-- MCQ -->
+                    <ul v-else class="option-list">
+                      <li
+                        v-for="(opt, oi) in selectedDeck.question_options?.[qi] ?? []"
+                        :key="oi"
+                        :class="{ correct: oi === selectedDeck.correct_option?.[qi] }"
+                      >
+                        {{ String.fromCharCode(65 + oi) }}. {{ opt }}
+                        <span v-if="oi === selectedDeck.correct_option?.[qi]"> ✓</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <div class="actions">
+                    <button class="cancel-button" @click="closeViewPanel">Close</button>
+                  </div>
+                </div>
+               </div>
+              
               <!-- STUDENT ROWS -->
 
               <div
@@ -359,6 +474,7 @@ watch(() => form.question_type, (type) => {
 
                     <button
                       class="view-btn"
+                      @click="openViewPanel(deck)"
                     >
                       ⏿ View
                     </button>
@@ -380,7 +496,7 @@ watch(() => form.question_type, (type) => {
                       Ban
                     </button>
 
-                    <button class="action-btn remove-btn">
+                    <button class="action-btn remove-btn" @click="sampleData = sampleData.filter(d => d.id !== deck.id)">
                       Remove
                     </button>
 
@@ -745,6 +861,11 @@ watch(() => form.question_type, (type) => {
   cursor: pointer;
   transition: background 0.2s ease;
 }
+.view-btn:hover {
+
+  background-color: rgb(163, 229, 248);
+
+}
 
 /* UNBAN */
 
@@ -865,7 +986,7 @@ watch(() => form.question_type, (type) => {
   color: #000;
   border-radius: 12px;
   padding: 20px;
-  width: 360px;
+  width: 600px;
   max-width: 90vw;
   display: flex;
   flex-direction: column;
@@ -959,6 +1080,51 @@ watch(() => form.question_type, (type) => {
 
 .remove-button{
   border: 1px solid grey;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #555;
+}
+
+.muted {
+  color: #777;
+  margin: 0;
+}
+
+.option-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.option-list li {
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: #f2f2f2;
+}
+
+.option-list li.correct,
+.answer-line .correct {
+  color: #1e7e34;
+  font-weight: 600;
+}
+
+.option-list li.correct {
+  background: #e3f4e7;
+}
+
+.answer-line {
+  margin: 0;
 }
 
 </style>
