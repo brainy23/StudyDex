@@ -93,7 +93,11 @@ const displayedDecks = computed(() => {
     let result = 0
     if (sortKey.value === 'pages') {
       result = (a.pages ?? 0) - (b.pages ?? 0)
-    } else if (['concept_title', 'topic_name', 'subject_name', 'school_level_id'].includes(sortKey.value)) {
+    } else if (sortKey.value === 'difficulty'){
+      result = (a.difficulty ?? 0) - (b.difficulty ?? 0)
+    } else if (sortKey.value === 'school_level_id'){
+      result = (a.school_level_id ?? 0) - (b.school_level_id ?? 0)
+    } else if (['concept_title', 'topic_name', 'subjects', 'school_level_id'].includes(sortKey.value)) {
       // numeric: true makes "Primary 2" sort before "Primary 10"
       result = (a[sortKey.value] ?? '').localeCompare(b[sortKey.value] ?? '', undefined, { numeric: true })
     }
@@ -113,12 +117,12 @@ const showPanel = ref(false)
 const errorMsg = ref('')
 
 const subjectOptions = ['Mathematics', 'Science']
-const levelOptions = [1, 2, 3, 4, 5, 6].map(n => `Primary ${n}`)
+const levelOptions = [1, 2, 3, 4, 5, 6].map(n => `${n}`)
 
 const emptyForm = () => ({
   concept_title: '',
   topic_name: '',
-  subject_name: '',
+  subjects: '',
   school_level_id: '',
 })
 const form = reactive(emptyForm())
@@ -177,8 +181,9 @@ function publish() {
     id: nextId,
     concept_title: form.concept_title.trim(),
     topic_name: form.topic_name.trim(),
-    subject_name: form.subject_name,
+    subjects: form.subjects,
     school_level_id: form.school_level_id,
+    difficulty: form.difficulty,
     pages: flashcards.value.length,
     flashcards: flashcards.value.map(c => ({
       front_text: c.front_text.trim(),
@@ -227,6 +232,68 @@ function removeDeck(id) {
           <p style="font-size: 14px; color: #7D8095;">View and manage StudyDecks</p>
         </div>
         <button class="add-quiz-button" @click="openPanel()">+ Add Deck</button>
+      </div>
+      <div v-if="showPanel" class="overlay" @click.self="closePanel">
+        <div class="panel">
+          <h3>New Deck</h3>
+
+          <label>Concept Title
+            <input type="text" v-model="form.concept_title" placeholder="e.g. Photosynthesis" />
+          </label>
+
+          <label>Topic Name
+            <input type="text" v-model="form.topic_name" placeholder="e.g. Plant Systems" />
+          </label>
+
+          <label>Subject
+            <select v-model="form.subjects">
+              <option disabled value="">Select subject</option>
+              <option v-for="s in subjectOptions" :key="s" :value="s">{{ s }}</option>
+            </select>
+          </label>
+
+          <label>Level
+            <select v-model="form.school_level_id">
+              <option disabled value="">Select level</option>
+              <option v-for="l in levelOptions" :key="l" :value="l">{{ l }}</option>
+            </select>
+          </label>
+
+          <label>Difficulty
+            <select v-model="form.difficulty">
+              <option disabled value="">Select Difficulty</option>
+              <option value='1'>1</option>
+              <option value='2'>2</option>
+              <option value='3'>3</option>
+            </select>
+          </label>
+
+          <div class="questions">
+            <div v-for="(card, ci) in flashcards" :key="ci" class="question-card">
+              <div class="question-header">
+                <strong>Flashcard {{ ci + 1 }}</strong>
+                <button type="button" class="remove-button" @click="removeFlashcard(ci)">✕</button>
+              </div>
+
+              <label>Front
+                <textarea v-model="card.front_text" rows="2" placeholder="Question or term"></textarea>
+              </label>
+
+              <label>Back
+                <textarea v-model="card.back_text" rows="3" placeholder="Answer or explanation"></textarea>
+              </label>
+            </div>
+
+            <button type="button" class="add-question-button" @click="addFlashcard">+ Add flashcard</button>
+          </div>
+
+          <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+
+          <div class="actions">
+            <button class="cancel-button" @click="closePanel">Cancel</button>
+            <button class="publish-button" @click="publish">Publish</button>
+          </div>
+        </div>
       </div>
         <div class="overview-panel">
 
