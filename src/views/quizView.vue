@@ -6,10 +6,14 @@ import ArenaAssessment from '../components/study/StudyQuiz.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudyCatalogue, getStudyQuestions, studyErrorMessage } from '../services/studyService'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
+import { useArenaTransition } from '../composables/useArenaTransition'
+import { displayTitle } from '../utils/displayText'
+import { lessonReviewLocation, requestedTopicId } from '../utils/studyNavigation'
 import '../assets/study.css'
 
 const route = useRoute()
 const router = useRouter()
+const arenaTransition = useArenaTransition()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
@@ -21,28 +25,26 @@ let alive = true
 let generation = 0
 
 const purpose = computed(() => route.query.battle === 'boss' ? 'boss_battle' : 'quiz')
+const requestedTopic = computed(() => requestedTopicId(route.query))
 const subject = computed(() => {
   const subjects = catalogue.value.subjects
   if (route.query.subject) return subjects.find((item) => item.id === route.query.subject) || null
-  const requested = catalogue.value.topics.find((item) => item.id === route.query.topic)
+  const requested = catalogue.value.topics.find((item) => item.id === requestedTopic.value)
   const firstSubject = requested?.subject_id || catalogue.value.topics[0]?.subject_id
   return subjects.find((item) => item.id === firstSubject) || subjects[0] || null
 })
 const availableTopics = computed(() => catalogue.value.topics.filter((item) => item.subject_id === subject.value?.id))
-const topic = computed(() => route.query.topic
-  ? availableTopics.value.find((item) => item.id === route.query.topic) || null
+const topic = computed(() => requestedTopic.value
+  ? availableTopics.value.find((item) => item.id === requestedTopic.value) || null
   : availableTopics.value[0] || null)
 const resourceKey = computed(() => `${topic.value?.id}:${purpose.value}`)
-const quizLocked = computed(() => purpose.value === 'quiz' && !topicCompletion.isComplete(topic.value?.id))
-const activeResource = computed(() => quizLocked.value
-  ? { loading: false, data: null, error: null }
-  : resources[resourceKey.value])
+const activeResource = computed(() => resources[resourceKey.value])
 const coveredTopics = computed(() => availableTopics.value.filter((item) => topicCompletion.isComplete(item.id)))
 const revisionLocation = computed(() => ({
   name: 'study-decks',
   query: {
     ...(subject.value ? { subject: subject.value.id } : {}),
-    ...(topic.value ? { topic: topic.value.id } : {}),
+    ...(topic.value ? { topic_id: topic.value.id } : {}),
     mode: 'flashcards',
   },
 }))
@@ -92,7 +94,7 @@ async function loadAssessment(topicId, nextPurpose, retry = false) {
 function assessmentQuery(subjectId, topicId) {
   return {
     subject: subjectId,
-    ...(topicId ? { topic: topicId } : {}),
+    ...(topicId ? { topic_id: topicId } : {}),
     ...(purpose.value === 'boss_battle' ? { battle: 'boss' } : {}),
   }
 }
@@ -105,7 +107,7 @@ function chooseTopic(selected) {
 }
 function setAssessmentMode(nextMode) {
   if (nextMode === 'study') {
-    router.push({ ...revisionLocation.value, query: { ...revisionLocation.value.query, mode: 'learn' } })
+    router.push(lessonReviewLocation(topic.value))
     return
   }
   if (nextMode === 'learn') {
@@ -119,14 +121,22 @@ function setAssessmentMode(nextMode) {
   router.push({ name: 'quiz', query })
 }
 function retryAssessment() {
-  if (!quizLocked.value) loadAssessment(topic.value?.id, purpose.value, true)
+  loadAssessment(topic.value?.id, purpose.value, true)
 }
 
-watch(() => [topic.value?.id, purpose.value, quizLocked.value], ([id, nextPurpose, locked]) => {
-  if (!locked) loadAssessment(id, nextPurpose)
+watch(() => [topic.value?.id, purpose.value], ([id, nextPurpose]) => {
+  loadAssessment(id, nextPurpose)
 })
+watch(
+  () => [loading.value, activeResource.value?.loading, arenaTransition.state.arrivalPath, route.fullPath],
+  () => {
+    if (!loading.value && !activeResource.value?.loading) arenaTransition.focusArrival(route.fullPath)
+  },
+  { flush: 'post' },
+)
 onMounted(initialise)
 onUnmounted(() => {
+  arenaTransition.clearArrival()
   alive = false
   generation++
 })
@@ -141,10 +151,10 @@ onUnmounted(() => {
           <RouterLink :to="revisionLocation" class="study-button study-button-secondary">Revise in Poké Lab</RouterLink>
         </div>
         <h1 id="quiz-heading">Poké Arena</h1>
-        <p>Each topic you finish in Poké Lab unlocks its Topic Quiz. You can enter Boss Battles directly.</p>
-        <p class="study-note">Topics covered are saved in this browser for your account. They do not sync between devices yet.</p>
-        <p v-if="!savedInBrowser" class="study-note" role="status">Browser storage is unavailable. Topic unlocks will last for this app visit only.</p>
-        <p v-if="profile" class="study-level">{{ profile.school_level?.name || 'School level not set' }}</p>
+        <p>Choose a Topic Quiz or Boss Battle when you feel ready. You can revise in Poké Lab at any time.</p>
+        <p class="study-note">Assessments will be available when questions and secure grading are ready.</p>
+        <p v-if="!savedInBrowser" class="study-note" role="status">Browser storage is unavailable. Topics read will stay for this app visit only.</p>
+        <p v-if="profile" class="study-level">{{ displayTitle(profile.school_level?.name || 'School level not set') }}</p>
         <a v-if="profile?.school_level_id" href="#arena-topics">Choose subject or topic</a>
       </header>
 
@@ -161,38 +171,37 @@ onUnmounted(() => {
       </div>
       <div v-else class="arena-layout">
         <section class="study-panel main-study" aria-label="Assessment content">
-          <p v-if="topic" class="study-eyebrow">{{ subject?.name }} · {{ topic.name }}</p>
+          <p v-if="topic" class="study-eyebrow">{{ displayTitle(subject?.name) }} · {{ displayTitle(topic.name) }}</p>
           <KeepAlive>
             <ArenaAssessment
               v-if="topic && activeResource"
               :key="resourceKey"
               :resource="activeResource"
               :purpose="purpose"
-              :locked="quizLocked"
               @mode="setAssessmentMode"
               @retry="retryAssessment"
             />
           </KeepAlive>
           <div v-if="!topic" class="study-empty">
-            <h2>{{ route.query.topic ? 'This topic is unavailable' : 'No assessment topics are available' }}</h2>
+            <h2>{{ requestedTopic ? 'This topic is unavailable' : 'No assessment topics are available' }}</h2>
             <p v-if="!catalogue.subjects.length">No subjects are visible to your account. Content may not be published yet, or read access may not have been enabled.</p>
-            <p v-else>Choose an available {{ subject?.name || '' }} topic for {{ profile.school_level?.name || 'your school level' }}.</p>
+            <p v-else>Choose an available {{ displayTitle(subject?.name) }} topic for {{ displayTitle(profile.school_level?.name || 'your school level') }}.</p>
           </div>
         </section>
 
         <aside id="arena-topics" class="study-panel study-topic-browser" aria-labelledby="arena-topics-heading">
           <h2 id="arena-topics-heading">Assessment topics</h2>
-          <p v-if="purpose === 'quiz'" class="study-note">{{ coveredTopics.length }} of {{ availableTopics.length }} topics covered in this subject. Covered topics unlock a quiz when questions are available.</p>
+          <p v-if="purpose === 'quiz'" class="study-note">{{ coveredTopics.length }} of {{ availableTopics.length }} topics read in this subject. Learning progress does not limit your quiz selection.</p>
           <label for="arena-subject">Subject</label>
           <select id="arena-subject" :value="subject?.id || ''" @change="chooseSubject($event.target.value)">
             <option v-if="!subject" value="" disabled>Choose a subject</option>
-            <option v-for="item in catalogue.subjects" :key="item.id" :value="item.id">{{ item.name }}</option>
+            <option v-for="item in catalogue.subjects" :key="item.id" :value="item.id">{{ displayTitle(item.name) }}</option>
           </select>
           <ul v-if="availableTopics.length" class="study-topic-list">
             <li v-for="item in availableTopics" :key="item.id">
               <button :aria-current="topic?.id === item.id ? 'true' : undefined" @click="chooseTopic(item)">
-                {{ item.name }}
-                <span v-if="purpose === 'quiz'" class="study-note arena-topic-status">{{ topicCompletion.isComplete(item.id) ? 'Topic covered · Quiz unlocked' : 'Finish topic in Poké Lab' }}</span>
+                {{ displayTitle(item.name) }}
+                <span v-if="purpose === 'quiz'" class="study-note arena-topic-status">{{ topicCompletion.isComplete(item.id) ? 'Topic read in Poké Lab' : 'Available to explore' }}</span>
               </button>
             </li>
           </ul>

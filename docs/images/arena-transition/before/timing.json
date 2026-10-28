@@ -1,0 +1,368 @@
+{
+  "reducedMotion": false,
+  "startedAt": 1021.8999999985099,
+  "samples": [
+    {
+      "elapsed": 14,
+      "path": "/study-decks",
+      "overlay": false,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 30,
+      "path": "/study-decks",
+      "overlay": false,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 47,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 64,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 80,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 97,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 114,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 130,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 147,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 164,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 180,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 197,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 214,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 230,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0
+    },
+    {
+      "elapsed": 247,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.0215854
+    },
+    {
+      "elapsed": 264,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.128378
+    },
+    {
+      "elapsed": 280,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.22995
+    },
+    {
+      "elapsed": 297,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.325923
+    },
+    {
+      "elapsed": 314,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.417627
+    },
+    {
+      "elapsed": 330,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.503919
+    },
+    {
+      "elapsed": 347,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.585657
+    },
+    {
+      "elapsed": 364,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.662021
+    },
+    {
+      "elapsed": 380,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.732621
+    },
+    {
+      "elapsed": 397,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.796588
+    },
+    {
+      "elapsed": 414,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.854059
+    },
+    {
+      "elapsed": 430,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.903821
+    },
+    {
+      "elapsed": 447,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.944844
+    },
+    {
+      "elapsed": 464,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.975637
+    },
+    {
+      "elapsed": 480,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 0.994802
+    },
+    {
+      "elapsed": 497,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 514,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 530,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 547,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 564,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 580,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 597,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 614,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 630,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 647,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 664,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 680,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 697,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 714,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 730,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 747,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 764,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 780,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 797,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 814,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 830,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 847,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 864,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 880,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 897,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 914,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 930,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 947,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 964,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 980,
+      "path": "/study-decks",
+      "overlay": true,
+      "titleOpacity": 1
+    },
+    {
+      "elapsed": 997,
+      "path": "/quiz",
+      "overlay": false,
+      "titleOpacity": 0
+    }
+  ],
+  "overlayMs": 933,
+  "readableTitleMs": 500
+}

@@ -12,6 +12,7 @@ import {
   getSelectedStudyBuddy,
 } from '../../services/studyService'
 import { useTimer } from '../../components/timer/useTimer'
+import { useArenaTransition } from '../../composables/useArenaTransition'
 import {
   studentProfile,
   studyCatalogue,
@@ -44,6 +45,7 @@ beforeEach(() => {
   getSelectedStudyBuddy.mockResolvedValue(null)
 })
 afterEach(() => {
+  useArenaTransition().cancel()
   useTimer().endSession()
   wrapper?.unmount()
   vi.useRealTimers()
@@ -70,7 +72,7 @@ const button = (text) => wrapper.findAll('button').find((item) => item.text() ==
 it('uses the registered level automatically, shows ordered goals, and never asks for a level', async () => {
   await open()
   expect(getStudyCatalogue).toHaveBeenCalledWith('level-3')
-  expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
   expect(wrapper.findAll('.study-goals li').map((item) => item.text())).toEqual(
     studyLesson.goals.map((goal) => goal.goal_text),
   )
@@ -110,80 +112,64 @@ it('uses a different registered level and handles a level with no published topi
   expect(getTopicLesson).not.toHaveBeenCalled()
 })
 
-it('progresses through all seven concepts and hands off to Arena with the same topic', async () => {
+it('reads all seven concepts without MCQs, offers completion choices, and preserves topic context', async () => {
+  getTopicFlashcards.mockResolvedValue(structuredClone(revisionCards))
   const router = await open()
-  await button('Start learning').trigger('click')
+  await button('Start Learning').trigger('click')
   for (let index = 0; index < 7; index++) {
     expect(wrapper.get('.study-concept h2').text()).toBe(`Concept ${index + 1}`)
+    expect(wrapper.get('.study-explanation').text()).toBe(`Explanation ${index + 1}`)
     expect(wrapper.get('.study-example .study-copy').text()).toBe(`Worked example ${index + 1}`)
-    expect(wrapper.get('.study-question legend').text()).toBe(`Check concept ${index + 1}`)
-    expect(
-      button(index === 6 ? 'Finish topic' : 'Next concept').attributes('disabled'),
-    ).toBeDefined()
-    await wrapper.find('input[type="radio"]').setValue()
-    await button(index === 6 ? 'Finish topic' : 'Next concept').trigger('click')
+    expect(wrapper.find('.study-question').exists()).toBe(false)
+    expect(wrapper.find('input[type="radio"]').exists()).toBe(false)
+    const next = button(index === 6 ? 'Finish Topic' : 'Next Concept')
+    expect(next.attributes('disabled')).toBeUndefined()
+    await next.trigger('click')
   }
   expect(wrapper.get('.study-completion').text()).toContain('7 of 7 concepts read')
-  expect(wrapper.get('.study-header-progress label').text()).toContain('7 / 7')
+  expect(wrapper.find('.study-header progress').exists()).toBe(false)
+  expect(wrapper.get('.study-topic-progress').text()).toContain('7 of 7 concepts read')
   expect(getStudyQuestions).not.toHaveBeenCalled()
-  await button('Quiz me!').trigger('click')
+  expect(router.currentRoute.value.name).toBe('study-decks')
+  await button('Review with Flashcards').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query.mode).toBe('flashcards')
+  expect(wrapper.get('.study-review-progress').text()).toContain('0 / 15 remembered')
+  expect(getTopicFlashcards).toHaveBeenCalledWith('topic-1')
+  await button('Learn').trigger('click')
+  await flushPromises()
+  expect(wrapper.find('.study-completion').exists()).toBe(true)
+  await wrapper.get('.study-completion').findAll('button').find((item) => item.text() === 'Go to Poké Arena').trigger('click')
+  expect(useArenaTransition().state.active).toBe(true)
+  await useArenaTransition().skip()
   await flushPromises()
   expect(router.currentRoute.value.name).toBe('quiz')
-  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1' })
-  await button('Boss Battle').trigger('click')
-  await flushPromises()
-  expect(wrapper.get('.study-quiz h2').text()).toBe('Boss Battle')
-  expect(wrapper.text()).toContain('answers are not graded or saved')
+  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic_id: 'topic-1' })
+  expect(getStudyQuestions.mock.calls).toEqual([['topic-1', 'quiz']])
+  expect(wrapper.text()).toContain('There are no regular quiz questions')
+  expect(button('Start Quiz').attributes('disabled')).toBeDefined()
 })
 
-it('unlocks one quiz per completed topic and keeps both available after entering Arena', async () => {
-  getStudyCatalogue.mockResolvedValue({
-    ...structuredClone(studyCatalogue),
-    topics: [studyCatalogue.topics[0], { ...studyCatalogue.topics[0], id: 'topic-2', name: 'Second fixture topic' }],
-  })
-  getTopicLesson.mockResolvedValue({
-    ...structuredClone(studyLesson),
-    concepts: [studyLesson.concepts[0]],
-    questions: [studyLesson.questions[0]],
-  })
-  getStudyQuestions.mockImplementation(async (id) => [{
-    ...structuredClone(bossQuestions[0]),
-    id: `${id}-quiz`, topic_id: id, question_purpose: 'quiz', question_text: `Quiz for ${id}`,
-  }])
-  const router = await open()
-  expect(button('Quiz me!').attributes('disabled')).toBeDefined()
-  expect(getStudyQuestions).not.toHaveBeenCalled()
-  for (const name of ['Test topic', 'Second fixture topic']) {
-    await button(name).trigger('click')
-    await flushPromises()
-    expect(button('Quiz me!').attributes('disabled')).toBeDefined()
-    await button('Start learning').trigger('click')
-    await wrapper.find('input[type="radio"]').setValue()
-    await button('Finish topic').trigger('click')
-    expect(button('Quiz me!').attributes('disabled')).toBeUndefined()
-  }
-  await button('Quiz me!').trigger('click')
-  await flushPromises()
-  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic: 'topic-2' })
-  expect(wrapper.text()).toContain('2 of 2 topics covered')
-  expect(wrapper.get('.study-question legend').text()).toBe('Quiz for topic-2')
-  await wrapper.findAll('.study-topic-list button')[0].trigger('click')
-  await flushPromises()
-  expect(wrapper.get('.study-question legend').text()).toBe('Quiz for topic-1')
-  expect(getStudyQuestions.mock.calls).toEqual([['topic-2', 'quiz'], ['topic-1', 'quiz']])
-  await wrapper.find('input[type="radio"]').setValue()
-  await button('Review my choices').trigger('click')
-  expect(wrapper.text()).toContain('2 of 2 topics covered')
-  await wrapper.findAll('.study-topic-list button')[1].trigger('click')
-  await flushPromises()
-  expect(wrapper.get('.study-question legend').text()).toBe('Quiz for topic-2')
+it('can revisit the roadmap and previous concepts without losing reading progress', async () => {
+  await open()
+  await button('Start Learning').trigger('click')
+  await button('Next Concept').trigger('click')
+  await button('Previous Concept').trigger('click')
+  expect(wrapper.get('.study-concept h2').text()).toBe('Concept 1')
+  const roadmap = wrapper.get('nav[aria-label="Concept roadmap"]')
+  expect(roadmap.findAll('li')).toHaveLength(7)
+  expect(roadmap.get('button[aria-current="step"]').attributes('aria-label')).toContain('Concept 1')
+  await roadmap.findAll('li button')[6].trigger('click')
+  await button('Finish Topic').trigger('click')
+  await button('Revisit Concepts').trigger('click')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
+  expect(wrapper.get('.study-topic-progress').text()).toContain('2 of 7 concepts read')
 })
 
 it('keeps only Learn and Flashcards in Lab and retains learning progress between them', async () => {
   await open()
-  await button('Start learning').trigger('click')
-  await wrapper.find('input[type="radio"]').setValue()
-  await button('Next concept').trigger('click')
+  await button('Start Learning').trigger('click')
+  await button('Next Concept').trigger('click')
   await button('Flashcards').trigger('click')
   await flushPromises()
   expect(wrapper.text()).toContain('There are no flashcards for this topic yet')
@@ -220,23 +206,23 @@ it('reports RLS failures and lets the student retry', async () => {
   expect(wrapper.find('.study-overview').exists()).toBe(true)
 })
 
-it('keeps reading available if quick checks are denied', async () => {
+it('ignores legacy quick checks and their errors in Learn', async () => {
   getTopicLesson.mockResolvedValueOnce({
     ...structuredClone(studyLesson),
-    questions: [],
     errors: { questions: { code: '42501' } },
   })
   await open()
-  await button('Start learning').trigger('click')
-  expect(wrapper.get('.study-check [role="alert"]').text()).toContain('does not have permission')
-  expect(button('Next concept').attributes('disabled')).toBeUndefined()
+  await button('Start Learning').trigger('click')
+  expect(wrapper.find('.study-check').exists()).toBe(false)
+  expect(wrapper.find('input[type="radio"]').exists()).toBe(false)
+  expect(button('Next Concept').attributes('disabled')).toBeUndefined()
 })
 
 it('reports missing concepts without adding sample material', async () => {
   getTopicLesson.mockResolvedValue({ goals: [], concepts: [], questions: [], errors: {} })
   await open()
   expect(wrapper.text()).toContain('This topic has no lesson concepts yet')
-  expect(button('Start learning')).toBeUndefined()
+  expect(button('Start Learning')).toBeUndefined()
 })
 
 it('does not mistake an RLS-filtered empty catalogue for a working lesson', async () => {
@@ -282,21 +268,21 @@ it('starts on demand, keeps the timer through mode/topic changes, and pauses on 
 it('retains a 15-card revision when switching modes, topics and an empty subject', async () => {
   getStudyCatalogue.mockResolvedValue({
     ...structuredClone(studyCatalogue),
-    topics: [studyCatalogue.topics[0], { ...studyCatalogue.topics[0], id: 'topic-2', name: 'Second fixture topic' }],
+    topics: [studyCatalogue.topics[0], { ...studyCatalogue.topics[0], id: 'topic-2', name: 'Second Fixture Topic' }],
   })
   getTopicFlashcards.mockImplementation(async (id) =>
     id === 'topic-1' ? structuredClone(revisionCards) : [{ ...revisionCards[0], id: 'second-card', front_text: 'Second topic fixture' }],
   )
   const router = await open({ mode: 'flashcards' })
   await wrapper.get('.study-flip-card').trigger('click')
-  await button('Easy').trigger('click')
+  await button('I Remembered').trigger('click')
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
   await button('Learn').trigger('click')
   await flushPromises()
   await button('Flashcards').trigger('click')
   await flushPromises()
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
-  await button('Second fixture topic').trigger('click')
+  await button('Second Fixture Topic').trigger('click')
   await flushPromises()
   await button('Flashcards').trigger('click')
   await flushPromises()
@@ -324,7 +310,7 @@ it('keeps the running timer deadline and buddy stats unchanged while rating card
   vi.setSystemTime(new Date(Date.now() + 10000))
   timer.sync()
   expect(timer.display.value).toBe('24:50')
-  for (const rating of ['Again', 'Hard', 'Easy']) {
+  for (const rating of ['Practise Again', 'I Remembered']) {
     await wrapper.get('.study-flip-card').trigger('click')
     await button(rating).trigger('click')
     expect(timer.state.deadlineAt).toBe(deadline)
@@ -364,7 +350,7 @@ it.each([
   expect(wrapper.find('.study-flip-card').exists()).toBe(false)
   await button('Learn').trigger('click')
   await flushPromises()
-  expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
   await button('Flashcards').trigger('click')
   await flushPromises()
   await button('Try again').trigger('click')
@@ -386,11 +372,124 @@ it('starts a fresh revision after the study page is destroyed and loaded again',
   getTopicFlashcards.mockResolvedValue(structuredClone(revisionCards))
   await open({ mode: 'flashcards' })
   await wrapper.get('.study-flip-card').trigger('click')
-  await button('Easy').trigger('click')
+  await button('I Remembered').trigger('click')
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
   wrapper.unmount()
   await open({ mode: 'flashcards' })
   expect(wrapper.get('.study-review-progress').text()).toContain('0 / 15 remembered')
   expect(wrapper.get('.study-card-front .study-card-text').text()).toBe(revisionCards[0].front_text)
   expect(getTopicFlashcards).toHaveBeenCalledTimes(2)
+})
+
+async function completeDeck() {
+  while (wrapper.find('.study-flip-card').exists()) {
+    await wrapper.get('.study-flip-card').trigger('click')
+    await button('I Remembered').trigger('click')
+  }
+}
+
+it('hands a completed direct-entry Flashcard topic to Arena without requiring Learn', async () => {
+  getStudyCatalogue.mockResolvedValue({
+    ...structuredClone(studyCatalogue),
+    topics: [...studyCatalogue.topics, { ...studyCatalogue.topics[0], id: 'science-topic', subject_id: 'science', name: 'living things' }],
+  })
+  getTopicFlashcards.mockResolvedValue(structuredClone(revisionCards))
+  const router = await open({ topic_id: 'science-topic', mode: 'flashcards' })
+  await completeDeck()
+  expect(wrapper.get('.study-completion').text()).toContain('15 unique cards remembered')
+  expect(getStudyQuestions).not.toHaveBeenCalled()
+  await wrapper.get('.study-completion').findAll('button').find((item) => item.text() === 'Go to Poké Arena').trigger('click')
+  await useArenaTransition().skip()
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ subject: 'science', topic_id: 'science-topic' })
+  expect(getStudyQuestions.mock.calls).toEqual([['science-topic', 'quiz']])
+  expect(wrapper.get('.study-quiz h2').text()).toBe('Topic Quiz')
+  expect(wrapper.text()).toContain('There are no regular quiz questions')
+  expect(wrapper.find('.study-question').exists()).toBe(false)
+})
+
+it('returns to topic selection with the saved level and opens another populated topic', async () => {
+  getStudyCatalogue.mockResolvedValue({
+    ...structuredClone(studyCatalogue),
+    topics: [...studyCatalogue.topics, { ...studyCatalogue.topics[0], id: 'other-topic', subject_id: 'science', name: 'another topic' }],
+  })
+  getTopicFlashcards.mockResolvedValue([revisionCards[0]])
+  const router = await open({ mode: 'flashcards' })
+  await completeDeck()
+  await button('Revise Another Topic').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ view: 'topics', mode: 'flashcards', from_topic_id: 'topic-1' })
+  expect(wrapper.find('.study-topic-selection').exists()).toBe(true)
+  expect(getStudyCatalogue.mock.calls).toEqual([['level-3']])
+  const other = wrapper.get('.study-topic-selection').findAll('button').find((item) => item.text().startsWith('Another Topic'))
+  await other.trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ subject: 'science', topic_id: 'other-topic', mode: 'flashcards' })
+  expect(wrapper.get('.study-review-progress').text()).toContain('0 / 1 remembered')
+})
+
+it.each([false, true])('explains when no other populated topics exist (empty alternative: %s)', async (emptyAlternative) => {
+  if (emptyAlternative) {
+    getStudyCatalogue.mockResolvedValue({
+      ...structuredClone(studyCatalogue),
+      topics: [...studyCatalogue.topics, { ...studyCatalogue.topics[0], id: 'empty-topic' }],
+    })
+    getTopicLesson.mockImplementation(async (id) => id === 'empty-topic'
+      ? { goals: [], concepts: [], errors: {} }
+      : structuredClone(studyLesson))
+  }
+  getTopicFlashcards.mockImplementation(async (id) => id === 'empty-topic' ? [] : [revisionCards[0]])
+  await open({ mode: 'flashcards' })
+  await completeDeck()
+  await button('Revise Another Topic').trigger('click')
+  await flushPromises()
+  const selection = wrapper.get('.study-topic-selection')
+  expect(selection.text()).toContain(emptyAlternative ? 'No other populated topics' : 'No other topics')
+  expect(selection.findAll('.study-topic-list button')[0].attributes('disabled')).toBeUndefined()
+  expect(selection.findAll('.study-topic-list button:disabled')).toHaveLength(emptyAlternative ? 1 : 0)
+})
+
+it('opens requested concept revision in topic order, marks only matching concepts, and accepts legacy links', async () => {
+  const router = await open({ topic: 'topic-1', mode: 'learn', review: 'concepts', concept_ids: ['concept-3', 'foreign-concept', 'concept-1'] })
+  expect(wrapper.get('.study-concept h2').text()).toBe('Concept 4')
+  const roadmap = wrapper.get('nav[aria-label="Concept roadmap"]')
+  expect(roadmap.findAll('.study-roadmap-steps button').filter((item) => item.attributes('aria-label').includes('Revisit')).map((item) => item.attributes('aria-label').split(': ')[1].split(' · ')[0])).toEqual(['Concept 2', 'Concept 4'])
+  expect(wrapper.text()).not.toMatch(/weak|failed|score/i)
+  await router.push({ name: 'study-decks', query: { topic_id: 'topic-1', mode: 'learn', review: 'topic' } })
+  await flushPromises()
+  expect(wrapper.find('.study-overview').exists()).toBe(true)
+})
+
+it('falls back to the overview for missing or foreign concepts without labeling them weak', async () => {
+  await open({ topic_id: 'topic-1', mode: 'learn', concept_ids: ['foreign-concept'] })
+  expect(wrapper.find('.study-overview').exists()).toBe(true)
+  expect(wrapper.text()).toContain('Those concepts are unavailable in this topic')
+  expect(wrapper.find('.study-concept').exists()).toBe(false)
+})
+
+it('reports failed topic availability checks and lets the student retry before selecting', async () => {
+  getStudyCatalogue.mockResolvedValue({
+    ...structuredClone(studyCatalogue),
+    topics: [...studyCatalogue.topics, { ...studyCatalogue.topics[0], id: 'other-topic', name: 'Another topic' }],
+  })
+  getTopicLesson.mockImplementation(async (id) => {
+    if (id === 'other-topic') throw new Error('Content check unavailable')
+    return structuredClone(studyLesson)
+  })
+  getTopicFlashcards.mockImplementation(async (id) => id === 'other-topic' ? [] : [revisionCards[0]])
+  const router = await open({ mode: 'flashcards' })
+  await completeDeck()
+  await button('Revise Another Topic').trigger('click')
+  await flushPromises()
+  const selection = wrapper.get('.study-topic-selection')
+  expect(selection.get('[role="alert"]').text()).toContain('Content check unavailable')
+  expect(selection.text()).not.toContain('No other populated topics')
+  getTopicLesson.mockResolvedValue(structuredClone(studyLesson))
+  await selection.get('[role="alert"] button').trigger('click')
+  await flushPromises()
+  expect(selection.find('[role="alert"]').exists()).toBe(false)
+  await selection.findAll('.study-topic-list button')[1].trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic_id: 'other-topic', mode: 'learn' })
+  expect(wrapper.find('.study-overview').exists()).toBe(true)
 })

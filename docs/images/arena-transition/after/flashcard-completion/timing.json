@@ -1,0 +1,1263 @@
+{
+  "reducedMotion": false,
+  "startedAt": 2079.0999999996275,
+  "samples": [
+    {
+      "elapsed": 8,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 24,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 41,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 58,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 75,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 91,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 108,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 124,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 141,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 158,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 175,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 191,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 208,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 225,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 241,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 258,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 275,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 291,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 308,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 324,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 341,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 358,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 374,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 391,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 408,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "anticipation",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(0.567368, -0.443276, 0.443276, 0.567368, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 424,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.139997,
+      "ballTransform": "matrix(0.628078, -0.410789, 0.410789, 0.628078, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 441,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.305519,
+      "ballTransform": "matrix(0.699259, -0.361905, 0.361905, 0.699259, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 458,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.457397,
+      "ballTransform": "matrix(0.763994, -0.30527, 0.30527, 0.763994, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 474,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.594622,
+      "ballTransform": "matrix(0.820721, -0.243394, 0.243394, 0.820721, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 491,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.717637,
+      "ballTransform": "matrix(0.870767, -0.17587, 0.17587, 0.870767, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 508,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.823527,
+      "ballTransform": "matrix(0.912691, -0.105772, 0.105772, 0.912691, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 524,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.908773,
+      "ballTransform": "matrix(0.946461, -0.035348, 0.035348, 0.946461, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 541,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.969829,
+      "ballTransform": "matrix(0.973564, 0.036451, -0.036451, 0.973564, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 558,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 0.99894,
+      "ballTransform": "matrix(0.993595, 0.106001, -0.106001, 0.993595, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 574,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.00759, 0.172809, -0.172809, 1.00759, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 591,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.01618, 0.233848, -0.233848, 1.01618, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 608,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02066, 0.288967, -0.288967, 1.02066, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 625,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.0221, 0.335826, -0.335826, 1.0221, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 641,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02173, 0.372999, -0.372999, 1.02173, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 658,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02069, 0.398725, -0.398725, 1.02069, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 675,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02002, 0.410291, -0.410291, 1.02002, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 691,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02653, 0.368553, -0.368553, 1.02653, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 708,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.03233, 0.313318, -0.313318, 1.03233, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 724,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.03511, 0.261658, -0.261658, 1.03511, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 741,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.03538, 0.212763, -0.212763, 1.03538, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 758,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.0335, 0.166396, -0.166396, 1.0335, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 774,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02991, 0.123797, -0.123797, 1.02991, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 791,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.02481, 0.0833014, -0.0833014, 1.02481, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 808,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.01864, 0.0460885, -0.0460885, 1.01864, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 825,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.01182, 0.0124912, -0.0124912, 1.01182, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 841,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(1.00448, -0.018311, 0.018311, 1.00448, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 858,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.997089, -0.0455955, 0.0455955, 0.997089, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 874,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.99024, -0.0684498, 0.0684498, 0.99024, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 891,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.983767, -0.0883614, 0.0883614, 0.983767, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 908,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.978471, -0.103647, 0.103647, 0.978471, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 924,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.974676, -0.114114, 0.114114, 0.974676, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 941,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.972963, -0.118718, 0.118718, 0.972963, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 958,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.975209, -0.110788, 0.110788, 0.975209, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 974,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.978292, -0.0997564, 0.0997564, 0.978292, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 991,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.981267, -0.0886015, 0.0886015, 0.981267, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1008,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.984098, -0.0774584, 0.0774584, 0.984098, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1024,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.98648, -0.0676272, 0.0676272, 0.98648, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1041,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.988653, -0.0582433, 0.0582433, 0.988653, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1058,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.990749, -0.0487671, 0.0487671, 0.990749, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1074,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.992473, -0.040618, 0.040618, 0.992473, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1091,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.99405, -0.0328476, 0.0328476, 0.99405, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1108,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.995557, -0.0251017, 0.0251017, 0.995557, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1124,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.996689, -0.0190532, 0.0190532, 0.996689, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1141,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.997692, -0.0135084, 0.0135084, 0.997692, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1158,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.998665, -0.007953, 0.007953, 0.998665, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1174,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.999169, -0.00499396, 0.00499396, 0.999169, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1191,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.999547, -0.00274095, 0.00274095, 0.999547, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1208,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "matrix(0.99992, -0.00048626, 0.00048626, 0.99992, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1224,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1241,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1258,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1274,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1291,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1308,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1324,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1341,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1358,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1374,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1391,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1408,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1424,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1441,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1458,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1474,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1491,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1508,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1524,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1541,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1558,
+      "path": "/study-decks",
+      "overlay": true,
+      "phase": "battle",
+      "titleOpacity": 1,
+      "ballTransform": "none",
+      "onTop": true,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 1574,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.960547,
+      "ballTransform": "matrix(1.00784, 0.01041, -0.01041, 1.00784, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1591,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.85422,
+      "ballTransform": "matrix(1.02841, 0.0392682, -0.0392682, 1.02841, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1608,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.754109,
+      "ballTransform": "matrix(1.047, 0.0674932, -0.0674932, 1.047, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1624,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.658363,
+      "ballTransform": "matrix(1.06406, 0.0954241, -0.0954241, 1.06406, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1641,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.567474,
+      "ballTransform": "matrix(1.07955, 0.122768, -0.122768, 1.07955, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1658,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.481516,
+      "ballTransform": "matrix(1.09354, 0.149355, -0.149355, 1.09354, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1674,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.401155,
+      "ballTransform": "matrix(1.10604, 0.174836, -0.174836, 1.10604, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1691,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.325728,
+      "ballTransform": "matrix(1.11722, 0.19929, -0.19929, 1.11722, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1708,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.25614,
+      "ballTransform": "matrix(1.12706, 0.222303, -0.222303, 1.12706, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1724,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.193275,
+      "ballTransform": "matrix(1.13554, 0.243457, -0.243457, 1.13554, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1741,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.137035,
+      "ballTransform": "matrix(1.14279, 0.262669, -0.262669, 1.14279, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1758,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.0886588,
+      "ballTransform": "matrix(1.14878, 0.279407, -0.279407, 1.14878, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1774,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.0494289,
+      "ballTransform": "matrix(1.15345, 0.293123, -0.293123, 1.15345, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1791,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.0202663,
+      "ballTransform": "matrix(1.15682, 0.3034, -0.3034, 1.15682, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1808,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0.00336411,
+      "ballTransform": "matrix(1.15873, 0.309388, -0.309388, 1.15873, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1824,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1841,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1858,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1874,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1891,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1908,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1924,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1941,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1958,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1974,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 1991,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 2008,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 2024,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 2041,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 2058,
+      "path": "/quiz",
+      "overlay": true,
+      "phase": "reveal",
+      "titleOpacity": 0,
+      "ballTransform": "matrix(1.15911, 0.310583, -0.310583, 1.15911, 0, 0)",
+      "onTop": true,
+      "heading": "Poké Arena"
+    },
+    {
+      "elapsed": 2074,
+      "path": "/quiz",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Arena"
+    }
+  ],
+  "overlayMs": 2017,
+  "readableTitleMs": 1000,
+  "phases": [
+    "anticipation",
+    "battle",
+    "reveal"
+  ]
+}

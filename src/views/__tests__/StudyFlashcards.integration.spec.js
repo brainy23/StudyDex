@@ -85,14 +85,14 @@ it('uses the verified profile level in actual supabase-js requests and reviews a
     expect(wrapper.get('.study-card-front .study-card-text').text()).toBe(card.front_text)
     expect(wrapper.get('.study-card-back .study-card-text').text()).toBe(card.back_text)
     await wrapper.get('.study-flip-card').trigger('click')
-    await button('Easy').trigger('click')
+    await button('I Remembered').trigger('click')
   }
-  expect(wrapper.get('.study-completion').text()).toContain('15 cards after 15 reviews')
+  expect(wrapper.get('.study-completion').text()).toContain('15 unique cards remembered · 15 total review attempts')
   await button('Restart Deck').trigger('click')
   expect(wrapper.get('.study-review-progress').text()).toContain('0 / 15 remembered')
   expect(requests.filter((request) => request.table === 'flashcards')).toHaveLength(1)
   expect(requests.every((request) => request.method === 'GET')).toBe(true)
-  expect(requests.filter((request) => request.table === 'questions').map((request) => request.url.searchParams.get('question_purpose'))).toEqual(['eq.quick_check'])
+  expect(requests.some((request) => ['questions', 'question_options', 'question_answers'].includes(request.table))).toBe(false)
 })
 
 it('shows the API empty state with no educational fallback content', async () => {

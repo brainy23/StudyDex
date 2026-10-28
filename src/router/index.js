@@ -11,6 +11,7 @@ import TimerView from '../views/timerView.vue'
 import RewardsView from '../views/rewardsView.vue'
 import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
+import { requestedTopicId } from '../utils/studyNavigation'
 
 export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
   const router = createRouter({
@@ -105,7 +106,7 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         replace: true,
         query: {
           ...(typeof to.query.subject === 'string' ? { subject: to.query.subject } : {}),
-          ...(typeof to.query.topic === 'string' ? { topic: to.query.topic } : {}),
+          ...(requestedTopicId(to.query) ? { topic_id: requestedTopicId(to.query) } : {}),
           ...(to.query.mode === 'boss_battle' || to.query.battle === 'boss' ? { battle: 'boss' } : {}),
         },
       }

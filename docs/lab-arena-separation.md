@@ -1,156 +1,139 @@
-# Poké Lab and Poké Arena
+# Poké Lab learning flow and Poké Arena handoff
 
-## Responsibilities
+## Responsibilities and ownership
 
 | Area | Route | Content |
 | --- | --- | --- |
-| Poké Lab | `/study-decks` | Overview, goals, concepts, explanations, examples, ungraded understanding checks, Flashcards, Study Block Timer and Pokémon Buddy |
-| Poké Arena | `/quiz` | Topic Quizzes and Boss Battles; question selection and review are available, with secure grading/saving/rewards still pending |
+| Poké Lab | `/study-decks` | Topic introductions, goals, concepts, explanations, worked examples, Flashcards, Study Block Timer and Pokémon Buddy |
+| Poké Arena | `/quiz` | Regular Topic Quizzes, Boss Battle previews, and future trusted grading, results and assessment feedback |
 
-Both pages require login and retrieve the student’s saved profile. Their topic catalogue
-is filtered using `profiles.school_level_id`. Neither page asks for another school-level
-selection. Arena is accessible directly from Town. Under the updated topic-quiz flow,
-each regular Topic Quiz unlocks after **Finish topic** in Lab; Boss Battles remain
-independently accessible. The study timer is not a prerequisite.
+The local history and existing services were inspected before editing Arena. The latest
+Arena implementation is the integrated Vue page from commit `7868abd` by Javan Chua.
+It hosts `StudyQuiz.vue` and already supports safe question/option retrieval and ungraded
+choice review. No separate grading service, attempt submission implementation or competing
+Arena changes were found in the working tree. The current changes adapt that implementation:
+topic context, direct entry, an explicit preview action, and honest unavailable states.
+They retain its question navigation, Boss Battle separation, caches, errors and choice review.
 
-## Poké Lab
+Both routes remain authenticated and filter topics using the profile's saved
+`school_level_id`. School level is never taken from URL parameters. No artwork, tables,
+SQL, migrations, policies, educational records or live assessment writes were created or
+modified. Existing quick-check records remain untouched.
 
-- Only **Learn** and **Flashcards** are learning modes.
-- Lesson retrieval still includes `question_purpose = 'quick_check'` understanding checks.
-- Lab no longer requests `quiz` or `boss_battle` question banks or renders their assessment UI.
-- Understanding-check choices are ungraded visit-only practice. They do not create formal
-  attempts, scores, XP or rewards.
-- Flashcard flipping, Again/Hard/Easy, unique progress, completion and Restart Deck are retained.
-- Lesson/revision caches, empty/error/retry states, the existing layout and buddy are retained.
-- The timer still starts manually and keeps its deadline through learning/revision changes.
-  Leaving Lab, including using **Quiz me!**, pauses the timer.
-- Topic completion offers Flashcard Revision, **Quiz me!**, or Read again. The header also
-  has a **Quiz me!** button, enabled once the current topic has been completed. Both open
-  that topic's regular quiz directly in Arena, preserving subject/topic IDs.
-- The user’s currently hidden level/context header remains hidden; filtering still uses
-  the saved profile level.
+## Learning and active recall
 
-## Poké Arena
+Learn retrieves only `topic_learning_goals` and `topic_concepts`, using their existing
+ordering. It neither requests nor renders quick-check MCQs or True/False questions.
+Explanations and visually distinct worked examples are the main content. Position,
+Previous/Next navigation and a keyboard-accessible roadmap support revisiting any concept.
+Read counts track distinct concepts acknowledged with Next Concept or Finish Topic.
+Jumping ahead via the roadmap does not mark skipped concepts read.
 
-The existing `/quiz` page contained a placeholder, not a separate assessment engine.
-It now hosts the existing `StudyQuiz.vue` component as `ArenaAssessment`, preserving
-question retrieval, options, answer selection, previous/next navigation and choice review.
-The file’s existing location/name is retained to avoid an unrelated directory migration;
-Arena is its only production importer.
+The final concept offers **Finish Topic**. Completion stays in Lab and offers:
 
-- Topic Quiz loads `question_purpose = 'quiz'`.
-- Boss Battle loads `question_purpose = 'boss_battle'`.
-- Only the chosen unlocked topic/type is loaded. A locked regular quiz does not fetch its
-  question bank. Changing assessment type does not fetch quick checks.
-- Topic/type caches keep their answer choices separate for the current Arena visit.
-- Subjects and topics can be changed independently of Lab. Unavailable/other-level topic
-  URLs are rejected before fetching their questions.
-- Loading, missing level, empty catalogue/bank, permission, network and retry states are handled.
-- A late response for another question set cannot replace the currently selected set.
-- The existing Arena background/panel and shared StudyDex controls/styles are reused, with
-  a responsive subject/topic sidebar.
-- The UI explicitly identifies this as an assessment preview: choices are not graded or saved,
-  and scores/rewards are not available yet. Review my choices is not a submission action.
+- **Review with Flashcards**: switches modes for the same topic and uses the existing deck.
+- **Go to Poké Arena**: opens that topic's regular quiz selection without starting it.
+- **Revisit Concepts**: returns to the overview and roadmap.
 
-## One quiz per completed topic
+Titles for subjects, topics, concepts and buddy names are capitalized for display only.
+Database strings, IDs and query matching are unchanged. Explanation/example text remains
+verbatim, with its line breaks preserved.
 
-- **Finish topic** records completion after the last lesson concept. Opening a topic, choosing
-  Flashcards, or completing an understanding check alone does not unlock its Topic Quiz.
-- Completing two topics unlocks their two separate quizzes. Finishing/reviewing a quiz does
-  not consume its unlock, and repeating a topic does not create a duplicate quiz.
-- Arena labels each topic as covered/unlocked or needing study. A locked quiz offers
-  **Study this topic**, which opens the correct Lab lesson in Learn mode.
-- Unlocking uses the existing question bank for the topic with `question_purpose = 'quiz'`.
-  It does not generate questions. Topics without questions show the existing empty state.
-  No test content was inserted into Supabase.
-- Completed topic IDs are stored in localStorage separately for each verified profile ID
-  and saved school level. They survive reloads in that browser, but do not sync across
-  devices. Clearing site data removes them. Unpublished/other-level topics remain excluded
-  by the profile-filtered catalogue, regardless of stored IDs.
-- If browser storage is blocked, an in-memory fallback keeps unlocks through navigation
-  during the current app visit, and the UI explains that they will not survive a reload.
-- Browser completion data is a convenience for this test-content flow, not authoritative
-  assessment eligibility. It must not be trusted for grades, attempts or rewards. Account-wide
-  completion tracking and any authoritative prerequisite enforcement are pending backend work.
+Flashcard actions appear only after revealing the answer:
 
-## Navigation
+- **I Remembered** removes the current card from the active queue and records its unique ID.
+- **Practise Again** reinserts it after the next queued card (or leaves it as the only card).
+  It does not increase the remembered count.
 
-1. **Town → Poké Lab:** the existing Lab building opens `/study-decks`.
-2. **Town → Poké Arena:** the existing Arena building opens `/quiz` directly.
-3. **Lab → Arena:** header/completion **Quiz me!** buttons open the covered topic's quiz.
-4. **Arena → Lab:** Revise in Poké Lab preserves subject/topic and opens Flashcards.
-5. Both areas retain the shared **Back to Town** link to `/home`.
-6. Old Lab assessment links such as `/study-decks?mode=quiz&battle=boss&topic=...`
-   redirect to `/quiz?battle=boss&topic=...`, retaining subject/topic context. They are
-   protected by Arena’s login guard and do not mount Lab or load its lesson.
+Each action increases total review attempts once and returns to the next card's question.
+Duplicate source IDs cannot inflate the unique deck count. Flipping, optional images,
+backend order, visit-only caches, progress and Restart Deck remain available. Keyboard
+focus returns to the next card or the completion heading after an action.
 
-Concept position, understanding-check choices and Flashcard revision progress still reset
-when leaving Lab, as before. The completed-topic unlock list is retained separately in this
-browser. The timer’s saved recovery state is separate and returns paused. Arena answer
-choices reset on leaving or refreshing Arena; no saved assessment attempt is implied.
+**Flashcards Completed!** shows unique cards remembered and total review attempts. It offers
+**Revise Another Topic**, **Go to Poké Arena**, and a separate optional **Restart Deck**.
+Topic selection keeps the saved school level, checks existing lesson/deck availability,
+shows errors with retries and explains when no other populated topics exist. Concepts-only
+topics open Learn; topics with cards open Flashcards. Returning to a completed deck allows
+an explicit Restart Deck.
 
-## Pending backend work
+Learn completion history remains local per student and school level. It is reading history,
+not assessment eligibility. Regular quizzes no longer require completing Learn, so entering
+Flashcards directly also supports the Arena handoff. No learning action starts a quiz or
+awards XP. The timer and buddy retain their existing behavior; leaving Lab pauses the timer.
 
-No database changes, SQL, policies, migrations, content inserts or live writes were performed.
-The existing Supabase services and explicit field selections are unchanged. Browser code
-does not query `question_answers` or receive answer keys.
+## Navigation contract
 
-Before assessments can submit results or grant rewards, the app needs an authenticated
-server-side grading integration that:
+`topic_id` is the canonical query parameter. Both Lab and Arena still accept the legacy
+`topic` parameter; when both are supplied, `topic_id` takes precedence.
 
-- validates the student, school level, topic, question purpose and selected options;
-- reads answer keys only on the server and computes the authoritative result;
-- saves the attempt and its answers, with duplicate-submission protection;
-- awards any permitted XP/rewards transactionally under the agreed rules;
-- returns the result/feedback that the frontend may safely display.
+| Action | Destination |
+| --- | --- |
+| Lab header, Learn completion or Flashcard completion → Arena | `/quiz?subject=<subject_id>&topic_id=<topic_id>` |
+| Select Boss Battle | Same Arena topic, with `battle=boss` |
+| Arena → Flashcard revision | `/study-decks?subject=<subject_id>&topic_id=<topic_id>&mode=flashcards` |
+| Review Entire Topic | `/study-decks?subject=<subject_id>&topic_id=<topic_id>&mode=learn&review=topic` |
+| Future Review Weak Concepts | `/study-decks?subject=<subject_id>&topic_id=<topic_id>&mode=learn&review=concepts&concept_ids=<id>&concept_ids=<id>` |
+| Revise Another Topic | `/study-decks?view=topics&mode=flashcards&from_topic_id=<completed_topic_id>` |
 
-This integration is not implemented or called by the current UI. No frontend-only grading,
-fake scores, artificial attempts or reward writes were added. Any future SQL requires review
-of the exact script and the owner’s explicit approval first.
+`arenaLocation` deliberately omits `battle`, selecting the regular quiz for both Lab
+completion flows. `lessonReviewLocation(topic, conceptIds)` builds full-topic or targeted
+review links. It does not infer weakness. Lab matches requested concept IDs against the
+selected topic's readable concepts, opens the first matching requested concept, and marks
+matching entries **Revisit** while preserving the full database-ordered roadmap. Missing,
+null or foreign IDs never label concepts weak. With no matches, Lab offers the overview.
+`review=topic` always opens the overview. Route hints cannot establish a grade.
 
-## Files changed for this separation
+Legacy Lab assessment bookmarks with `mode=quiz` or `mode=boss_battle` redirect to the
+protected Arena route with canonical topic context. Subjects/topics outside the student's
+catalogue are rejected before loading their resources. Town links and auth guards remain.
 
-- `src/views/studyView.vue`: learning/revision-only modes and context-preserving Arena links.
-- `src/views/quizView.vue`: adapts the existing Arena route to host assessment selection/review.
-- `src/components/study/StudyLearn.vue`: completion handoff to Arena and ungraded-check wording.
-- `src/components/study/StudyQuiz.vue`: reuses the assessment UI in Arena; explicit preview
-  status and a return-to-revision action for an empty Boss Battle.
-- `src/router/index.js`: protects Arena and redirects old Lab assessment URLs.
-- `src/router/__tests__/flow.spec.js`: direct entry, login protection, both-way navigation,
-  timer pause and legacy redirects.
-- `src/views/__tests__/StudyView.spec.js`: learning-only modes and completed-topic handoff.
-- `src/views/__tests__/StudyFlashcards.integration.spec.js`: confirms the real Supabase client’s
-  fixture HTTP requests from Lab fetch only quick checks, never formal question sets.
-- `src/views/__tests__/ArenaView.spec.js`: profile filtering, answer/review isolation, question
-  sets, topic selection, empty/error/retry, loading races and revision navigation.
-- `docs/back-to-home.md` and this document.
+## Assessment availability and future grading contract
 
-The **Quiz me!** follow-up also changes both views, `StudyLearn.vue`, `StudyQuiz.vue`, their
-view/route tests and this document. It adds `src/composables/useTopicCompletion.js` and its
-storage tests. Existing Supabase services, routes, timer, Flashcards and buddy are unchanged
-by the follow-up.
+The supplied pilot inventory is Primary 3 → Science → Diversity of Living and Non-Living
+Things: 7 concepts, 15 flashcards, 7 quick checks, 2 Boss Battle questions and **0 regular
+quiz questions**. These are separate purposes; quick checks and Boss Battles are never
+substituted for regular quizzes.
 
-## Verification and limits
+An empty regular bank displays an informative message and a disabled **Start Quiz**.
+When questions exist but secure grading is unavailable, Start Quiz stays disabled and
+**Preview Questions** explicitly opens the existing ungraded preview. Answer selection
+never begins automatically on arrival. Boss Battle questions remain a separate preview.
+Preview choices are visit-only; they are neither submitted nor graded. No retry-quiz action,
+pass/fail result, weakness claim or rewards are presented without backend support.
 
-- **187 tests passed across 18 files** using `pnpm exec vitest run`.
-- Production build passed using `pnpm run build`; existing large-bundle warnings remain.
-- ESLint and Oxlint passed for all source/test files changed in this task.
-- `git diff --check` passed.
-- Existing Flashcards, timer, buddy, account/avatar and navigation tests remain passing.
-- Synthetic two-topic tests cover consecutive topic completion, both quizzes remaining
-  available after reviewing one, duplicate prevention, reloads, account/level isolation,
-  storage failures, locked topic handoff and independently accessible Boss Battles.
-- Tests use fixture service/HTTP responses. No new authenticated live Supabase or browser
-  verification was performed, and responsive layout was not visually verified because the
-  session’s saved localhost permission blocks browser access.
+The following is an integration specification, **not implemented grading functionality**:
 
-Pre-separation source/test snapshots are saved under the Git-ignored `.lab-arena-backup.local/`.
-Snapshots immediately before the Quiz me! follow-up are under `.quiz-me-backup.local/`,
-with a manifest mapping snapshot numbers to original files. That follow-up adds the
-completion composable and its test; those two files have no pre-change snapshot. Restore
-only after reviewing later edits, so unrelated changes are not overwritten.
-Earlier weather, avatar sync and shared home-link work is retained. The older Back to Town
-rollback deliberately refuses to overwrite these later Lab/Arena edits; do not change its
-fingerprints to force it. Local snapshot directories are ignored by Git and are not
-included when the branch is pushed. See [Team testing](team-testing.md) for setup
-and the current feedback checklist.
+1. An authenticated server operation validates the student, saved school level, topic,
+   purpose, question IDs and selected options. It reads `question_answers` on the server,
+   grades against trusted keys, and persists `quiz_attempts` and `quiz_attempt_answers`
+   with protection against duplicate submissions. Browser code must not fetch answer keys
+   or write authoritative correctness/score fields.
+2. Return an authorized, completed attempt tied to the topic and `question_purpose=quiz`,
+   its trusted score percentage, and trusted per-question correctness. Use the unrounded
+   authoritative score: **>= 50% passes; < 50% fails**. Missing or invalid results cannot
+   be classified as failures.
+3. For a failed regular attempt, identify questions explicitly graded incorrect. Resolve
+   their `questions.concept_id` links against `topic_concepts.id` for the same topic.
+   Deduplicate matches and ignore null/foreign/missing links. Never infer incorrectness
+   from frontend selections, a missing client answer, route parameters or an unverified key.
+4. Offer **Review Weak Concepts** only when these validated links provide evidence. Pass
+   those IDs to `lessonReviewLocation`. Offer **Review Entire Topic** for every failed
+   regular quiz, and use it as the fallback when concept evidence is unavailable. If some
+   incorrect questions lack links, do not imply that the mapped concepts cover every gap.
+5. Show **Retry Quiz** only when the backend supports starting a new authorized attempt.
+   Reopening or restarting a preview is not a retry of a graded quiz.
+
+The missing regular quiz content and missing trusted grading/attempt service block actual
+Start Quiz, 50% pass/fail results, automatic weakness detection, saved attempts and retries.
+Only the revision navigation receiver, link builder and full-topic Arena action are complete.
+No invented endpoint or fake assessment result is wired into the app. Any proposed SQL must
+first be shown verbatim, explained and explicitly approved by the owner, including read-only
+SQL. No SQL was executed as part of this change.
+
+## Verification
+
+See [learning-flow-test-report.md](learning-flow-test-report.md) for current results and
+[team-testing.md](team-testing.md) for the manual checklist. The earlier
+[flashcards-test-report.md](flashcards-test-report.md) is a historical report of the old
+three-button controls.

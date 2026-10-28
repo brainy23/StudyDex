@@ -1,6 +1,7 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
+import { useReducedMotion } from 'motion-v'
 import { getCurrentProfile } from '../services/profileService'
 import {
   getStudyCatalogue,
@@ -16,11 +17,17 @@ import StudyTimerPanel from '../components/study/StudyTimerPanel.vue'
 import StudyImage from '../components/study/StudyImage.vue'
 import BackToHome from '../components/common/BackToHome.vue'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
+import { useArenaTransition } from '../composables/useArenaTransition'
+import { displayTitle } from '../utils/displayText'
+import { arenaLocation, requestedConceptIds, requestedTopicId } from '../utils/studyNavigation'
 import '../assets/study.css'
 
 const route = useRoute()
 const router = useRouter()
 const timer = useTimer()
+const arenaTransition = useArenaTransition()
+const arenaState = arenaTransition.state
+const reducedMotion = useReducedMotion()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
@@ -30,6 +37,7 @@ const error = ref(null)
 const buddy = ref(null)
 const buddyError = ref(null)
 const buddyLoading = ref(false)
+const topicSelection = ref(null)
 const resources = reactive({})
 const progress = reactive({})
 let alive = true
@@ -38,29 +46,29 @@ let generation = 0
 const mode = computed(() =>
   ['learn', 'flashcards'].includes(route.query.mode) ? route.query.mode : 'learn',
 )
+const selectingTopic = computed(() => route.query.view === 'topics')
+const requestedTopic = computed(() => requestedTopicId(route.query))
+const reviewConceptIds = computed(() => requestedConceptIds(route.query))
 const subject = computed(() => {
   const subjects = catalogue.value.subjects
   if (route.query.subject) return subjects.find((item) => item.id === route.query.subject) || null
-  const requestedTopic = catalogue.value.topics.find((item) => item.id === route.query.topic)
-  const initialSubjectId = requestedTopic?.subject_id || catalogue.value.topics[0]?.subject_id
+  const selected = catalogue.value.topics.find((item) => item.id === requestedTopic.value)
+  const initialSubjectId = selected?.subject_id || catalogue.value.topics[0]?.subject_id
   return subjects.find((item) => item.id === initialSubjectId) || subjects[0] || null
 })
 const availableTopics = computed(() =>
   catalogue.value.topics.filter((item) => item.subject_id === subject.value?.id),
 )
 const topic = computed(() =>
-  route.query.topic
-    ? availableTopics.value.find((item) => item.id === route.query.topic) || null
+  selectingTopic.value ? null : requestedTopic.value
+    ? availableTopics.value.find((item) => item.id === requestedTopic.value) || null
     : availableTopics.value[0] || null,
 )
-const arenaLocation = computed(() => ({
-  name: 'quiz',
-  query: {
-    ...(subject.value ? { subject: subject.value.id } : {}),
-    ...(topic.value ? { topic: topic.value.id } : {}),
-  },
-}))
-const quizUnlocked = computed(() => topicCompletion.isComplete(topic.value?.id))
+const nextArena = computed(() => arenaLocation(topic.value, subject.value?.id))
+const otherTopics = computed(() => catalogue.value.topics.filter((item) => item.id !== route.query.from_topic_id))
+const noOtherPopulatedTopics = computed(() => otherTopics.value.length > 0 && otherTopics.value.every(
+  (item) => !topicContentPending(item) && !topicHasContent(item) && !topicContentFailed(item),
+))
 const currentResources = computed(() => resources[topic.value?.id])
 const readingProgress = computed(
   () =>
@@ -159,11 +167,59 @@ function setMode(nextMode) {
   if (!['learn', 'flashcards'].includes(nextMode)) return
   const query = { ...route.query, mode: nextMode }
   delete query.battle
+  delete query.concept_id
+  delete query.concept_ids
+  delete query.review
   router.push({ name: 'study-decks', query })
 }
 
 function goToArena() {
-  if (quizUnlocked.value) router.push(arenaLocation.value)
+  if (!topic.value) return
+  arenaTransition.start({
+    router,
+    location: nextArena.value,
+    topicName: topic.value.name,
+    reducedMotion: reducedMotion.value,
+    onStart: () => timer.pause('Your session was paused when you left Poké Lab. Resume when you return.'),
+  })
+}
+
+async function reviseAnotherTopic() {
+  await router.push({
+    name: 'study-decks',
+    query: { view: 'topics', mode: 'flashcards', from_topic_id: topic.value?.id },
+  })
+  await nextTick()
+  topicSelection.value?.querySelector('h2')?.focus()
+}
+
+function topicHasContent(item) {
+  const data = resources[item.id]
+  return Boolean(data?.flashcards.data?.length || data?.lesson.data?.concepts.length)
+}
+
+function topicContentPending(item) {
+  const data = resources[item.id]
+  return !data || data.lesson.loading || data.flashcards.loading
+}
+
+function topicContentFailed(item) {
+  const data = resources[item.id]
+  return data?.lesson.error || data?.lesson.data?.errors.concepts || data?.flashcards.error
+}
+
+function topicContentLabel(item) {
+  const data = resources[item.id]
+  if (topicContentPending(item)) return 'Checking content…'
+  if (data?.flashcards.data?.length) return 'Flashcards available'
+  if (data?.lesson.data?.concepts.length) return 'Concepts available · No flashcards yet'
+  if (topicContentFailed(item)) return 'Content could not be loaded'
+  return 'No study content available yet'
+}
+
+function retryTopicContent(item) {
+  loadResource(item.id, 'lesson')
+  loadResource(item.id, 'flashcards')
 }
 
 function completeTopic(id) {
@@ -174,14 +230,18 @@ function chooseSubject(id) {
   const firstTopic = catalogue.value.topics.find((item) => item.subject_id === id)
   router.push({
     name: 'study-decks',
-    query: { subject: id, ...(firstTopic ? { topic: firstTopic.id } : {}), mode: 'learn' },
+    query: { subject: id, ...(firstTopic ? { topic_id: firstTopic.id } : {}), mode: 'learn' },
   })
 }
 
 function chooseTopic(selected) {
   router.push({
     name: 'study-decks',
-    query: { subject: selected.subject_id, topic: selected.id, mode: 'learn' },
+    query: {
+      subject: selected.subject_id,
+      topic_id: selected.id,
+      mode: selectingTopic.value && resources[selected.id]?.flashcards.data?.length ? 'flashcards' : 'learn',
+    },
   })
 }
 
@@ -195,6 +255,9 @@ function retryMode() {
 }
 
 watch(() => topic.value?.id, loadTopic)
+watch(() => [selectingTopic.value, catalogue.value.topics], ([selecting]) => {
+  if (selecting) catalogue.value.topics.forEach((item) => loadTopic(item.id))
+})
 onMounted(initialise)
 onBeforeRouteLeave(() => {
   timer.pause('Your session was paused when you left Poké Lab. Resume when you return.')
@@ -221,25 +284,19 @@ onUnmounted(() => {
           </p>
           <a href="#study-topics">Choose subject or topic</a>
         </div> -->
-        <div v-if="topic" class="study-header-progress">
-          <label for="topic-reading-progress"
-            >{{ readingProgress.read }} / {{ readingProgress.total }} concepts read</label
-          >
-          <progress id="topic-reading-progress" :value="progressPercent" max="100" />
-          <span class="study-note">Progress for this visit</span>
-        </div>
         <div class="study-header-actions">
-          <button class="study-button" :disabled="!quizUnlocked" @click="goToArena">Quiz me!</button>
+          <button class="study-button" :disabled="!topic || arenaState.active" @click="goToArena">Go to Poké Arena</button>
+          <p v-if="arenaState.error" class="study-note" role="alert">{{ arenaState.error }}</p>
           <p v-if="topic" class="study-note">
-            {{ quizUnlocked ? 'Topic covered — your quiz is unlocked.' : 'Finish this topic to unlock its quiz.' }}
+            Choose when you are ready to explore this topic's quiz.
           </p>
           <p v-if="!savedInBrowser" class="study-note" role="status">
-            Browser storage is unavailable. Completed topics will stay unlocked for this app visit only.
+            Browser storage is unavailable. Topic completion will stay for this app visit only.
           </p>
         </div>
       </header>
 
-      <section v-if="loading" class="study-page-state study-panel" role="status">
+      <section v-if="loading" class="study-page-state study-panel study-loading" role="status">
         Loading your Poké Lab…
       </section>
       <section v-else-if="error" class="study-page-state study-panel" role="alert">
@@ -264,7 +321,7 @@ onUnmounted(() => {
           </div>
           <div>
             <p class="study-eyebrow">Your study companion</p>
-            <h2 id="study-buddy-heading">{{ buddy?.pokemon?.name || 'Pokémon Buddy' }}</h2>
+            <h2 id="study-buddy-heading">{{ displayTitle(buddy?.pokemon?.name || 'Pokémon Buddy') }}</h2>
             <p v-if="buddyLoading" class="study-note" role="status">Looking for your buddy…</p>
             <p v-else-if="buddyError" class="study-note" role="alert">
               {{ studyErrorMessage(buddyError, 'Your buddy') }}
@@ -281,6 +338,25 @@ onUnmounted(() => {
         </aside>
 
         <section class="main-study study-panel" aria-label="Learning content">
+          <div v-if="selectingTopic" ref="topicSelection" class="study-topic-selection">
+            <p class="study-eyebrow">{{ displayTitle(profile.school_level?.name || 'Your school level') }}</p>
+            <h2 tabindex="-1">Revise Another Topic</h2>
+            <p>Choose a topic to keep learning. Your saved school level stays the same.</p>
+            <p v-if="!otherTopics.length" role="status">No other topics are available at your school level yet. You can revisit your completed topic below.</p>
+            <p v-else-if="noOtherPopulatedTopics" role="status">No other populated topics are available yet. You can revisit your completed topic below.</p>
+            <ul class="study-topic-list">
+              <li v-for="item in catalogue.topics" :key="item.id">
+                <button :disabled="!topicHasContent(item)" @click="chooseTopic(item)">
+                  {{ displayTitle(item.name) }}
+                  <span class="study-note">{{ topicContentLabel(item) }}</span>
+                </button>
+                <div v-if="topicContentFailed(item)" class="study-message" role="alert">
+                  <p>{{ studyErrorMessage(topicContentFailed(item), displayTitle(item.name)) }}</p>
+                  <button class="study-button study-button-secondary" @click="retryTopicContent(item)">Try again</button>
+                </div>
+              </li>
+            </ul>
+          </div>
           <nav v-if="topic" class="study-mode-nav" aria-label="Learning modes">
             <button
               v-for="item in [
@@ -295,7 +371,7 @@ onUnmounted(() => {
             </button>
           </nav>
           <p v-if="topic && activeResource" class="study-eyebrow study-topic-label">
-            {{ subject?.name }} · {{ topic.name }}
+            {{ displayTitle(subject?.name) }} · {{ displayTitle(topic.name) }}
           </p>
           <!-- Keep the cache alive when browsing a subject with no available topic. -->
           <KeepAlive>
@@ -305,17 +381,21 @@ onUnmounted(() => {
               :key="modeKey"
               :topic="topic"
               :resource="activeResource"
+              :review-concept-ids="reviewConceptIds"
+              :show-overview="route.query.review === 'topic'"
+              :arena-busy="arenaState.active"
               @progress="updateProgress"
               @complete="completeTopic"
               @mode="setMode"
               @retry="retryMode"
               @arena="goToArena"
+              @topics="reviseAnotherTopic"
             />
           </KeepAlive>
-          <div v-if="!topic || !activeResource" class="study-empty">
+          <div v-if="!selectingTopic && (!topic || !activeResource)" class="study-empty">
             <h2>
               {{
-                route.query.topic ? 'This topic is unavailable' : 'No study content is available'
+                requestedTopic ? 'This topic is unavailable' : 'No study content is available'
               }}
             </h2>
             <p v-if="!catalogue.subjects.length">
@@ -324,9 +404,9 @@ onUnmounted(() => {
             </p>
             <p v-else>
               {{
-                route.query.topic
+                requestedTopic
                   ? 'Choose a topic available for your registered school level.'
-                  : `There are no available ${subject?.name || ''} topics for ${profile.school_level?.name || 'your school level'} yet.`
+                  : `There are no available ${displayTitle(subject?.name || '')} topics for ${displayTitle(profile.school_level?.name || 'your school level')} yet.`
               }}
             </p>
             <p class="study-note">
@@ -352,7 +432,7 @@ onUnmounted(() => {
             >
               <option v-if="!subject" value="" disabled>Choose a subject</option>
               <option v-for="item in catalogue.subjects" :key="item.id" :value="item.id">
-                {{ item.name }}
+                {{ displayTitle(item.name) }}
               </option>
             </select>
             <ul v-if="availableTopics.length" class="study-topic-list">
@@ -361,7 +441,7 @@ onUnmounted(() => {
                   :aria-current="topic?.id === item.id ? 'true' : undefined"
                   @click="chooseTopic(item)"
                 >
-                  {{ item.name }}
+                  {{ displayTitle(item.name) }}
                 </button>
               </li>
             </ul>
@@ -373,7 +453,7 @@ onUnmounted(() => {
               <p>{{ readingProgress.read }} of {{ readingProgress.total }} concepts read</p>
               <progress :value="progressPercent" max="100" aria-label="Topic reading progress" />
               <p class="study-note">
-                Reading progress and answer choices stay for this visit. They reset after leaving or
+                Reading and flashcard progress stay for this visit. They reset after leaving or
                 refreshing.
               </p>
             </div>

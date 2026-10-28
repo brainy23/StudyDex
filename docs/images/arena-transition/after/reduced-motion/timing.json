@@ -1,0 +1,70 @@
+{
+  "reducedMotion": true,
+  "startedAt": 997.6999999992549,
+  "samples": [
+    {
+      "elapsed": -1,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 16,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 32,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 49,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 66,
+      "path": "/study-decks",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Lab"
+    },
+    {
+      "elapsed": 83,
+      "path": "/quiz",
+      "overlay": false,
+      "phase": "idle",
+      "titleOpacity": 0,
+      "ballTransform": null,
+      "onTop": false,
+      "heading": "Poké Arena"
+    }
+  ],
+  "navigationMs": 105,
+  "overlayMs": 0,
+  "readableTitleMs": 0,
+  "phases": []
+}

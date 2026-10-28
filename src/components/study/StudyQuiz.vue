@@ -6,12 +6,12 @@ import StudyQuestion from './StudyQuestion.vue'
 const props = defineProps({
   resource: { type: Object, required: true },
   purpose: { type: String, default: 'quiz' },
-  locked: { type: Boolean, default: false },
 })
 defineEmits(['retry', 'mode'])
 const index = ref(0)
 const answers = reactive({})
 const reviewing = ref(false)
+const previewing = ref(false)
 const questions = computed(() => props.resource.data || [])
 const current = computed(() => questions.value[index.value])
 const title = computed(() => (props.purpose === 'boss_battle' ? 'Boss Battle' : 'Topic Quiz'))
@@ -44,11 +44,7 @@ function reviewQuestions() {
       </button>
     </div>
     <h2>{{ title }}</h2>
-    <div v-if="locked" class="study-empty">
-      <p>Finish this topic in Poké Lab to unlock its quiz.</p>
-      <button class="study-button" @click="$emit('mode', 'study')">Study this topic</button>
-    </div>
-    <p v-else-if="resource.loading" role="status">Loading questions…</p>
+    <p v-if="resource.loading" role="status">Loading questions…</p>
     <div v-else-if="resource.error" class="study-message" role="alert">
       <p>{{ studyErrorMessage(resource.error, title) }}</p>
       <button class="study-button" @click="$emit('retry')">Try again</button>
@@ -61,7 +57,10 @@ function reviewQuestions() {
             : 'There are no regular quiz questions for this topic yet.'
         }}
       </p>
+      <p>Keep practising in Poké Lab and check back when this assessment is ready.</p>
+      <button class="study-button" disabled>{{ purpose === 'quiz' ? 'Start Quiz' : 'Start Boss Battle' }}</button>
       <div class="study-button-row">
+        <button class="study-button study-button-secondary" @click="$emit('mode', 'study')">Review Entire Topic</button>
         <button
           class="study-button"
           @click="$emit('mode', purpose === 'quiz' ? 'boss_battle' : 'learn')"
@@ -72,9 +71,17 @@ function reviewQuestions() {
     </div>
     <template v-else>
       <p class="study-message">
-        Assessment preview: answers are not graded or saved. Scores and rewards are not available yet.
+        Secure grading is not available yet. You can preview these questions, but answers are not graded or saved. Scores and rewards are not available yet.
       </p>
-      <template v-if="reviewing">
+      <div v-if="!previewing" class="study-empty">
+        <p>{{ questions.length }} questions available to preview. Start this assessment when secure grading is ready.</p>
+        <div class="study-button-row">
+          <button class="study-button" disabled>{{ purpose === 'quiz' ? 'Start Quiz' : 'Start Boss Battle' }}</button>
+          <button class="study-button study-button-secondary" @click="previewing = true">Preview Questions</button>
+          <button class="study-button study-button-secondary" @click="$emit('mode', 'study')">Review Entire Topic</button>
+        </div>
+      </div>
+      <template v-else-if="reviewing">
         <h3>Your answer choices</h3>
         <ol class="study-answer-summary">
           <li v-for="question in questions" :key="question.id">

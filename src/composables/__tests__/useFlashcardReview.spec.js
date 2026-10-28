@@ -8,35 +8,39 @@ const cards = Array.from({ length: 5 }, (_, id) => ({
   back_text: `A${id}`,
 }))
 
-it('returns Again soon without resetting previously remembered cards', () => {
+it('returns Practise Again soon without resetting previously remembered cards', () => {
   const review = useFlashcardReview()
   review.start(cards)
   review.flipped.value = true
-  review.rate('easy')
+  review.rate('remembered')
   review.flipped.value = true
-  review.rate('again')
+  review.rate('practise')
   expect(review.remembered.value).toEqual(['0'])
   expect(review.queue.value.map((card) => card.id)).toEqual(['2', '1', '3', '4'])
   expect(review.reviews.value).toBe(2)
 })
 
-it('places Hard later than Again without duplicating cards', () => {
+it('keeps duplicate source records out of the revision queue', () => {
   const review = useFlashcardReview()
-  review.start(cards)
-  review.flipped.value = true
-  review.rate('hard')
-  expect(review.queue.value.map((card) => card.id)).toEqual(['1', '2', '3', '0', '4'])
+  review.start([...cards, cards[0]])
   expect(review.queue.value).toHaveLength(cards.length)
+  expect(review.cards.value).toHaveLength(cards.length)
+  for (let index = 0; index < cards.length; index++) {
+    review.flipped.value = true
+    review.rate('remembered')
+  }
+  expect(review.remembered.value).toEqual(cards.map((card) => card.id))
+  expect(review.complete.value).toBe(true)
 })
 
-it('requires revealing an answer, completes after Easy ratings and supports a new revision', () => {
+it('requires revealing an answer, completes after remembering every card and supports a new revision', () => {
   const review = useFlashcardReview()
   review.start(cards)
-  review.rate('easy')
+  review.rate('remembered')
   expect(review.remembered.value).toHaveLength(0)
   for (let i = 0; i < cards.length; i++) {
     review.flipped.value = true
-    review.rate('easy')
+    review.rate('remembered')
   }
   expect(review.complete.value).toBe(true)
   expect(review.remembered.value).toHaveLength(5)
@@ -68,27 +72,27 @@ function rate(review, rating) {
   expect(review.flipped.value).toBe(false)
 }
 
-it.each(['again', 'hard', 'easy'])('handles %s on the first of 15 cards', (rating) => {
+it.each(['practise', 'remembered'])('handles %s on the first of 15 cards', (rating) => {
   const review = useFlashcardReview()
   review.start(revisionCards)
   rate(review, rating)
   expect(review.current.value.id).toBe(revisionCards[1].id)
-  expect(review.remembered.value.length).toBe(rating === 'easy' ? 1 : 0)
+  expect(review.remembered.value.length).toBe(rating === 'remembered' ? 1 : 0)
 })
 
-it.each(['again', 'hard'])('can rate the same card %s repeatedly without losing or duplicating it', (rating) => {
+it.each(['practise'])('can rate the same card %s repeatedly without losing or duplicating it', (rating) => {
   const review = useFlashcardReview()
   review.start(revisionCards)
   const firstId = revisionCards[0].id
   for (let attempt = 0; attempt < 20; attempt++) {
     expect(review.current.value.id).toBe(firstId)
     rate(review, rating)
-    while (review.current.value.id !== firstId) rate(review, 'easy')
+    while (review.current.value.id !== firstId) rate(review, 'remembered')
     expect(review.remembered.value).not.toContain(firstId)
   }
   expect(review.complete.value).toBe(false)
   expect(review.queue.value.map((card) => card.id)).toEqual([firstId])
-  rate(review, 'easy')
+  rate(review, 'remembered')
   expect(review.complete.value).toBe(true)
   expect(review.remembered.value).toHaveLength(15)
   expect(review.reviews.value).toBeGreaterThan(15)
@@ -98,15 +102,15 @@ it('preserves all 15 unique cards through mixed ratings, completes, and restarts
   const review = useFlashcardReview()
   const original = structuredClone(revisionCards)
   review.start(revisionCards)
-  const ratings = ['again', 'hard', 'easy', 'again', 'easy', 'hard']
+  const ratings = ['practise', 'remembered', 'practise', 'remembered']
   for (let index = 0; index < 120 && review.current.value; index++) {
     rate(review, ratings[index % ratings.length])
   }
-  while (review.current.value) rate(review, 'easy')
+  while (review.current.value) rate(review, 'remembered')
   expect(review.complete.value).toBe(true)
   expect(review.remembered.value).toHaveLength(15)
   const reviews = review.reviews.value
-  review.rate('easy')
+  review.rate('remembered')
   expect(review.reviews.value).toBe(reviews)
   review.start(review.cards.value)
   expect(review.queue.value).toEqual(original)
@@ -120,9 +124,9 @@ it('preserves all 15 unique cards through mixed ratings, completes, and restarts
 it('ignores ratings until revealed and ignores unknown ratings', () => {
   const review = useFlashcardReview()
   review.start(revisionCards)
-  for (const rating of ['again', 'hard', 'easy']) review.rate(rating)
+  for (const rating of ['practise', 'remembered']) review.rate(rating)
   review.flipped.value = true
-  review.rate('unknown')
+  for (const rating of ['unknown', 'again', 'hard', 'easy']) review.rate(rating)
   expect(review.reviews.value).toBe(0)
   expect(review.queue.value).toEqual(revisionCards)
   expect(review.remembered.value).toEqual([])

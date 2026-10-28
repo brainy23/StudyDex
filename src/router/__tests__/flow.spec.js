@@ -9,6 +9,7 @@ import { getCurrentProfile } from '../../services/profileService'
 import { useTimer } from '../../components/timer/useTimer'
 import { getStudyCatalogue, getTopicLesson, getStudyQuestions } from '../../services/studyService'
 import { useTopicCompletion } from '../../composables/useTopicCompletion'
+import { useArenaTransition } from '../../composables/useArenaTransition'
 
 const { getSession, signInWithPassword, getUser, signOut } = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -64,6 +65,7 @@ beforeEach(() => {
   getSession.mockResolvedValue({ data: { session: null }, error: null })
 })
 afterEach(() => {
+  useArenaTransition().cancel()
   useTimer().endSession()
   wrapper?.unmount()
   vi.useRealTimers()
@@ -377,7 +379,7 @@ it('opens profile-level lessons from Poké Lab and supports learning mode naviga
   await lab.trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/study-decks')
-  expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
   expect(getStudyCatalogue).toHaveBeenCalledWith('level-3')
   const revision = wrapper
     .findAll('.study-mode-nav button')
@@ -409,7 +411,7 @@ it('keeps Poké Arena separate from the Poké Lab study screen', async () => {
   await lab.trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/study-decks')
-  expect(wrapper.get('.study-overview h2').text()).toBe('Test topic')
+  expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
 })
 
 it('keeps Poké Lab and Arena available when the buddy is sleeping at night', async () => {
@@ -467,7 +469,7 @@ it('keeps Town behind login when a signed-out visitor follows the shared link', 
   expect(wrapper.find('.world-page').exists()).toBe(false)
 })
 
-it('uses Quiz me! for a covered topic and pauses the Lab timer on the way to Arena', async () => {
+it('uses Go to Poké Arena for a covered topic and pauses the Lab timer on the way to Arena', async () => {
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
   const completion = useTopicCompletion()
   completion.bindStudent(studentProfile.id, studentProfile.school_level_id)
@@ -475,30 +477,34 @@ it('uses Quiz me! for a covered topic and pauses the Lab timer on the way to Are
   const router = await open('/study-decks')
   expect(getStudyQuestions).not.toHaveBeenCalled()
   await wrapper.findAll('button').find((button) => button.text() === 'Start Study Session').trigger('click')
-  await wrapper.findAll('button').find((button) => button.text() === 'Quiz me!').trigger('click')
+  await wrapper.findAll('button').find((button) => button.text() === 'Go to Poké Arena').trigger('click')
+  expect(useArenaTransition().state.active).toBe(true)
+  expect(useTimer().state.status).toBe('paused')
+  expect(router.currentRoute.value.name).toBe('study-decks')
+  await useArenaTransition().skip()
   await flushPromises()
   expect(router.currentRoute.value.name).toBe('quiz')
-  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1' })
+  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic_id: 'topic-1' })
   expect(useTimer().state.status).toBe('paused')
   expect(getStudyQuestions).toHaveBeenCalledWith('topic-1', 'quiz')
   await wrapper.get('a[href^="/study-decks"]').trigger('click')
   await flushPromises()
-  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1', mode: 'flashcards' })
+  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic_id: 'topic-1', mode: 'flashcards' })
   expect(wrapper.find('.study-flashcards').exists()).toBe(true)
   expect(useTimer().state.status).toBe('paused')
 })
 
 it.each([
-  ['mode=quiz', []],
+  ['mode=quiz', [['topic-1', 'quiz']]],
   ['mode=quiz&battle=boss', [['topic-1', 'boss_battle']]],
   ['mode=boss_battle', [['topic-1', 'boss_battle']]],
 ])('redirects the old Lab assessment URL %s into Arena', async (query, expectedQuestionCalls) => {
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
   const router = await open(`/study-decks?subject=maths&topic=topic-1&${query}`)
   expect(router.currentRoute.value.name).toBe('quiz')
-  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic: 'topic-1' })
+  expect(router.currentRoute.value.query).toMatchObject({ subject: 'maths', topic_id: 'topic-1' })
   expect(getTopicLesson).not.toHaveBeenCalled()
   expect(getStudyQuestions.mock.calls).toEqual(expectedQuestionCalls)
-  expect(wrapper.text().includes('Finish this topic in Poké Lab to unlock its quiz')).toBe(!expectedQuestionCalls.length)
+  expect(wrapper.find('.study-question').exists()).toBe(false)
   expect(wrapper.find('.study-screen').exists()).toBe(false)
 })

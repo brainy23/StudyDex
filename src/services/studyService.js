@@ -72,7 +72,7 @@ export async function getStudyQuestions(topicId, purpose) {
 
 export async function getTopicLesson(topicId) {
   const client = getSupabase()
-  const sections = ['goals', 'concepts', 'questions']
+  const sections = ['goals', 'concepts']
   const results = await Promise.allSettled([
     rows(
       client
@@ -88,10 +88,9 @@ export async function getTopicLesson(topicId) {
         .eq('topic_id', topicId)
         .order('concept_order'),
     ),
-    getStudyQuestions(topicId, 'quick_check'),
   ])
-  // A denied question-options request must not hide an otherwise readable lesson.
-  const lesson = { goals: [], concepts: [], questions: [], errors: {} }
+  // Learning stays independent of all assessment questions and answer keys.
+  const lesson = { goals: [], concepts: [], errors: {} }
   results.forEach((result, index) => {
     const section = sections[index]
     if (result.status === 'fulfilled') lesson[section] = result.value

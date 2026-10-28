@@ -38,7 +38,7 @@ it('requires a real profile level and filters/orders the topic catalogue', async
   expect(query.order).toHaveBeenCalledWith('topic_order', { nullsFirst: false })
 })
 
-it('orders goals and concepts and keeps the lesson available when quick-check access is denied', async () => {
+it('orders goals and concepts without requesting assessment questions or answer keys', async () => {
   responses.topic_concepts = { data: [{ id: 'concept-1' }], error: null }
   responses.questions = {
     data: null,
@@ -46,17 +46,24 @@ it('orders goals and concepts and keeps the lesson available when quick-check ac
   }
   const result = await getTopicLesson('topic-1')
   expect(result.concepts).toEqual([{ id: 'concept-1' }])
-  expect(result.errors.questions.code).toBe('42501')
+  expect(result.errors).toEqual({})
+  expect(result).not.toHaveProperty('questions')
   expect(
     requests.find((request) => request.table === 'topic_learning_goals').query.order,
   ).toHaveBeenCalledWith('goal_order')
   expect(
     requests.find((request) => request.table === 'topic_concepts').query.order,
   ).toHaveBeenCalledWith('concept_order')
-  expect(requests.find((request) => request.table === 'questions').query.eq).toHaveBeenCalledWith(
-    'question_purpose',
-    'quick_check',
-  )
+  expect(requests.map((request) => request.table)).toEqual(['topic_learning_goals', 'topic_concepts'])
+})
+
+it('retains partial lesson content and reports denied concepts independently', async () => {
+  responses.topic_learning_goals = { data: [{ id: 'goal-1' }], error: null }
+  responses.topic_concepts = { data: null, error: { code: '42501' } }
+  const result = await getTopicLesson('topic-1')
+  expect(result.goals).toEqual([{ id: 'goal-1' }])
+  expect(result.concepts).toEqual([])
+  expect(result.errors.concepts).toEqual({ code: '42501' })
 })
 
 it.each(['quiz', 'boss_battle'])(

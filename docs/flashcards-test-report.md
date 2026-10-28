@@ -1,3 +1,8 @@
+> Historical report: this describes the earlier Again/Hard/Easy controls. The current
+> flow uses I Remembered and Practise Again; see
+> [the current learning-flow report](learning-flow-test-report.md) and
+> [the Lab/Arena contract](lab-arena-separation.md).
+
 # Flashcards integration and functional test report
 
 Date: 24 October 2026 (Asia/Singapore).

@@ -1,11 +1,15 @@
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useFlashcardReview } from '../../composables/useFlashcardReview'
 import { studyErrorMessage } from '../../services/studyService'
 import StudyImage from './StudyImage.vue'
 
-const props = defineProps({ resource: { type: Object, required: true } })
-defineEmits(['retry', 'mode'])
+const props = defineProps({
+  resource: { type: Object, required: true },
+  arenaBusy: { type: Boolean, default: false },
+})
+defineEmits(['retry', 'mode', 'arena', 'topics'])
+const content = ref(null)
 const { cards, queue, remembered, reviews, flipped, current, complete, start, rate } =
   useFlashcardReview()
 const cardNumber = computed(() => cards.value.findIndex((card) => card.id === current.value?.id) + 1)
@@ -16,12 +20,27 @@ watch(
   },
   { immediate: true },
 )
+
+async function focusCard() {
+  await nextTick()
+  content.value?.querySelector('.study-flip-card, .study-completion h3')?.focus()
+}
+
+function reviewCard(choice) {
+  rate(choice)
+  focusCard()
+}
+
+function restartDeck() {
+  start(cards.value)
+  focusCard()
+}
 </script>
 
 <template>
-  <div class="study-flashcards">
+  <div ref="content" class="study-flashcards">
     <h2>Flashcard Revision</h2>
-    <p v-if="resource.loading" role="status">Loading flashcards…</p>
+    <p v-if="resource.loading" class="study-loading" role="status">Loading flashcards…</p>
     <div v-else-if="resource.error" class="study-message" role="alert">
       <p>{{ studyErrorMessage(resource.error, 'Flashcards') }}</p>
       <button class="study-button" @click="$emit('retry')">Try again</button>
@@ -32,15 +51,15 @@ watch(
       <button class="study-button" @click="$emit('mode', 'learn')">Back to Learn</button>
     </div>
     <div v-else-if="complete" class="study-completion">
-      <h3>Revision complete!</h3>
-      <p>You remembered {{ remembered.length }} cards after {{ reviews }} reviews.</p>
+      <h3 tabindex="-1">Flashcards Completed!</h3>
+      <p>{{ remembered.length }} unique cards remembered · {{ reviews }} total review attempts</p>
+      <p>Great practice! Take your next step when you feel ready.</p>
       <p class="study-note">This revision progress is kept for this visit only.</p>
       <div class="study-button-row">
-        <button class="study-button" @click="start(cards)">Restart Deck</button>
-        <button class="study-button study-button-secondary" @click="$emit('mode', 'learn')">
-          Back to Learn
-        </button>
+        <button class="study-button" @click="$emit('topics')">Revise Another Topic</button>
+        <button class="study-button" :disabled="arenaBusy" @click="$emit('arena')">Go to Poké Arena</button>
       </div>
+      <button class="study-button study-button-secondary" @click="restartDeck">Restart Deck</button>
     </div>
     <template v-else-if="current">
       <p class="study-card-position">Card {{ cardNumber }} of {{ cards.length }}</p>
@@ -73,19 +92,16 @@ watch(
           </span>
         </span>
       </button>
-      <div class="study-button-row study-ratings">
-        <button class="study-button study-again" :disabled="!flipped" @click="rate('again')">
-          Again
+      <div v-if="flipped" class="study-button-row study-ratings">
+        <button class="study-button study-remembered" @click="reviewCard('remembered')">
+          I Remembered
         </button>
-        <button class="study-button study-hard" :disabled="!flipped" @click="rate('hard')">
-          Hard
-        </button>
-        <button class="study-button study-easy" :disabled="!flipped" @click="rate('easy')">
-          Easy
+        <button class="study-button study-button-secondary" @click="reviewCard('practise')">
+          Practise Again
         </button>
       </div>
       <p class="study-note">
-        Again brings it back soon. Hard repeats it later. Easy marks it remembered.
+        Reveal the answer, then choose I Remembered or Practise Again.
       </p>
       <p class="study-note">Revision progress is kept for this visit only.</p>
     </template>

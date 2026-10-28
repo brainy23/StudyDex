@@ -37,7 +37,7 @@ beforeEach(() => {
 })
 afterEach(() => wrapper?.unmount())
 
-async function open(query = {}) {
+async function open(query = {}, preview = true) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -51,9 +51,14 @@ async function open(query = {}) {
   await router.isReady()
   wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
   await flushPromises()
+  if (preview) await previewQuestions()
   return router
 }
 const button = (text) => wrapper.findAll('button').find((item) => item.text() === text)
+async function previewQuestions() {
+  const preview = button('Preview Questions')
+  if (preview) await preview.trigger('click')
+}
 
 it('opens an unlocked quiz using the saved school level, without fetching learning resources', async () => {
   await open()
@@ -69,42 +74,45 @@ it('opens an unlocked quiz using the saved school level, without fetching learni
   expect(wrapper.find('.study-flashcards').exists()).toBe(false)
 })
 
-it('allows direct Arena entry but locks an unfinished topic quiz and links to its lesson', async () => {
+it('allows direct Arena entry without Learn completion and offers the topic overview', async () => {
   localStorage.clear()
-  const router = await open({ subject: 'maths', topic: 'topic-1' })
-  expect(wrapper.text()).toContain('Finish this topic in Poké Lab to unlock its quiz')
-  expect(wrapper.text()).toContain('0 of 1 topics covered')
-  expect(getStudyQuestions).not.toHaveBeenCalled()
-  await button('Study this topic').trigger('click')
+  const router = await open({ subject: 'maths', topic_id: 'topic-1' }, false)
+  expect(wrapper.text()).toContain('0 of 1 topics read')
+  expect(getStudyQuestions.mock.calls).toEqual([['topic-1', 'quiz']])
+  expect(wrapper.find('.study-question').exists()).toBe(false)
+  expect(button('Start Quiz').attributes('disabled')).toBeDefined()
+  expect(wrapper.text()).toContain('Secure grading is not available yet')
+  await button('Review Entire Topic').trigger('click')
   await flushPromises()
-  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic: 'topic-1', mode: 'learn' })
+  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic_id: 'topic-1', mode: 'learn', review: 'topic' })
   expect(router.currentRoute.value.name).toBe('study-decks')
 })
 
-it('keeps Boss Battles independently accessible before completing a topic', async () => {
+it('keeps Boss Battles separate from regular quizzes before completing a topic', async () => {
   localStorage.clear()
   await open()
   await button('Boss Battle').trigger('click')
   await flushPromises()
-  expect(getStudyQuestions.mock.calls).toEqual([['topic-1', 'boss_battle']])
+  expect(getStudyQuestions.mock.calls).toEqual([['topic-1', 'quiz'], ['topic-1', 'boss_battle']])
+  expect(wrapper.find('.study-question').exists()).toBe(false)
+  await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe(bossQuestions[0].question_text)
   await button('Topic Quiz').trigger('click')
   await flushPromises()
-  expect(wrapper.text()).toContain('Finish this topic in Poké Lab to unlock its quiz')
-  expect(getStudyQuestions).toHaveBeenCalledTimes(1)
+  await previewQuestions()
+  expect(wrapper.get('.study-question legend').text()).toBe(quizQuestions[0].question_text)
+  expect(getStudyQuestions).toHaveBeenCalledTimes(2)
 })
 
-it('restores covered-topic unlocks on a fresh Arena mount and rejects another student’s unlocks', async () => {
+it('keeps reading history separate by account without treating it as assessment eligibility', async () => {
   await open()
-  expect(wrapper.find('.study-question').exists()).toBe(true)
-  wrapper.unmount()
-  await open()
-  expect(wrapper.find('.study-question').exists()).toBe(true)
+  expect(wrapper.text()).toContain('1 of 1 topics read')
   wrapper.unmount()
   getCurrentProfile.mockResolvedValue({ ...studentProfile, id: 'another-student' })
-  await open()
+  await open({}, false)
   expect(wrapper.find('.study-question').exists()).toBe(false)
-  expect(wrapper.text()).toContain('0 of 1 topics covered')
+  expect(wrapper.text()).toContain('0 of 1 topics read')
+  expect(button('Preview Questions')).toBeDefined()
 })
 
 it('keeps quiz and Boss Battle choices separate and reviews choices without claiming a score or saved attempt', async () => {
@@ -113,6 +121,7 @@ it('keeps quiz and Boss Battle choices separate and reviews choices without clai
   await wrapper.find('input[type="radio"]').setValue()
   await button('Boss Battle').trigger('click')
   await flushPromises()
+  await previewQuestions()
   expect(router.currentRoute.value.query.battle).toBe('boss')
   expect(wrapper.get('.study-quiz h2').text()).toBe('Boss Battle')
   expect(wrapper.find('input[type="radio"]').element.checked).toBe(false)
@@ -138,7 +147,7 @@ it('returns to revision in Lab with the selected subject and topic', async () =>
   await wrapper.get('a[href^="/study-decks"]').trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.name).toBe('study-decks')
-  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic: 'topic-1', mode: 'flashcards' })
+  expect(router.currentRoute.value.query).toEqual({ subject: 'maths', topic_id: 'topic-1', mode: 'flashcards' })
 })
 
 it('loads another topic, preserves the assessment type, and retains choices when returning', async () => {
@@ -155,7 +164,8 @@ it('loads another topic, preserves the assessment type, and retains choices when
   await wrapper.find('input[type="radio"]').setValue()
   await wrapper.get('#arena-subject').setValue('science')
   await flushPromises()
-  expect(router.currentRoute.value.query).toEqual({ subject: 'science', topic: 'science-topic', battle: 'boss' })
+  expect(router.currentRoute.value.query).toEqual({ subject: 'science', topic_id: 'science-topic', battle: 'boss' })
+  await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe('science-topic boss_battle question')
   expect(getStudyQuestions).toHaveBeenCalledWith('science-topic', 'boss_battle')
   await wrapper.get('#arena-subject').setValue('maths')
@@ -186,6 +196,7 @@ it.each([
   await button('Try again').trigger('click')
   await flushPromises()
   expect(wrapper.find('.study-quiz [role="alert"]').exists()).toBe(false)
+  await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe(quizQuestions[0].question_text)
   expect(getStudyQuestions).toHaveBeenCalledTimes(2)
 })
@@ -202,9 +213,11 @@ it('shows loading while questions are pending and isolates a late quiz response 
   finishQuiz(structuredClone(quizQuestions))
   await flushPromises()
   expect(wrapper.get('.study-quiz h2').text()).toBe('Boss Battle')
+  await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe(bossQuestions[0].question_text)
   await button('Topic Quiz').trigger('click')
   await flushPromises()
+  await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe(quizQuestions[0].question_text)
 })
 
@@ -250,5 +263,34 @@ it('supports retrying the catalogue when Arena cannot open', async () => {
   expect(wrapper.get('[role="alert"]').text()).toContain('Catalogue unavailable')
   await button('Try again').trigger('click')
   await flushPromises()
+  await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe(quizQuestions[0].question_text)
+})
+
+it('respects canonical topic_id over legacy topic and does not auto-start a quiz preview', async () => {
+  getStudyCatalogue.mockResolvedValue({
+    ...structuredClone(studyCatalogue),
+    topics: [...studyCatalogue.topics, { ...studyCatalogue.topics[0], id: 'science-topic', subject_id: 'science', name: 'living things' }],
+  })
+  const router = await open({ topic_id: 'science-topic', topic: 'topic-1' }, false)
+  expect(getStudyQuestions.mock.calls).toEqual([['science-topic', 'quiz']])
+  expect(wrapper.get('.main-study > .study-eyebrow').text()).toBe('Science · Living Things')
+  expect(wrapper.get('.study-quiz h2').text()).toBe('Topic Quiz')
+  expect(wrapper.find('.study-question').exists()).toBe(false)
+  expect(button('Start Quiz').attributes('disabled')).toBeDefined()
+  await previewQuestions()
+  expect(wrapper.find('.study-question').exists()).toBe(true)
+  expect(router.currentRoute.value.query.topic_id).toBe('science-topic')
+})
+
+it('does not substitute Boss Battle questions or infer grades when the regular quiz is missing', async () => {
+  getStudyQuestions.mockImplementation(async (_id, purpose) => purpose === 'quiz' ? [] : structuredClone(bossQuestions))
+  await open({ topic_id: 'topic-1', score: '0', concept_id: 'concept-1' }, false)
+  expect(wrapper.text()).toContain('There are no regular quiz questions')
+  expect(getStudyQuestions.mock.calls).toEqual([['topic-1', 'quiz']])
+  expect(wrapper.find('.study-question').exists()).toBe(false)
+  expect(button('Review Weak Concepts')).toBeUndefined()
+  expect(button('Retry Quiz')).toBeUndefined()
+  expect(wrapper.text()).not.toMatch(/you failed|weak concepts|0%/i)
+  expect(button('Review Entire Topic')).toBeDefined()
 })

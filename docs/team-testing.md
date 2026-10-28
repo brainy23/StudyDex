@@ -32,28 +32,33 @@ has limited test content, so some subjects or question banks may be empty.
 2. **Avatar sync:** change the avatar in Trainer House's wardrobe, return to Town,
    then open Edit Profile. Check that the saved avatar matches. Try the reverse
    direction too. The Trainer House door returns to Town.
-3. **Poké Lab:** open a topic and go through the overview, learning goals, concepts,
-   examples and ungraded understanding checks. Check the centered header progress
-   and the Quiz me! button on the right at desktop and smaller window sizes.
-4. **Flashcards:** flip cards and use Again, Hard and Easy. Complete the deck and
-   try Restart Deck. Start the study timer and check that changing learning modes
-   keeps it running, while leaving Lab pauses it.
-5. **Topic quiz:** choose Finish topic after the final concept. Quiz me! should
-   become enabled and open that topic in Arena. If quiz questions exist, select
-   answers and review the choices. Otherwise, an empty-bank message is expected.
-6. **Arena navigation:** enter directly from Town. Unfinished topic quizzes should
-   offer Study this topic. Boss Battles can be opened independently. Revise in
-   Poké Lab returns to the selected topic's Flashcards.
-7. **Multiple topics:** when two topics have content, complete both and check that
-   their quizzes remain unlocked after switching topics or reviewing one quiz.
-   The automated tests also cover this flow using two synthetic topics.
+3. **Poké Lab:** open the overview and learning goals, then read concepts and worked
+   examples. There should be no MCQs or True/False checks. Use Previous, Next and the
+   concept roadmap, and check capitalization and concept progress.
+4. **Flashcards:** reveal the answer, then use I Remembered or Practise Again. Complete
+   the deck and check unique remembered cards, total attempts and Restart Deck. Start
+   the study timer and check that mode changes keep it running; leaving Lab pauses it.
+5. **Finish Topic:** on the final concept, choose Finish Topic. Review with Flashcards
+   opens the same topic. Go to Poké Arena preselects that topic's regular quiz. Neither
+   action submits a quiz, grants XP or forces a navigation choice.
+6. **Arena navigation:** enter directly from Town, Learn completion and Flashcard
+   completion. Learn completion is not a prerequisite. Check the selected topic_id.
+   Missing regular quiz questions show an unavailable state; Boss Battles stay separate.
+   Start Quiz remains disabled until secure grading is implemented. If questions exist,
+   Preview Questions explicitly opens the ungraded choices. Review Entire Topic returns
+   to the topic overview; Revise in Poké Lab opens that topic's Flashcards.
+7. **Revise Another Topic:** complete Flashcards and return to topic selection. The saved
+   school level stays the same. Choose another populated topic when available, or check
+   the no-other-topics message and revisit/restart the existing deck. Check desktop and
+   narrow layouts. Concept review links should open the requested matching concepts;
+   they do not prove weakness or imply that a real failed quiz exists.
 8. **Logout:** log out from Town, then try reopening a protected page. The app
    should require login again.
 
 ## Expected limitations
 
-- Topic unlocks are saved per student and school level in this browser. They
-  survive reloads but do not sync across devices; clearing site data removes them.
+- Reading completion is saved per student and school level in this browser. It
+  survives reloads but does not sync across devices and does not gate quizzes.
 - Lesson position, Flashcard revision and Arena answer choices are visit-only.
 - Arena is an assessment preview. Secure grading, saved attempts, scores and
   XP/rewards are pending. Reviewing choices does not submit a quiz.
@@ -77,8 +82,8 @@ pnpm exec vitest run
 pnpm run build
 ```
 
-Before publishing, all **187 tests across 18 files** and the production build
-passed. The build retains existing large-bundle warnings. Authenticated browser
-testing remains for this feedback round; it has not been verified by the agent.
-The opt-in Flashcard browser tests are documented separately in
-[flashcards-test-report.md](flashcards-test-report.md).
+Current verification, changed files and grading blockers are recorded in
+[learning-flow-test-report.md](learning-flow-test-report.md). The build retains existing
+large-bundle warnings. The opt-in live Flashcard suite is described in the historical
+[flashcards-test-report.md](flashcards-test-report.md); its controls now use I Remembered
+and Practise Again.
