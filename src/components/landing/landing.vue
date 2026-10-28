@@ -37,7 +37,7 @@ const clouds = [
 
     <div class="front">
       <img src="/backgrounds/studydex_logo.png" alt="StudyDex" class="logo" />
-      <a href="/landing-info" class="enter-btn">Start your journey</a>
+      <RouterLink to="/characterdesign" class="enter-btn">Start your journey</RouterLink>
     </div>
   </div>
 </template>
