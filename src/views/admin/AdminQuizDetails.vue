@@ -7,7 +7,7 @@ import AdminNav from '@/components/common/adminNav.vue'
 import {
   getAdminQuiz,
   saveAdminQuiz
-} from '@/data/adminQuizData'
+} from '/src/data/adminQuizData'
 
 const router = useRouter()
 const route = useRoute()
