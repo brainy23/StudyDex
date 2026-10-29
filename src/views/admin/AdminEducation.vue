@@ -282,13 +282,8 @@ function removeDeck(id) {
                 <!-- ACTION BUTTONS -->
                 <div class="col-2">
                   <div class="action-buttons">
+                    <router-link class="view-btn" :to="`/admin-education/${deck.id}`">View</router-link>
 
-                    <button
-                      class="view-btn"
-                      @click="openViewPanel(deck)"
-                    >
-                      ⏿ View
-                    </button>
                     <button
                       class="action-btn unban-btn"
                       :disabled="!deck.banned"

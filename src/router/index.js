@@ -6,6 +6,7 @@ import AdminEducation from '@/views/admin/AdminEducation.vue'
 import AdminQuiz from '@/views/admin/AdminQuiz.vue'
 import AdminAddQuiz from '@/views/admin/AdminAddQuiz.vue'
 import AdminAddDeck from '@/views/admin/AdminAddDeck.vue'
+import AdminEducationDetails from '@/views/admin/AdminEducationDetails.vue'
 
 
 const router = createRouter({
@@ -47,6 +48,10 @@ const router = createRouter({
       path: '/admin-adddeck',
       name: 'adminAddDeck',
       component: AdminAddDeck
+    },{
+      path: '/admin-education/:id',
+      name: 'adminEducationDetails',
+      component: AdminEducationDetails
     }
 
   ],
