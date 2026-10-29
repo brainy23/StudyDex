@@ -8,8 +8,6 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
-import { DEFAULT_WEATHER_LOCATION, useWeatherLocation } from '../composables/useWeatherLocation'
-
 
 
 // VUE TYPERR
@@ -18,10 +16,10 @@ import 'vue3-typer/dist/vue-typer.css'
 
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
+import TownBackground from '@/components/common/TownBackground.vue'
 
 
 const router = useRouter()
-const { getSavedLocation } = useWeatherLocation()
 
 const asset = '/town/'
 
@@ -152,350 +150,14 @@ function selectBuilding(building) {
   router.push(building.path)
 }
 
-const live = ref(true)
-const previewHour = ref(12)
-const currentTime = ref(new Date())
+// Component outputs used by the town's interactions.
+// ClockWeather owns weather/location; TownBackground owns time/lighting.
+const rainActive = ref(false)
+const buddySleeping = ref(false)
 
-let clockInterval
-
-// ==========================================
-// 1. WEATHER DATA
-// ==========================================
-const use_device_loc = ref(false)
-function chooseLocation(option){
-  use_device_loc.value = option
-}
-const isRaining = ref(false)
-const rainDataAvailable = ref(false)
-
-// Default: Singapore (fallback location)
-const latitude = ref(DEFAULT_WEATHER_LOCATION.latitude)
-const longitude = ref(DEFAULT_WEATHER_LOCATION.longitude)
-
-let weatherInterval
-let rainInterval
-
-// ==========================================
-// 2. REUSE THE LOCATION CHOSEN FOR THIS APP VISIT
-// ==========================================
-const showLocationModal = ref(false)
-
-let weatherStarted = false
-let weatherPageActive = false
-
-
-async function startWeather(locationPromise) {
-  if (weatherStarted) return
-
-  weatherStarted = true
-
-  // Close location modal
-  showLocationModal.value = false
-
-  const location = await locationPromise
-  if (!weatherPageActive) return
-  latitude.value = location.latitude
-  longitude.value = location.longitude
-
-  // Fetch weather using selected location
-  // fetchWeather()
-  fetchActualRain()
-
-  // Update weather every 10 minutes
-  // weatherInterval = setInterval(fetchWeather, 600000)
-
-  // Update rainfall every 5 minutes
-  rainInterval = setInterval(fetchActualRain, 300000)
-}
-
-
-
-// ==========================================
-// 3. FETCH WEATHER FROM OPEN-METEO
-// ==========================================
-// async function fetchWeather() {
-//   try {
-//     const response = await axios.get(
-//       'https://api.open-meteo.com/v1/forecast',
-//       {
-//         params: {
-//           latitude: latitude.value,
-//           longitude: longitude.value,
-//           current: 'temperature_2m,weather_code,cloud_cover,is_day',
-//           timezone: 'auto'
-//         }
-//       }
-//     )
-
-//     const current = response.data.current
-
-//     weatherCode.value = current.weather_code
-//     cloudCover.value = current.cloud_cover
-//     isDay.value = current.is_day === 1
-
-//     console.log('Open-Meteo weather:', current)
-
-//   } catch (error) {
-//     console.error('Error fetching weather:', error)
-//   }
-// }
-
-// ==========================================
-// 4. CALCULATE DISTANCE BETWEEN LOCATIONS
-// ==========================================
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371
-  const toRad = deg => deg * Math.PI / 180
-
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) *
-    Math.cos(toRad(lat2)) *
-    Math.sin(dLon / 2) ** 2
-
-  return 2 * R * Math.asin(Math.sqrt(a))
-}
-
-// ==========================================
-// 5. CHECK ACTUAL RAINFALL USING NEA
-// ==========================================
-async function fetchActualRain() {
-  try {
-    const response = await axios.get(
-      'https://api-open.data.gov.sg/v2/real-time/api/rainfall'
-    )
-
-    const { stations, readings } = response.data.data
-
-    const latest = readings?.[0]
-
-    if (!latest) {
-      rainDataAvailable.value = false
-      isRaining.value = false
-      return
-    }
-
-    // Only use recent rainfall measurements
-    const ageMinutes =
-      (Date.now() - new Date(latest.timestamp).getTime()) / 60000
-
-    if (
-      !Number.isFinite(ageMinutes) ||
-      ageMinutes < 0 ||
-      ageMinutes > 12
-    ) {
-      rainDataAvailable.value = false
-      isRaining.value = false
-      return
-    }
-
-    // Match each station with its rainfall reading
-    const rainValues = new Map(
-      latest.data.map(item => [
-        item.stationId,
-        item.value
-      ])
-    )
-
-    // Find nearest station with a valid reading
-    const nearestStation = stations
-      .filter(station =>
-        station.location &&
-        Number.isFinite(rainValues.get(station.id))
-      )
-      .map(station => ({
-        name: station.name,
-        distance: getDistance(
-          latitude.value,
-          longitude.value,
-          station.location.latitude,
-          station.location.longitude
-        ),
-        rainfall: rainValues.get(station.id)
-      }))
-      .filter(station => station.distance <= 2.5)
-      .sort((a, b) => a.distance - b.distance)[0]
-
-    // No sufficiently nearby station
-    if (!nearestStation) {
-      rainDataAvailable.value = false
-      isRaining.value = false
-      return
-    }
-
-    rainDataAvailable.value = true
-
-    // Rain only when nearby station measured rainfall
-    isRaining.value = nearestStation.rainfall > 0
-
-    console.log('Nearest station:', nearestStation.name)
-    console.log('Distance (km):', nearestStation.distance)
-    console.log('Rainfall (mm):', nearestStation.rainfall)
-    console.log('Is raining:', isRaining.value)
-
-  } catch (error) {
-    console.error('Error fetching NEA rainfall:', error)
-    rainDataAvailable.value = false
-    isRaining.value = false
-  }
-}
-
-const hour = computed(() => {
-  if (!live.value) return Number(previewHour.value)
-
-  const now = currentTime.value
-  return now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600
-})
-
-/*
-  Each row is a lighting keyframe.
-  Values smoothly transition between neighbouring keyframes.
-
-  Times are visual presets, not astronomical sunrise/sunset times.
-*/
-const frames = [
-  {
-    hour: 0, name: 'Night',
-    top: '#03091c', horizon: '#142744',
-    brightness: 0.5, saturation: 0.8,
-    cloud: 0.3, stars: 1, lights: 1, fireflies: 0.75,
-  },
-  {
-    hour: 5.5, name: 'Night',
-    top: '#081229', horizon: '#354564',
-    brightness: 0.38, saturation: 0.7,
-    cloud: 0.38, stars: 0.8, lights: 1, fireflies: 0.5,
-  },
-  {
-    hour: 8, name: 'Day',
-    top: '#258be0', horizon: '#c7eeff',
-    brightness: 1, saturation: 1.06,
-    cloud: 1, stars: 0, lights: 0, fireflies: 0,
-  },
-  {
-    hour: 12, name: 'Day',
-    top: '#1685df', horizon: '#c4efff',
-    brightness: 1.04, saturation: 1.1,
-    cloud: 1, stars: 0, lights: 0, fireflies: 0,
-  },
-  {
-    hour: 15.5, name: 'Afternoon',
-    top: '#579bd5', horizon: '#ffe0ad',
-    brightness: 1.02, saturation: 1.08,
-    cloud: 0.95, stars: 0, lights: 0, fireflies: 0,
-  },
-  {
-    hour: 18.5, name: 'Sunset',
-    top: '#67518e', horizon: '#ffad7b',
-    brightness: 0.82, saturation: 1.05,
-    cloud: 0.78, stars: 0.03, lights: 0.15, fireflies: 0.05,
-  },
-  {
-    hour: 19.25, name: 'Dusk',
-    top: '#30345f', horizon: '#a77b9d',
-    brightness: 0.58, saturation: 0.85,
-    cloud: 0.58, stars: 0.35, lights: 0.55, fireflies: 0.35,
-  },
-  {
-    hour: 20.5, name: 'Evening',
-    top: '#101f43', horizon: '#405477',
-    brightness: 0.43, saturation: 0.75,
-    cloud: 0.4, stars: 0.75, lights: 0.9, fireflies: 0.65,
-  },
-  {
-    hour: 22, name: 'Night',
-    top: '#03091c', horizon: '#142744',
-    brightness: 0.5, saturation: 0.8,
-    cloud: 0.3, stars: 1, lights: 1, fireflies: 0.75,
-  },
-]
-
-frames.push({ ...frames[0], hour: 24 })
-
-const lerp = (a, b, t) => a + (b - a) * t
-
-function mixColor(a, b, t) {
-  const rgb = hex => hex.match(/[a-f\d]{2}/gi).map(v => parseInt(v, 16))
-  const first = rgb(a)
-  const second = rgb(b)
-
-  return `rgb(${first.map((v, i) =>
-    Math.round(lerp(v, second[i], t))
-  ).join(',')})`
-}
-
-const lighting = computed(() => {
-  const h = hour.value
-  const index = frames.findIndex((frame, i) =>
-    i < frames.length - 1 &&
-    h >= frame.hour &&
-    h < frames[i + 1].hour
-  )
-
-  const a = frames[Math.max(0, index)]
-  const b = frames[Math.max(0, index) + 1]
-  const progress = (h - a.hour) / (b.hour - a.hour)
-
-  // Smooth easing between lighting keyframes
-  const t = progress * progress * (3 - 2 * progress)
-
-  const result = {
-    name: t < 0.5 ? a.name : b.name,
-    top: mixColor(a.top, b.top, t),
-    horizon: mixColor(a.horizon, b.horizon, t),
-  }
-
-  for (const key of [
-    'brightness', 'saturation', 'cloud',
-    'stars', 'lights', 'fireflies',
-  ]) {
-    result[key] = lerp(a[key], b[key], t)
-  }
-
-  return result
-})
-
-const worldStyle = computed(() => ({
-  filter: `brightness(${lighting.value.brightness})
-           saturate(${lighting.value.saturation})`,
-}))
-
-// Sun crosses the sky between 06:00 and 19:00.
-// Moon crosses between 19:00 and 06:00.
-function celestialStyle(isMoon) {
-  const h = hour.value
-  const progress = isMoon
-    ? ((h - 19 + 24) % 24) / 11
-    : (h - 6) / 13
-
-  const visible =
-  progress > 0 &&
-  progress < 1 &&
-  !rainActive.value
-  const p = Math.max(0, Math.min(1, progress))
-
-  return {
-    left: `${12 + p * 76}%`,
-    top: `${25 - Math.sin(p * Math.PI) * 19}%`,
-    opacity: visible
-      ? Math.min(1, p * 10, (1 - p) * 10)
-      : 0,
-  }
-}
 // ==========================================
 // RAIN + UMBRELLA
 // ==========================================
-
-// Set true to test. Set false to use actual weather.
-const rainPreview = ref(false)
-
-
-const rainActive = computed(() =>
-  rainPreview.value || isRaining.value
-)
 
 const rainCanvas = ref(null)
 const umbrellaImage = ref(null)
@@ -930,7 +592,7 @@ watch(goalsOpen, (isOpen) => {
 })
 
 // TO-DOS — shared by the notepad and the quest screen.
-// Completion dates follow the device's local calendar, not the town preview clock.
+// To-do completion dates follow the device's local calendar.
 const TODO_STORAGE_KEY = 'studydex-todos-v1'
 const todos = ref([])
 const todoDialog = ref(null)
@@ -1038,26 +700,11 @@ function deleteTodo(todo) {
 
 
 onMounted(() => {
-  weatherPageActive = true
-  const savedLocation = getSavedLocation()
-  if (savedLocation) {
-    console.log('hm?')
-    startWeather(savedLocation)
-  } else {
-    console.log('modal true leh')
-    showLocationModal.value = true
-  }
-
   // Existing to-do setup
   loadTodos()
   scheduleTodoCleanup()
   document.addEventListener('visibilitychange', refreshTodosOnReturn)
   window.addEventListener('focus', refreshTodosOnReturn)
-
-  // Update clock every second
-  clockInterval = setInterval(() => {
-    currentTime.value = new Date()
-  }, 1000)
 
   // Retrieve Pokeball
   getPokeBall()
@@ -1066,15 +713,11 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  weatherPageActive = false
 
   clearTimeout(todoMidnightTimer)
   document.removeEventListener('visibilitychange', refreshTodosOnReturn)
   window.removeEventListener('focus', refreshTodosOnReturn)
 
-  clearInterval(clockInterval)
-  clearInterval(weatherInterval)
-  clearInterval(rainInterval)
 
   clearTimeout(questBootTimer)
 })
@@ -1083,38 +726,6 @@ onUnmounted(() => {
 function closeGoals() {
   goalsOpen.value = false
 }
-
-// const defaultBuddy = {
-//   id: 25,
-//   name: 'Pikachu',
-// }
-
-// function loadActiveBuddy() {
-//   try {
-//     const saved = JSON.parse(
-//       localStorage.getItem('studydex-active-buddy')
-//     )
-
-//     if (
-//       saved &&
-//       Number.isInteger(saved.id) &&
-//       saved.id > 0 &&
-//       typeof saved.name === 'string' &&
-//       saved.name.trim()
-//     ) {
-//       return {
-//         id: saved.id,
-//         name: saved.name,
-//       }
-//     }
-//   } catch {
-//     // Use Pikachu if saved data is missing or unreadable.
-//   }
-
-//   return { ...defaultBuddy }
-// }
-
-// const activeBuddy = ref(loadActiveBuddy())
 
 // POKÉAPI BUDDY DATA
 const buddyData = ref(null)
@@ -1224,12 +835,6 @@ function setActiveBuddy(pokemon) {
     }
   })
 }
-// Sleep from 10 PM until 6 AM.
-// Uses your existing clock, including the time preview.
-const buddySleeping = computed(() =>
-  hour.value >= 22 || hour.value < 6
-)
-
 const ballShaking = ref(false)
 
 function shakePokeball() {
@@ -1719,17 +1324,9 @@ watch(
     />
 
     <ClockWeather
-      :use-device-location=use_device_loc
-    />
-
-
-    <!-- <ClockWeather
       :use-device-location="true"
-      :hour="hour"
-      :period="lighting.name"
-      :rain-preview="rainPreview"
-      @rain-change="isRaining = $event"
-    /> -->
+      @rain-change="rainActive = $event"
+    />
   </header>
 
   <!-- Click outside to dismiss the profile menu -->
@@ -2127,81 +1724,10 @@ watch(
   </aside>
 
       <div class="world-scene">
-        <!-- Sky colour changes continuously -->
-        <div
-          class="layer sky"
-          :style="{
-            background: `linear-gradient(
-              to bottom,
-              ${lighting.top} 0%,
-              ${lighting.horizon} 30%
-            )`,
-          }"
-        ></div>
-
-        <img
-          class="celestial sun"
-          :src="asset + 'bg_sun.png'"
-          :style="celestialStyle(false)"
-          alt=""
+        <TownBackground
+          :rain-active="rainActive"
+          @sleep-change="buddySleeping = $event"
         />
-
-        <img
-          class="celestial moon"
-          :src="asset + 'bg_moon.png'"
-          :style="celestialStyle(true)"
-          alt=""
-        />
-
-        <div
-          class="layer"
-          :style="{ opacity: rainActive ? 0 : lighting.stars }"
-        >
-          <img
-            class="layer stars"
-            :src="asset + 'bg_stars.png'"
-            alt=""
-          />
-        </div>
-
-        <div
-          class="layer"
-          :style="{
-            opacity: lighting.cloud,
-            filter: `brightness(${lighting.brightness})`,
-          }"
-        >
-          <img class="layer clouds" :src="asset + 'bg_clouds.png'" alt="" />
-        </div>
-
-        <!-- One fixed world prevents geometry shifting -->
-        <img
-          class="layer"
-          :src="asset + 'building_img.png'"
-          :style="worldStyle"
-          alt="StudyDex world with an arena, laboratory and trainer house"
-        />
-
-        <!-- Building lights -->
-        <img
-          class="layer building-lights"
-          :src="asset + 'bg_buildinglights.png'"
-          :style="{ opacity: buddySleeping ? 0 : lighting.lights * 0.45 }"
-          alt=""
-        />
-
-
-
-        <div
-          class="layer"
-          :style="{ opacity: rainActive ? 0 : lighting.fireflies }"
-        >
-          <img
-            class="layer fireflies"
-            :src="asset + 'bg_firefly.png'"
-            alt=""
-          />
-        </div>
 
         <!-- Darken the town while raining -->
         <div
@@ -2315,7 +1841,6 @@ watch(
             </template>
           </div>
         </div>
-
 
 
         <!-- Building navigation -->
@@ -2639,81 +2164,13 @@ watch(
           </div>
         </div>
       </div>
-      <!-- LOCATION MODAL -->
-      <div
-        v-if="showLocationModal"
-        class="modal show d-block location-modal"
-        tabindex="-1"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="locationModalTitle"
-      >
-        <div class="modal-dialog modal-dialog-centered">
-          <div class="modal-content p-4">
 
-            <div class="location-header d-flex justify-content-between align-items-center">
-              <span>STUDYDEX / TOWN SETUP</span>
-            </div>
-
-            <div class="modal-body text-center px-0 pb-0">
-
-              <div
-                class="location-icon d-flex align-items-center justify-content-center mx-auto mb-3"
-              >
-                🗺️
-              </div>
-
-              <h2 id="locationModalTitle" class="mb-3">
-                Find Your Town!
-              </h2>
-
-              <p class="location-description">
-                Let your Pokémon experience the same weather as you!
-              </p>
-
-              <div class="d-flex justify-content-center gap-3 my-3 fs-4">
-                <span>☀️</span>
-                <span>🌤️</span>
-                <span>🌧️</span>
-              </div>
-
-              <p class="location-notice p-3">
-                Allow location access to experience
-                your local weather in Pokémon Town.
-              </p>
-
-              <div class="d-flex gap-3 mt-2">
-                <button
-                  type="button"
-                  class="btn location-allow w-50 py-3"
-                  @click="chooseLocation(true)"
-                >
-                  📍 Use My Location
-                </button>
-
-                <button
-                  type="button"
-                  class="btn location-skip w-50 py-3"
-                  @click="chooseLocation(false)"
-                >
-                  Not Now
-                </button>
-              </div>
-
-              <p class="text-muted small-note mt-2 mb-0">
-                Without location access, Singapore's default weather will be used.
-              </p>
-
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 </template>
 
 <style scoped>
 /* =====================================================
-   01. WORLD SCENE — BASE, LIGHTING, SKY, CLOUDS
+   01. WORLD SCENE — LAYOUT
    ===================================================== */
 .world-page {
   position: relative;
@@ -2736,86 +2193,6 @@ watch(
   height: 100%;
   pointer-events: none;
 }
-
-img.layer {
-  object-fit: fill;
-}
-
-.building-lights {
-  filter: saturate(0.65);
-}
-
-.celestial {
-  position: absolute;
-  width: 10%;
-  height: auto;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-
-  transition: opacity 1.5s ease;
-}
-
-.moon {
-  width: 7%;
-}
-
-.clouds {
-  inset: auto;
-  top: 0;
-  left: -5%;
-  width: 110%;
-  height: 100%;
-  max-width: none;
-  object-fit: fill;
-
-  animation: cloud-drift 80s ease-in-out infinite alternate;
-}
-
-.stars {
-  animation: twinkle 5s ease-in-out infinite alternate;
-}
-
-.fireflies {
-  animation: firefly-float 5s ease-in-out infinite alternate;
-}
-
-.preview-controls {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 16px;
-  color: white;
-  font: 14px system-ui, sans-serif;
-}
-
-.preview-controls input[type="range"] {
-  width: min(360px, 70vw);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .clouds,
-  .stars,
-  .fireflies {
-    animation: none;
-  }
-}
-
-@keyframes cloud-drift {
-  from { transform: translateX(-2%); }
-  to { transform: translateX(2%); }
-}
-@keyframes twinkle {
-  from { opacity: 0.65; }
-  to { opacity: 1; }
-}
-
-@keyframes firefly-float {
-  from { transform: translateY(0); opacity: 0.55; }
-  to { transform: translateY(-0.8%); opacity: 1; }
-}
-
 
 /* =========================================
    02. BUILDING NAVIGATION — BUTTONS + RESPONSIVE
@@ -5221,8 +4598,6 @@ img.layer {
 }
 
 
-
-
 /* =====================================================
    SHARED TO-DOS — BOOTSTRAP MODAL AND QUEST DEVICE
 ===================================================== */
@@ -5614,91 +4989,6 @@ img.layer {
 }
 @media (prefers-reduced-motion: reduce) { .todo-notepad[open] { animation: none; } }
 
-
-/* STUDYDEX LOCATION MODAL */
-
-.location-modal {
-  z-index: 2000;
-  background: rgba(10, 23, 48, 0.7);
-  backdrop-filter: blur(5px);
-}
-
-.location-modal .modal-dialog {
-  max-width: 380px;
-  margin-left: auto;
-  margin-right: auto;
-  width: calc(100% - 32px);
-}
-
-.location-modal .modal-content {
-  background: #fff9e8;
-  border: 3px solid #344967;
-  border-radius: 22px;
-  color: #293c60;
-  font-family: 'Nunito', sans-serif;
-}
-
-.location-header {
-  font-family: 'Silkscreen', monospace;
-  font-size: 10px;
-  color: #8f7440;
-}
-
-.location-icon {
-  width: 90px;
-  height: 90px;
-  background: #ffe68c;
-  border-radius: 20px;
-  font-size: 45px;
-}
-
-.location-modal h2 {
-  font-family: 'Silkscreen', monospace;
-  font-size: 22px;
-}
-
-.location-description {
-  color: #687791;
-  font-size: 14px;
-}
-
-.location-notice {
-  background: #f5ecd4;
-  border-radius: 12px;
-  color: #6c6046;
-  font-size: 12px;
-}
-
-.small-note {
-  font-size: 12px;
-}
-
-.location-allow,
-.location-skip {
-  border-radius: 12px;
-  font-weight: 800;
-  font-size: 12px;
-}
-
-.location-allow {
-  background: #ffde59;
-  color: #283957;
-  border: 2px solid #d6b73a;
-}
-
-.location-allow:hover {
-  background: #ffe880;
-}
-
-.location-skip {
-  background: #fffdf5;
-  color: #62718b;
-  border: 2px solid #d7cdb5;
-}
-
-.location-skip:hover {
-  background: #f5ecd4;
-}
 
 /* Fit the component into the existing town character space */
 .homepage-pokemon {

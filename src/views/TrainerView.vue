@@ -9,24 +9,17 @@ import { avatarOptions } from '../data/avatarOptions'
 import BackToHome from '../components/common/BackToHome.vue'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
+import TownBackground from '@/components/common/TownBackground.vue'
 
 // =====================================================
 // CONFIGURATION AND PAGE IMAGES
 // =====================================================
 
-
 const router = useRouter()
-const base = import.meta.env.BASE_URL
 const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 
-const images = {
-  room: `${base}trainer-home/trainer-home-v3.png`,
-  landscape: `${base}trainer-home/window-landscape-clean.png`,
-  sun: `${base}town/bg_sun.png`,
-  moon: `${base}town/bg_moon.png`,
-  stars: `${base}town/bg_stars.png`,
-  clouds: `${base}town/bg_clouds.png`
-}
+// Weather is fetched inside ClockWeather; this only forwards its output.
+const rainActive = ref(false)
 
 const failedImages = ref([])
 
@@ -35,242 +28,6 @@ function reportImageError(event) {
 
   if (!failedImages.value.includes(path)) {
     failedImages.value.push(path)
-  }
-}
-
-// =====================================================
-// CLOCK — FOR ROOM LIGHTING ONLY
-// =====================================================
-
-// ClockWeather.vue handles the displayed time.
-// This clock controls room lighting, sun, moon and stars.
-
-const currentTime = ref(new Date())
-
-let clockInterval = null
-
-function refreshClock() {
-  currentTime.value = new Date()
-}
-
-const hour = computed(() => {
-  const now = currentTime.value
-
-  return (
-    now.getHours() +
-    now.getMinutes() / 60 +
-    now.getSeconds() / 3600
-  )
-})
-
-// =====================================================
-// ROOM LIGHTING
-// =====================================================
-
-const frames = [
-  {
-    hour: 0,
-    name: 'Night',
-    top: '#03091c',
-    horizon: '#142744',
-    brightness: 0.5,
-    saturation: 0.8,
-    cloud: 0.3,
-    stars: 1,
-    lights: 1
-  },
-  {
-    hour: 5.5,
-    name: 'Night',
-    top: '#081229',
-    horizon: '#354564',
-    brightness: 0.38,
-    saturation: 0.7,
-    cloud: 0.38,
-    stars: 0.8,
-    lights: 1
-  },
-  {
-    hour: 8,
-    name: 'Day',
-    top: '#258be0',
-    horizon: '#c7eeff',
-    brightness: 1,
-    saturation: 1.06,
-    cloud: 1,
-    stars: 0,
-    lights: 0
-  },
-  {
-    hour: 12,
-    name: 'Day',
-    top: '#1685df',
-    horizon: '#c4efff',
-    brightness: 1.04,
-    saturation: 1.1,
-    cloud: 1,
-    stars: 0,
-    lights: 0
-  },
-  {
-    hour: 15.5,
-    name: 'Afternoon',
-    top: '#579bd5',
-    horizon: '#ffe0ad',
-    brightness: 1.02,
-    saturation: 1.08,
-    cloud: 0.95,
-    stars: 0,
-    lights: 0
-  },
-  {
-    hour: 18.5,
-    name: 'Sunset',
-    top: '#67518e',
-    horizon: '#ffad7b',
-    brightness: 0.82,
-    saturation: 1.05,
-    cloud: 0.78,
-    stars: 0.03,
-    lights: 0.15
-  },
-  {
-    hour: 19.25,
-    name: 'Dusk',
-    top: '#30345f',
-    horizon: '#a77b9d',
-    brightness: 0.58,
-    saturation: 0.85,
-    cloud: 0.58,
-    stars: 0.35,
-    lights: 0.55
-  },
-  {
-    hour: 20.5,
-    name: 'Evening',
-    top: '#101f43',
-    horizon: '#405477',
-    brightness: 0.43,
-    saturation: 0.75,
-    cloud: 0.4,
-    stars: 0.75,
-    lights: 0.9
-  },
-  {
-    hour: 22,
-    name: 'Night',
-    top: '#03091c',
-    horizon: '#142744',
-    brightness: 0.5,
-    saturation: 0.8,
-    cloud: 0.3,
-    stars: 1,
-    lights: 1
-  }
-]
-
-frames.push({ ...frames[0], hour: 24 })
-
-const lerp = (start, end, progress) =>
-  start + (end - start) * progress
-
-function mixColor(firstHex, secondHex, progress) {
-  const toRgb = hex =>
-    hex.match(/[a-f\d]{2}/gi).map(value => parseInt(value, 16))
-
-  const first = toRgb(firstHex)
-  const second = toRgb(secondHex)
-
-  const result = first.map((value, index) =>
-    Math.round(lerp(value, second[index], progress))
-  )
-
-  return `rgb(${result.join(',')})`
-}
-
-const lighting = computed(() => {
-  const index = frames.findIndex((frame, i) =>
-    i < frames.length - 1 &&
-    hour.value >= frame.hour &&
-    hour.value < frames[i + 1].hour
-  )
-
-  const safeIndex = Math.max(0, index)
-  const start = frames[safeIndex]
-  const end = frames[safeIndex + 1]
-
-  const progress = Math.max(
-    0,
-    Math.min(1, (hour.value - start.hour) / (end.hour - start.hour))
-  )
-
-  const smoothProgress = progress * progress * (3 - 2 * progress)
-
-  const result = {
-    name: smoothProgress < 0.5 ? start.name : end.name,
-    top: mixColor(start.top, end.top, smoothProgress),
-    horizon: mixColor(start.horizon, end.horizon, smoothProgress)
-  }
-
-  for (const key of [
-    'brightness',
-    'saturation',
-    'cloud',
-    'stars',
-    'lights'
-  ]) {
-    result[key] = lerp(start[key], end[key], smoothProgress)
-  }
-
-  return result
-})
-
-const skyStyle = computed(() => ({
-  background: `linear-gradient(
-    to bottom,
-    ${lighting.value.top} 0%,
-    ${lighting.value.horizon} 55%,
-    ${lighting.value.horizon} 100%
-  )`
-}))
-
-const landscapeStyle = computed(() => ({
-  filter: `
-    brightness(${lighting.value.brightness})
-    saturate(${lighting.value.saturation})
-  `
-}))
-
-const cloudStyle = computed(() => ({
-  opacity: lighting.value.cloud,
-  filter: `brightness(${lighting.value.brightness})`
-}))
-
-const roomStyle = computed(() => ({
-  filter: `
-    brightness(${0.55 + lighting.value.brightness * 0.45})
-    saturate(${0.9 + lighting.value.saturation * 0.1})
-  `
-}))
-
-const sunsetStrength = computed(() =>
-  Math.max(0, 1 - Math.abs(hour.value - 18.3) / 2)
-)
-
-function celestialStyle(isMoon) {
-  const progress = isMoon
-    ? ((hour.value - 19 + 24) % 24) / 11
-    : (hour.value - 6) / 13
-
-  const visible = progress > 0 && progress < 1
-  const position = Math.max(0, Math.min(1, progress))
-
-  return {
-    left: `${18 + position * 64}%`,
-    top: `${48 - Math.sin(position * Math.PI) * 36}%`,
-    opacity: visible
-      ? Math.min(1, position * 12, (1 - position) * 12)
-      : 0
   }
 }
 
@@ -718,16 +475,6 @@ function openRoomPage(link) {
 // =====================================================
 
 onMounted(() => {
-  // Update room lighting every second
-  refreshClock()
-  clockInterval = setInterval(refreshClock, 1000)
-
-  // Refresh after returning to the tab
-  document.addEventListener(
-    'visibilitychange',
-    refreshClock
-  )
-
   // Load trainer profile
   loadTrainerProfile()
 
@@ -739,13 +486,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   avatarPageActive = false
-
-  clearInterval(clockInterval)
-
-  document.removeEventListener(
-    'visibilitychange',
-    refreshClock
-  )
 
   window.removeEventListener(
     'focus',
@@ -760,79 +500,12 @@ onUnmounted(() => {
 
     <div class="trainer-scene">
 
-      <div class="window-view" aria-hidden="true">
-
-        <div
-          class="outdoor-layer sky-layer"
-          :style="skyStyle"
-        ></div>
-
-        <div
-          class="outdoor-layer stars-layer"
-          :style="{ opacity: lighting.stars }"
-        >
-          <img
-            class="stars-image"
-            :src="images.stars"
-            alt=""
-            draggable="false"
-            @error="reportImageError"
-          />
-        </div>
-
-        <div
-          class="outdoor-layer clouds-layer"
-          :style="cloudStyle"
-        >
-          <img
-            class="clouds-image"
-            :src="images.clouds"
-            alt=""
-            draggable="false"
-            @error="reportImageError"
-          />
-        </div>
-
-        <img
-          class="celestial sun-image"
-          :src="images.sun"
-          :style="celestialStyle(false)"
-          alt=""
-          draggable="false"
-          @error="reportImageError"
-        />
-
-        <img
-          class="celestial moon-image"
-          :src="images.moon"
-          :style="celestialStyle(true)"
-          alt=""
-          draggable="false"
-          @error="reportImageError"
-        />
-
-        <img
-          class="landscape-image"
-          :src="images.landscape"
-          :style="landscapeStyle"
-          alt=""
-          draggable="false"
-          @error="reportImageError"
-        />
-
-        <div
-          class="outdoor-layer sunset-layer"
-          :style="{ opacity: sunsetStrength * 0.2 }"
-        ></div>
-      </div>
-
-      <img
-        class="room-image"
-        :src="images.room"
-        :style="roomStyle"
-        draggable="false"
-        @error="reportImageError"
+      <TownBackground
+        scene="room"
+        :rain-active="rainActive"
+        @image-error="reportImageError"
       />
+
       <div class="room-characters">
 
         <div class="carpet-party">
@@ -882,8 +555,6 @@ onUnmounted(() => {
               No active buddy yet
             </span>
           </div>
-
-
 
           <!-- <div class="buddy-figure" aria-live="polite">
             <span v-if="buddyLoading" class="scene-message">
@@ -1032,37 +703,16 @@ onUnmounted(() => {
         </section>
       </div>
 
-      <div
-        class="window-warmth"
-        :style="{ opacity: sunsetStrength * 0.3 }"
-        aria-hidden="true"
-      ></div>
-
-      <div
-        class="lamp-glow desk-glow"
-        :style="{ opacity: lighting.lights * 0.65 }"
-        aria-hidden="true"
-      ></div>
-
-      <div
-        class="lamp-core desk-core"
-        :style="{ opacity: lighting.lights * 0.85 }"
-        aria-hidden="true"
-      ></div>
-
       <header class="trainer-hud">
         <div class="title-card">
           <span class="title-eyebrow">STUDYDEX</span>
           <h1>Trainer Home</h1>
         </div>
 
-        <ClockWeather/>
-
-        <!-- <div class="clock-pill">
-          <span class="clock-time">{{ displayTime }}</span>
-          <span class="clock-divider" aria-hidden="true"></span>
-          <span class="clock-period">{{ lighting.name }}</span>
-        </div> -->
+        <ClockWeather
+          :use-device-location="true"
+          @rain-change="rainActive = $event"
+        />
       </header>
     </div>
 
@@ -1099,42 +749,6 @@ onUnmounted(() => {
 
 .trainer-scene { position: relative; width: 100%; aspect-ratio: 1672 / 941; overflow: hidden; isolation: isolate; background: #17243b; }
 
-.window-view { position: absolute; left: 32.5%; top: 16.5%; width: 30.5%; height: 33%; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; }
-
-.outdoor-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
-
-.sky-layer { z-index: 0; }
-
-.stars-layer { z-index: 2; }
-
-.stars-image { display: block; width: 100%; height: 100%; max-width: none; object-fit: fill; animation: star-twinkle 5s ease-in-out infinite alternate; }
-
-.clouds-layer { z-index: 2; }
-
-.clouds-image { position: absolute; top: 0; left: -6%; display: block; width: 112%; height: 70%; max-width: none; object-fit: fill; animation: cloud-drift 70s ease-in-out infinite alternate; }
-
-.celestial { position: absolute; z-index: 1; display: block; height: auto; max-width: none; transform: translate(-50%, -50%); pointer-events: none; }
-
-.sun-image { width: 15%; }
-
-.moon-image { width: 10%; }
-
-.landscape-image { position: absolute; left: 0; bottom: 0; z-index: 3; display: block; width: 100%; height: 85%; max-width: none; object-fit: fill; }
-
-.sunset-layer { z-index: 4; background: #ff9c60; mix-blend-mode: soft-light; }
-
-.room-image { position: absolute; inset: 0; z-index: 1; display: block; width: 100%; height: 100%; max-width: none; object-fit: fill; pointer-events: none; user-select: none; }
-
-.window-warmth { position: absolute; left: 22%; top: 45%; width: 55%; height: 48%; z-index: 2; background: radial-gradient( ellipse at 50% 15%, rgba(255, 179, 95, 0.8), rgba(255, 166, 88, 0.2) 45%, transparent 72% ); mix-blend-mode: screen; pointer-events: none; }
-
-.lamp-glow { position: absolute; z-index: 2; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient( ellipse, rgba(255, 214, 133, 0.65) 0%, rgba(255, 191, 95, 0.3) 28%, rgba(255, 168, 65, 0.08) 50%, transparent 72% ); mix-blend-mode: screen; pointer-events: none; }
-
-.desk-glow { left: 17%; top: 49%; width: 24%; height: 36%; }
-
-.lamp-core { position: absolute; z-index: 3; transform: translate(-50%, -50%); background: radial-gradient( ellipse, rgba(255, 246, 201, 0.95), rgba(255, 215, 137, 0.45) 45%, transparent 75% ); mix-blend-mode: screen; pointer-events: none; }
-
-.desk-core { left: 17%; top: 41.5%; width: 3.3%; height: 2.5%; }
-
 .trainer-hud { position: absolute; top: 24px; left: 24px; z-index: 10; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 
 .title-card { padding: 12px 18px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 18px; background: rgba(22, 39, 62, 0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 5px 16px rgba(5, 15, 30, 0.18); }
@@ -1143,31 +757,11 @@ onUnmounted(() => {
 
 .title-card h1 { margin: 3px 0 0; font-size: 21px; font-weight: 800; line-height: 1.2; }
 
-.clock-pill { display: flex; align-items: center; gap: 10px; padding: 8px 13px; border: 1px solid rgba(255, 255, 255, 0.35); border-radius: 999px; background: rgba(22, 39, 62, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
-
-.clock-time { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
-
-.clock-divider { width: 1px; height: 16px; background: rgba(255, 255, 255, 0.35); }
-
-.clock-period { color: #e5edf7; font-size: 11px; font-weight: 700; }
-
 .image-errors { margin: 16px; padding: 16px; border: 1px solid #f39b9b; border-radius: 12px; background: #482631; color: #ffe5e5; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 
 .image-errors ul { margin: 8px 0; padding-left: 20px; }
 
 .image-errors p { margin: 8px 0 0; }
-
-@keyframes cloud-drift {
-from { transform: translateX(-2%); }
-
-to { transform: translateX(2%); }
-}
-
-@keyframes star-twinkle {
-from { opacity: 0.65; }
-
-to { opacity: 1; }
-}
 
 @media (max-width: 600px) {
 .trainer-hud { top: 10px; left: 10px; gap: 6px; }
@@ -1178,19 +772,6 @@ to { opacity: 1; }
 
 .title-card h1 { font-size: 14px; }
 
-.clock-pill { padding: 5px 9px; gap: 7px; }
-
-.clock-time { font-size: 12px; }
-
-.clock-period { font-size: 9px; }
-
-.clock-divider { height: 12px; }
-
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .clouds-image,
-.stars-image { animation: none; }
 }
 
 .room-characters { position: absolute; inset: 0; z-index: 6; pointer-events: none; --party-left: 51%; --party-feet: 85%;  }
@@ -1538,6 +1119,64 @@ to { opacity: 1; }
   .room-pokemon::before {
     width: 150px;
   }
+}
+
+/* =========================================
+   PICHU — HOVER TO SHOW NAME, LEVEL AND XP
+   ========================================= */
+
+/* Allow mouse interaction with the Pokémon */
+.buddy-figure {
+  pointer-events: auto;
+}
+
+.room-pokemon {
+  pointer-events: auto;
+}
+
+/* Make the actual sprite hoverable */
+.room-pokemon :deep(.buddy-image-container),
+.room-pokemon :deep(.buddy-sprite) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Hide information by default */
+.room-pokemon :deep(h3),
+.room-pokemon :deep(.buddy-level),
+.room-pokemon :deep(.buddy-xp) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  transition:
+    opacity 0.25s ease,
+    visibility 0.25s ease;
+}
+
+/* Hide information background by default */
+.room-pokemon::before {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  transition:
+    opacity 0.25s ease,
+    visibility 0.25s ease;
+}
+
+/* Show information when hovering on Pokémon image */
+.room-pokemon:has(.buddy-image-container:hover) :deep(h3),
+.room-pokemon:has(.buddy-image-container:hover) :deep(.buddy-level),
+.room-pokemon:has(.buddy-image-container:hover) :deep(.buddy-xp) {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Show the information panel background */
+.room-pokemon:has(.buddy-image-container:hover)::before {
+  opacity: 1;
+  visibility: visible;
 }
 
 </style>

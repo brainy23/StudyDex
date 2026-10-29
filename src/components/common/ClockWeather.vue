@@ -1,65 +1,199 @@
 <script setup>
-import axios from 'axios'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import axios from 'axios'
+import { useTimeOfDay } from '@/composables/useTimeofDay'
 import {
   DEFAULT_WEATHER_LOCATION,
   useWeatherLocation
 } from '@/composables/useWeatherLocation'
 
-const props = defineProps({
+const {
+  savedLocation,
+  locationBusy,
+  locationNotice,
+  beginLocationRequest,
+  isCurrentLocationRequest
+} = useWeatherLocation()
 
-  // If no shared location exists:
-  // true = request device location
-  // false = use Singapore
+// =====================================================
+// PROPS AND EMITS
+// =====================================================
+
+const props = defineProps({
+  // true: offer the location chooser on the first visit.
+  // false: use Singapore without asking on the first visit.
   useDeviceLocation: {
     type: Boolean,
-    default: false
+    default: true
   }
 })
 
-const emit = defineEmits(['rain-change'])
-
-const { getSavedLocation, selectLocation } = useWeatherLocation()
+const emit = defineEmits([
+  'rain-change',
+  'rain-status-change'
+])
 
 const assetBase = import.meta.env.BASE_URL
 
 // =====================================================
-// CLOCK
+// TIME AND LIGHTING
 // =====================================================
 
-const now = ref(new Date())
+// Same device-time lighting configuration used by TownBackground.
+const { currentTime, lighting } = useTimeOfDay()
 
-const currentHour = computed(() => {
-  if (props.hour !== null && Number.isFinite(props.hour)) {
-    return ((props.hour % 24) + 24) % 24
+const displayTime = computed(() =>
+  currentTime.value.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+)
+
+const displayPeriod = computed(() => lighting.value.name)
+
+// =====================================================
+// LOCATION STATE
+// =====================================================
+
+const locationDialog = ref(null)
+const locationButton = ref(null)
+
+const locationLabel = computed(() => {
+  if (locationBusy.value) {
+    return 'Finding your location…'
   }
 
-  return now.value.getHours() + now.value.getMinutes() / 60
+  if (savedLocation.value?.source === 'device') {
+    return 'Device location'
+  }
+
+  if (savedLocation.value) {
+    return 'Singapore (default)'
+  }
+
+  return 'Choose weather location'
 })
 
-const displayTime = computed(() => {
-  const minutes = Math.floor(currentHour.value * 60)
+// =====================================================
+// LOCATION SELECTION
+// =====================================================
 
-  const hoursText = String(Math.floor(minutes / 60)).padStart(2, '0')
-  const minutesText = String(minutes % 60).padStart(2, '0')
+function useSingaporeLocation(message = '') {
+  // Ignore any unfinished device request after choosing Singapore.
+  beginLocationRequest()
 
-  return `${hoursText}:${minutesText}`
-})
+  locationBusy.value = false
+  locationNotice.value = message
 
-const displayPeriod = computed(() => {
-  if (props.period) return props.period
+  savedLocation.value = {
+    ...DEFAULT_WEATHER_LOCATION,
+    source: 'default'
+  }
+}
 
-  const hour = currentHour.value
+async function useDeviceLoc() {
+  if (locationBusy.value) return
 
-  if (hour < 6) return 'Night'
-  if (hour < 12) return 'Morning'
-  if (hour < 18) return 'Afternoon'
-  if (hour < 19) return 'Sunset'
-  if (hour < 20) return 'Dusk'
-  if (hour < 22) return 'Evening'
+  const request = beginLocationRequest()
 
-  return 'Night'
-})
+  locationBusy.value = true
+  locationNotice.value = ''
+
+  try {
+    const coords = await new Promise((resolve, reject) => {
+      const geolocation = globalThis.navigator?.geolocation
+
+      if (!geolocation) {
+        reject(new Error('Device location is unavailable.'))
+        return
+      }
+
+      geolocation.getCurrentPosition(
+        position => resolve(position.coords),
+        reject,
+        {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 300000
+        }
+      )
+    })
+
+    if (!isCurrentLocationRequest(request)) return
+
+    if (
+      !Number.isFinite(coords.latitude) ||
+      !Number.isFinite(coords.longitude)
+    ) {
+      throw new Error('Invalid device coordinates.')
+    }
+
+    savedLocation.value = {
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      source: 'device'
+    }
+  } catch (error) {
+    if (!isCurrentLocationRequest(request)) return
+
+    locationNotice.value =
+      error.code === 1
+        ? 'Location permission was denied. Using Singapore instead.'
+        : 'Your location could not be found. Using Singapore instead.'
+
+    savedLocation.value = {
+      ...DEFAULT_WEATHER_LOCATION,
+      source: 'default'
+    }
+  } finally {
+    if (isCurrentLocationRequest(request)) {
+      locationBusy.value = false
+    }
+  }
+}
+
+// =====================================================
+// LOCATION MODAL
+// =====================================================
+
+function openLocationDialog() {
+  const dialog = locationDialog.value
+
+  if (dialog && !dialog.open) {
+    dialog.showModal()
+  }
+}
+
+function closeLocationDialog() {
+  locationDialog.value?.close()
+}
+
+async function chooseDevice() {
+  await useDeviceLoc()
+  closeLocationDialog()
+}
+
+function chooseSingapore() {
+  useSingaporeLocation()
+  closeLocationDialog()
+}
+
+function cancelLocationDialog(event) {
+  event.preventDefault()
+
+  // Escape means Not Now on the first visit.
+  // Later it keeps the current choice.
+  if (!savedLocation.value) {
+    useSingaporeLocation()
+  }
+
+  closeLocationDialog()
+}
+
+function restoreLocationFocus() {
+  locationButton.value?.focus()
+}
 
 // =====================================================
 // WEATHER STATE
@@ -68,26 +202,53 @@ const displayPeriod = computed(() => {
 const weatherReady = ref(false)
 const cloudCover = ref(0)
 const isDay = ref(true)
-const isRaining = ref(false)
-const loading = ref(true)
+
+const loading = ref(false)
 const weatherError = ref('')
 
+const rainStatus = ref('unknown')
+const rainMessage = ref('Choose a location to check rainfall.')
+
+const isRaining = computed(() =>
+  rainStatus.value === 'raining'
+)
+
+// =====================================================
+// WEATHER DISPLAY
+// =====================================================
+
 const weatherDescription = computed(() => {
-  if (props.rainPreview || isRaining.value) return 'Rainy'
-  if (!weatherReady.value) return 'Weather unavailable'
-  if (!isDay.value) return 'Night'
-  if (cloudCover.value >= 70) return 'Cloudy'
-  if (cloudCover.value >= 20) return 'Partly cloudy'
+  if (isRaining.value) {
+    return 'Rainy'
+  }
+
+  if (!weatherReady.value) {
+    return 'Weather unavailable'
+  }
+
+  if (!isDay.value) {
+    return 'Night'
+  }
+
+  if (cloudCover.value >= 70) {
+    return 'Cloudy'
+  }
+
+  if (cloudCover.value >= 20) {
+    return 'Partly cloudy'
+  }
 
   return 'Sunny'
 })
 
 const weatherImage = computed(() => {
-  if (props.rainPreview || isRaining.value) {
+  if (isRaining.value) {
     return `${assetBase}assets/rain.png`
   }
 
-  if (!weatherReady.value) return ''
+  if (!weatherReady.value) {
+    return ''
+  }
 
   if (!isDay.value) {
     return `${assetBase}assets/moon.png`
@@ -104,13 +265,35 @@ const weatherImage = computed(() => {
   return `${assetBase}assets/sun.png`
 })
 
-function updateRain(value) {
-  isRaining.value = value
-  emit('rain-change', value)
+const weatherTitle = computed(() =>
+  [
+    locationLabel.value,
+    loading.value
+      ? 'Loading weather…'
+      : weatherError.value || weatherDescription.value,
+    rainMessage.value,
+    locationNotice.value
+  ]
+    .filter(Boolean)
+    .join(' · ')
+)
+
+// =====================================================
+// RAIN STATUS
+// =====================================================
+
+function updateRain(status, message) {
+  rainStatus.value = status
+  rainMessage.value = message
+
+  // Unknown disables the visual rain effect
+  // without claiming confirmed dry weather.
+  emit('rain-change', status === 'raining')
+  emit('rain-status-change', status)
 }
 
 // =====================================================
-// DISTANCE TO RAINFALL STATION
+// DISTANCE CALCULATION
 // =====================================================
 
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -122,34 +305,27 @@ function getDistance(lat1, lon1, lat2, lon2) {
     Math.cos(radians(lat2)) *
     Math.sin(radians(lon2 - lon1) / 2) ** 2
 
-  return 6371 * 2 * Math.asin(
-    Math.sqrt(Math.min(1, Math.max(0, value)))
+  return (
+    6371 *
+    2 *
+    Math.asin(
+      Math.sqrt(
+        Math.min(1, Math.max(0, value))
+      )
+    )
   )
 }
 
 // =====================================================
-// LIFECYCLE AND LOCATION
+// WEATHER AND RAINFALL FETCHING
 // =====================================================
 
-let clockInterval
 let stopLocationWatcher
 
 onMounted(() => {
-  now.value = new Date()
-
-  clockInterval = setInterval(() => {
-    if (props.hour === null || !Number.isFinite(props.hour)) {
-      now.value = new Date()
-    }
-  }, 1000)
-
   stopLocationWatcher = watch(
-    [
-      () => props.location?.latitude,
-      () => props.location?.longitude,
-      () => props.useDeviceLocation
-    ],
-    async (_, previous, onCleanup) => {
+    savedLocation,
+    (location, previous, onCleanup) => {
       const controller = new AbortController()
 
       let cancelled = false
@@ -158,50 +334,57 @@ onMounted(() => {
       let weatherBusy = false
       let rainBusy = false
 
-      onCleanup(() => {
-        cancelled = true
-        controller.abort()
-        clearInterval(weatherInterval)
-        clearInterval(rainInterval)
-      })
+      // -----------------------------------------------
+      // REFRESH WHEN TAB BECOMES VISIBLE
+      // -----------------------------------------------
 
-      loading.value = true
-      weatherReady.value = false
-      weatherError.value = ''
-      updateRain(false)
-
-      let selectedLocation
-
-      try {
-        // Explicit coordinates take priority.
-        if (
-          Number.isFinite(props.location?.latitude) &&
-          Number.isFinite(props.location?.longitude)
-        ) {
-          selectedLocation = props.location
-        } else {
-          // Reuse the app's selected location.
-          // Otherwise choose device location or Singapore.
-          selectedLocation = await (
-            getSavedLocation() ||
-            selectLocation(props.useDeviceLocation)
-          )
+      function refreshOnReturn() {
+        if (!document.hidden) {
+          fetchWeather()
+          fetchRain()
         }
-      } catch {
-        selectedLocation = DEFAULT_WEATHER_LOCATION
       }
 
-      if (cancelled) return
+      // -----------------------------------------------
+      // CLEAN UP PREVIOUS LOCATION REQUESTS
+      // -----------------------------------------------
 
-      const latitude =
-        selectedLocation?.latitude ?? DEFAULT_WEATHER_LOCATION.latitude
+      onCleanup(() => {
+        cancelled = true
 
-      const longitude =
-        selectedLocation?.longitude ?? DEFAULT_WEATHER_LOCATION.longitude
+        controller.abort()
 
-      // -------------------------------------------------
-      // Open-Meteo: cloud cover and day/night
-      // -------------------------------------------------
+        clearInterval(weatherInterval)
+        clearInterval(rainInterval)
+
+        document.removeEventListener(
+          'visibilitychange',
+          refreshOnReturn
+        )
+      })
+
+      // -----------------------------------------------
+      // RESET WEATHER STATE
+      // -----------------------------------------------
+
+      weatherReady.value = false
+      weatherError.value = ''
+      loading.value = Boolean(location)
+
+      updateRain(
+        'unknown',
+        location
+          ? 'Checking local rainfall…'
+          : 'Choose a location to check rainfall.'
+      )
+
+      if (!location) return
+
+      const { latitude, longitude } = location
+
+      // -----------------------------------------------
+      // FETCH WEATHER FROM OPEN-METEO
+      // -----------------------------------------------
 
       async function fetchWeather() {
         if (cancelled || weatherBusy) return
@@ -218,7 +401,8 @@ onMounted(() => {
                 current: 'cloud_cover,is_day',
                 timezone: 'auto'
               },
-              signal: controller.signal
+              signal: controller.signal,
+              timeout: 15000
             }
           )
 
@@ -235,24 +419,26 @@ onMounted(() => {
 
           cloudCover.value = current.cloud_cover
           isDay.value = current.is_day === 1
+
           weatherReady.value = true
           weatherError.value = ''
-        } catch (error) {
+        } catch {
           if (!cancelled) {
             weatherReady.value = false
             weatherError.value = 'Weather could not load.'
-            console.log('error',error)
           }
         } finally {
           weatherBusy = false
 
-          if (!cancelled) loading.value = false
+          if (!cancelled) {
+            loading.value = false
+          }
         }
       }
 
-      // -------------------------------------------------
-      // NEA: recent rainfall within 2.5 km
-      // -------------------------------------------------
+      // -----------------------------------------------
+      // FETCH RAINFALL FROM NEA
+      // -----------------------------------------------
 
       async function fetchRain() {
         if (cancelled || rainBusy) return
@@ -262,15 +448,40 @@ onMounted(() => {
         try {
           const response = await axios.get(
             'https://api-open.data.gov.sg/v2/real-time/api/rainfall',
-            { signal: controller.signal }
+            {
+              signal: controller.signal,
+              timeout: 15000
+            }
           )
 
           if (cancelled) return
 
-          const { stations = [], readings = [] } =
+          const { stations, readings } =
             response.data.data ?? {}
 
-          const latest = readings[0]
+          if (
+            !Array.isArray(stations) ||
+            !Array.isArray(readings)
+          ) {
+            throw new Error('Invalid rainfall data')
+          }
+
+          // Find the newest timestamp rather than
+          // assuming the API array order.
+          const latest = readings
+            .filter(item =>
+              Number.isFinite(Date.parse(item.timestamp))
+            )
+            .reduce(
+              (newest, item) =>
+                !newest ||
+                Date.parse(item.timestamp) >
+                  Date.parse(newest.timestamp)
+                  ? item
+                  : newest,
+              null
+            )
+
           const ageMinutes =
             (Date.now() - Date.parse(latest?.timestamp)) / 60000
 
@@ -280,19 +491,28 @@ onMounted(() => {
             ageMinutes < 0 ||
             ageMinutes > 12
           ) {
-            updateRain(false)
+            updateRain(
+              'unknown',
+              'Recent rainfall readings are unavailable.'
+            )
             return
           }
 
+          // Match station IDs with their rainfall readings.
           const rainfall = new Map(
-            latest.data.map(item => [item.stationId, item.value])
+            latest.data.map(item => [
+              item.stationId,
+              item.value
+            ])
           )
 
-          const nearestStation = stations
+          // Find the nearest valid station within 2.5 km.
+          const nearest = stations
             .filter(station =>
               Number.isFinite(station.location?.latitude) &&
               Number.isFinite(station.location?.longitude) &&
-              Number.isFinite(rainfall.get(station.id))
+              Number.isFinite(rainfall.get(station.id)) &&
+              rainfall.get(station.id) >= 0
             )
             .map(station => ({
               distance: getDistance(
@@ -303,66 +523,154 @@ onMounted(() => {
               ),
               rainfall: rainfall.get(station.id)
             }))
-            .filter(station => station.distance <= 2.5)
-            .sort((a, b) => a.distance - b.distance)[0]
+            .filter(station =>
+              station.distance <= 2.5
+            )
+            .sort((a, b) =>
+              a.distance - b.distance
+            )[0]
+
+          if (!nearest) {
+            updateRain(
+              'unknown',
+              'No Singapore rainfall station within 2.5 km.'
+            )
+            return
+          }
 
           updateRain(
-            nearestStation ? nearestStation.rainfall > 0 : false
+            nearest.rainfall > 0 ? 'raining' : 'dry',
+            nearest.rainfall > 0
+              ? 'Rain measured at a nearby station.'
+              : 'No rain measured at the nearby station.'
           )
         } catch {
-          if (!cancelled) updateRain(false)
+          if (!cancelled) {
+            updateRain(
+              'unknown',
+              'Local rainfall could not be checked.'
+            )
+          }
         } finally {
           rainBusy = false
         }
       }
 
+      // -----------------------------------------------
+      // INITIAL FETCH AND REFRESH INTERVALS
+      // -----------------------------------------------
+
       fetchWeather()
       fetchRain()
 
-      weatherInterval = setInterval(fetchWeather, 600000)
-      rainInterval = setInterval(fetchRain, 300000)
+      // Weather refresh: every 10 minutes
+      weatherInterval = setInterval(
+        fetchWeather,
+        600000
+      )
+
+      // Rainfall refresh: every 5 minutes
+      rainInterval = setInterval(
+        fetchRain,
+        300000
+      )
+
+      document.addEventListener(
+        'visibilitychange',
+        refreshOnReturn
+      )
     },
     { immediate: true }
   )
+
+  // -----------------------------------------------
+  // INITIAL LOCATION CHOICE
+  // -----------------------------------------------
+
+  if (!savedLocation.value && !locationBusy.value) {
+    if (props.useDeviceLocation) {
+      openLocationDialog()
+    } else {
+      useSingaporeLocation()
+    }
+  }
 })
 
+// =====================================================
+// CLEANUP
+// =====================================================
+
 onUnmounted(() => {
-  clearInterval(clockInterval)
   stopLocationWatcher?.()
+  closeLocationDialog()
 })
 </script>
 
 <template>
-  <div
-    class="clock-weather"
-    :title="loading ? 'Loading weather…' : weatherError || weatherDescription"
-    :aria-label="`${displayTime}, ${displayPeriod}, ${weatherDescription}`"
-  >
-    <img
-      v-if="weatherImage"
-      :src="weatherImage"
-      class="weather-icon"
-      alt=""
-      draggable="false"
-    />
+  <div class="clock-weather-widget">
+    <div class="clock-weather" :title="weatherTitle"
+      :aria-label="`${displayTime}, ${displayPeriod}, ${weatherDescription}, ${rainMessage}`">
+      <img v-if="weatherImage" :src="weatherImage" class="weather-icon" alt="" draggable="false" />
+      <span v-else class="weather-placeholder" aria-hidden="true">{{ loading ? '…' : '—' }}</span>
+      <span class="clock-time">{{ displayTime }}</span>
+      <span class="clock-divider" aria-hidden="true"></span>
+      <span class="clock-period">{{ displayPeriod }}</span>
+      <button ref="locationButton" type="button" class="location-settings"
+        title="Change weather location" aria-label="Change weather location"
+        @click="openLocationDialog">📍</button>
+    </div>
+    <p v-if="locationNotice" class="location-feedback" role="status">{{ locationNotice }}</p>
 
-    <span v-else class="weather-placeholder" aria-hidden="true">
-      {{ loading ? '…' : '—' }}
-    </span>
+    <!-- Native dialog handles focus, Escape and stacking without Teleport.
+         Bootstrap's existing classes style the modal content and buttons. -->
+    <dialog ref="locationDialog" class="location-dialog" aria-label="Choose weather location"
+      @cancel="cancelLocationDialog" @close="restoreLocationFocus">
+      <div class="modal-content p-4">
+        <div class="location-header">STUDYDEX / TOWN SETUP</div>
+        <div class="modal-body text-center px-0 pb-0">
+          <div class="location-icon d-flex align-items-center justify-content-center mx-auto mb-3" aria-hidden="true">🗺️</div>
+          <h2 class="mb-3">Find Your Town!</h2>
+          <p class="location-description">Let your Pokémon experience the same weather as you!</p>
+          <div class="d-flex justify-content-center gap-3 my-3 fs-4" aria-hidden="true">☀️ 🌤️ 🌧️</div>
+          <p class="location-notice p-3">Use your device location for nearby weather, or use Singapore’s default location.</p>
+          <p v-if="savedLocation" class="small-note">Currently using: {{ locationLabel }}</p>
+          <p v-if="locationBusy" class="small-note" role="status">Finding your location… Please respond to your browser’s permission prompt.</p>
+          <!-- LOCATION ACTION BUTTONS -->
+          <div class="location-actions">
 
-    <span class="clock-time">
-      {{ displayTime }}
-    </span>
+            <!-- Primary action -->
+            <button
+              type="button"
+              class="location-action location-allow"
+              :disabled="locationBusy"
+              @click="chooseDevice"
+            >
+              <span class="location-action-icon">📍</span>
+              <span>
+                {{ locationBusy ? 'Locating…' : 'Use My Location' }}
+              </span>
+            </button>
 
-    <span class="clock-divider" aria-hidden="true"></span>
+            <!-- Secondary action -->
+            <button
+              type="button"
+              class="location-action location-skip"
+              @click="chooseSingapore"
+            >
+              {{ savedLocation ? 'Use Singapore' : 'Not Now' }}
+            </button>
 
-    <span class="clock-period">
-      {{ displayPeriod }}
-    </span>
+          </div>
+          <p class="text-muted small-note mt-2 mb-0">If location access fails, Singapore’s default location will be used.</p>
+          <p class="text-muted small-note mt-2 mb-0">Rainfall readings cover Singapore only.</p>
+        </div>
+      </div>
+    </dialog>
   </div>
 </template>
 
 <style scoped>
+
 .clock-weather {
   display: inline-flex;
   align-items: center;
@@ -449,4 +757,232 @@ onUnmounted(() => {
     height: 20px;
   }
 }
+
+.clock-weather-widget { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
+.location-settings { flex-shrink: 0; padding: 3px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; font-size: 19px; }
+.location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: 12px; }
+
+
+/* =========================================
+   STUDYDEX LOCATION MODAL
+   ========================================= */
+
+.location-dialog {
+  width: min(460px, calc(100vw - 32px));
+  max-width: 460px;
+  max-height: calc(100dvh - 32px);
+
+  margin: auto;
+  padding: 0;
+
+  border: 3px solid #344967;
+  border-radius: 24px;
+
+  background: #fff9e8;
+  color: #293c60;
+
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(10, 23, 48, 0.35);
+}
+
+.location-dialog::backdrop {
+  background: rgba(10, 23, 48, 0.75);
+  backdrop-filter: blur(5px);
+}
+
+/* Modal content */
+.location-dialog .modal-content {
+  padding: 28px !important;
+  background: #fff9e8;
+  border: none;
+  color: #293c60;
+}
+
+/* Header */
+.location-header {
+  font-family: 'Silkscreen', monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: #8f7440;
+}
+
+/* Map icon */
+.location-icon {
+  width: 82px;
+  height: 82px;
+
+  background: #ffe68c;
+  border-radius: 22px;
+
+  font-size: 40px;
+}
+
+/* Title */
+.location-dialog h2 {
+  font-family: 'Silkscreen', monospace;
+  font-size: clamp(18px, 4vw, 23px);
+  line-height: 1.4;
+  color: #293c60;
+}
+
+/* Description */
+.location-description {
+  margin-bottom: 16px;
+  color: #687791;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* Information box */
+.location-notice {
+  margin: 20px 0 24px;
+  padding: 16px !important;
+
+  background: #f5ecd4;
+  border-radius: 14px;
+
+  color: #6c6046;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* =========================================
+   LOCATION BUTTONS
+   ========================================= */
+
+.location-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+
+  gap: 14px;
+  width: 100%;
+
+  margin: 24px 0 18px;
+}
+
+/* Shared button styling */
+.location-dialog .location-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+  min-width: 0;
+  min-height: 58px;
+
+  padding: 12px 10px;
+
+  border: 2px solid transparent;
+  border-radius: 14px;
+
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.3;
+  text-align: center;
+
+  cursor: pointer;
+
+  transition:
+    transform 180ms ease,
+background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+/* PRIMARY: Use My Location */
+.location-dialog .location-allow {
+  background: #ffde59;
+  color: #293c60;
+  border-color: #d6b73a;
+
+  box-shadow:
+    0 4px 0 #c49b2d,
+    0 7px 12px rgba(70, 55, 20, 0.12);
+}
+
+.location-dialog .location-allow:hover:not(:disabled) {
+  background: #ffe780;
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 6px 0 #c49b2d,
+    0 9px 14px rgba(70, 55, 20, 0.16);
+}
+
+.location-dialog .location-allow:active:not(:disabled) {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 #c49b2d;
+}
+
+.location-action-icon {
+  flex-shrink: 0;
+  font-size: 17px;
+}
+
+/* SECONDARY: Not Now */
+.location-dialog .location-skip {
+  background: #fffdf5;
+  color: #62718b;
+  border-color: #d7cdb5;
+
+  box-shadow: 0 4px 0 #e1d8c4;
+}
+
+.location-dialog .location-skip:hover {
+  background: #f5ecd4;
+  border-color: #b6a889;
+  color: #293c60;
+
+  transform: translateY(-2px);
+}
+
+.location-dialog .location-skip:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #e1d8c4;
+}
+
+/* Disabled state */
+.location-dialog .location-action:disabled {
+  opacity: 0.55;
+  cursor: wait;
+  transform: none;
+}
+
+/* Footer text */
+.location-dialog .small-note {
+  color: #7c8290;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* =========================================
+   MOBILE RESPONSIVENESS
+   ========================================= */
+
+@media (max-width: 420px) {
+  .location-dialog {
+    width: calc(100vw - 24px);
+  }
+
+  .location-dialog .modal-content {
+    padding: 20px !important;
+  }
+
+  .location-actions {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    margin-top: 20px;
+  }
+
+  .location-dialog .location-action {
+    min-height: 52px;
+    font-size: 13px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .location-dialog .location-action {
+    transition: none;
+  }
+}
+
 </style>
