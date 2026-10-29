@@ -1,7 +1,7 @@
 <script setup>
 import '@/assets/admincommon.css'
 import AdminNav from '@/components/common/adminNav.vue';
-import { ref, onMounted, computed, reactive } from 'vue';
+import { ref, computed } from 'vue';
 
 // DB team please get rid of sampleData and use Supabase data THANKS
 const sampleData = ref([
@@ -111,89 +111,8 @@ function arrow(key) {
   return sortOrder.value === 'asc' ? '↑' : '↓';
 }
 
-/* ---------------- add deck panel ---------------- */
+  // flashcards
 
-const showPanel = ref(false)
-const errorMsg = ref('')
-
-const subjectOptions = ['Mathematics', 'Science']
-const levelOptions = [1, 2, 3, 4, 5, 6].map(n => `${n}`)
-
-const emptyForm = () => ({
-  concept_title: '',
-  topic_name: '',
-  subjects: '',
-  school_level_id: '',
-})
-const form = reactive(emptyForm())
-
-const emptyCard = () => ({ front_text: '', back_text: '' })
-const flashcards = ref([emptyCard()])   // start with one card
-
-function addFlashcard() {
-  flashcards.value.push(emptyCard())
-}
-
-function removeFlashcard(index) {
-  flashcards.value.splice(index, 1)
-}
-
-function openPanel() {
-
-  
-  Object.assign(form, emptyForm())
-  flashcards.value = [emptyCard()]
-  errorMsg.value = ''
-  showPanel.value = true
-  console.log('finished calling openPanel');
-  
-}
-
-function closePanel() {
-  showPanel.value = false
-}
-
-function publish() {
-  // 1. deck-level fields
-  if (Object.values(form).some(v => !v.trim())) {
-    errorMsg.value = 'Please fill in all fields.'
-    return
-  }
-
-  // 2. flashcards
-  if (flashcards.value.length === 0) {
-    errorMsg.value = 'Add at least one flashcard.'
-    return
-  }
-  const bad = flashcards.value.findIndex(
-    c => !c.front_text.trim() || !c.back_text.trim()
-  )
-  if (bad !== -1) {
-    errorMsg.value = `Flashcard ${bad + 1} is missing its front or back text.`
-    return
-  }
-
-  // 3. add the deck
-  const list = sampleData.value ?? []
-  const nextId = list.reduce((max, d) => Math.max(max, d.id), 0) + 1
-
-  sampleData.value = [...list, {
-    id: nextId,
-    concept_title: form.concept_title.trim(),
-    topic_name: form.topic_name.trim(),
-    subjects: form.subjects,
-    school_level_id: form.school_level_id,
-    difficulty: form.difficulty,
-    pages: flashcards.value.length,
-    flashcards: flashcards.value.map(c => ({
-      front_text: c.front_text.trim(),
-      back_text: c.back_text.trim(),
-    })),
-  }]
-
-  errorMsg.value = ''
-  closePanel()
-}
 
 /* ---------------- view deck panel ---------------- */
 
@@ -231,69 +150,7 @@ function removeDeck(id) {
           <h1 style="font-weight: 800; font-size: 30px;">StudyDeck Overview</h1>
           <p style="font-size: 14px; color: #7D8095;">View and manage StudyDecks</p>
         </div>
-        <button class="add-quiz-button" @click="openPanel()">+ Add Deck</button>
-      </div>
-      <div v-if="showPanel" class="overlay" @click.self="closePanel">
-        <div class="panel">
-          <h3>New Deck</h3>
-
-          <label>Concept Title
-            <input type="text" v-model="form.concept_title" placeholder="e.g. Photosynthesis" />
-          </label>
-
-          <label>Topic Name
-            <input type="text" v-model="form.topic_name" placeholder="e.g. Plant Systems" />
-          </label>
-
-          <label>Subject
-            <select v-model="form.subjects">
-              <option disabled value="">Select subject</option>
-              <option v-for="s in subjectOptions" :key="s" :value="s">{{ s }}</option>
-            </select>
-          </label>
-
-          <label>Level
-            <select v-model="form.school_level_id">
-              <option disabled value="">Select level</option>
-              <option v-for="l in levelOptions" :key="l" :value="l">{{ l }}</option>
-            </select>
-          </label>
-
-          <label>Difficulty
-            <select v-model="form.difficulty">
-              <option disabled value="">Select Difficulty</option>
-              <option value='1'>1</option>
-              <option value='2'>2</option>
-              <option value='3'>3</option>
-            </select>
-          </label>
-
-          <div class="questions">
-            <div v-for="(card, ci) in flashcards" :key="ci" class="question-card">
-              <div class="question-header">
-                <strong>Flashcard {{ ci + 1 }}</strong>
-                <button type="button" class="remove-button" @click="removeFlashcard(ci)">✕</button>
-              </div>
-
-              <label>Front
-                <textarea v-model="card.front_text" rows="2" placeholder="Question or term"></textarea>
-              </label>
-
-              <label>Back
-                <textarea v-model="card.back_text" rows="3" placeholder="Answer or explanation"></textarea>
-              </label>
-            </div>
-
-            <button type="button" class="add-question-button" @click="addFlashcard">+ Add flashcard</button>
-          </div>
-
-          <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
-
-          <div class="actions">
-            <button class="cancel-button" @click="closePanel">Cancel</button>
-            <button class="publish-button" @click="publish">Publish</button>
-          </div>
-        </div>
+        <router-link class="add-quiz-button" to="/admin-adddeck">+ Add Deck</router-link>
       </div>
         <div class="overview-panel">
 
@@ -539,6 +396,11 @@ function removeDeck(id) {
 }
 
 .add-quiz-button {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  color: black;
+
   border: 0;
   border-radius: 20px;
   background-color: #fad336;
@@ -908,26 +770,6 @@ function removeDeck(id) {
   overflow-y: auto;
 }
 
-.panel label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-weight: 600;
-}
-
-.panel input,
-.panel select {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-
-.error {
-  color: #c0392b;
-  margin: 0;
-}
-
 .actions {
   display: flex;
   justify-content: flex-end;
@@ -937,12 +779,6 @@ function removeDeck(id) {
 .cancel-button{
   border: 1px solid grey;
   background-color: #dbdbdb;
-  border-radius: 8px;
-  padding: 10px;
-}
-.publish-button{
-  border: 1px solid #be9e00;
-  background-color: #ffd21f;
   border-radius: 8px;
   padding: 10px;
 }
@@ -973,26 +809,6 @@ function removeDeck(id) {
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.panel label.inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-weight: normal;
-}
-
-.panel label.inline input[type="text"] {
-  flex: 1;
-}
-
-.remove-button, .add-question-button{
-  border: 0;
-  border-radius: 8px;
-}
-
-.remove-button{
-  border: 1px solid grey;
 }
 
 .card-side {
