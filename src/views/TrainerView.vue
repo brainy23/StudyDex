@@ -5,6 +5,7 @@ import { getCurrentProfile } from '../services/profileService'
 import { updateCurrentAvatar } from '../services/accountService'
 import { avatarOptions } from '../data/avatarOptions'
 import BackToHome from '../components/common/BackToHome.vue'
+import StudydexBubbleNav from '../components/common/StudydexBubbleNav.vue'
 
 const router = useRouter()
 
@@ -506,6 +507,8 @@ function openRoomPage(link) {
 <template>
 
   <main class="trainer-page">
+
+    <StudydexBubbleNav current="bag" />
 
     <div class="trainer-scene">
 
