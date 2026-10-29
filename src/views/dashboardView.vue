@@ -3,6 +3,8 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
 import BackToHome from '../components/common/BackToHome.vue'
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+
 
 // ======================================================
 // CONFIGURATION
@@ -199,7 +201,6 @@ const userPokemons = ref([
 
 
 async function getSelectedPokemon(userId) {
-  // Find the active Pokémon for this user
   const selected = userPokemons.value.find(
     pokemon =>
       pokemon.user_id === userId &&
@@ -209,7 +210,6 @@ async function getSelectedPokemon(userId) {
   if (!selected) return null
 
   try {
-    // pokemon_id is the PokéAPI ID in our local data
     const response = await fetch(
       `${POKE_API_URL}/pokemon/${selected.pokeapi_id}`
     )
@@ -220,41 +220,48 @@ async function getSelectedPokemon(userId) {
 
     const data = await response.json()
 
+    const name =
+      data.name.charAt(0).toUpperCase() +
+      data.name.slice(1)
+
+    const staticImage = data.sprites.front_default || ''
+
+    const animatedImage =
+      data.sprites.versions?.['generation-v']?.['black-white']
+        ?.animated?.front_default || staticImage
+
     return {
-      ...selected, // Local XP, level, selected status, etc.
+      ...selected,
 
-      name:
-        data.name.charAt(0).toUpperCase() +
-        data.name.slice(1),
+      // Preserve the owned record's UUID separately.
+      ownedId: selected.id,
 
-      type: data.types.map(t => t.type.name).join(', '),
+      // PokemonBuddy uses the numeric PokéAPI ID.
+      id: data.id,
 
-      // Animated Pokémon GIF
-      sprite:
-        data.sprites.versions?.['generation-v']?.['black-white']
-          ?.animated?.front_default ||
-        data.sprites.front_default
-          }
+      name,
+      species: name,
+      originalSpeciesId: selected.pokeapi_id,
+      isDefeated: selected.is_defeated,
 
+      // Your current sample Pokémon start at evolution stage 0.
+      // Pokémon level and evolution stage are different values.
+      evolution_stage: selected.evolution_stage ?? 0,
+      stageBeforeMax: selected.stageBeforeMax,
+
+      animated_img: animatedImage,
+      static_img: staticImage
+    }
   } catch (error) {
     console.error('Error fetching Pokémon:', error)
     return null
   }
 }
-const pokemonXPProgress = computed(() => {
-  if (!selectedPokemon.value) return 0
-
-  return Math.min(
-    100,
-    Math.max(0, selectedPokemon.value.xp)
-  )
-})
-
 
 // Change this value to switch users programmatically.
 const currentUserId = ref(sampleId(101))
 
-// DELETE WHEN READY , this is to test between multiple users
+// Selected buddy and its loading state.
 const selectedPokemon = ref(null)
 const pokemonLoading = ref(false)
 
@@ -753,7 +760,7 @@ const stats = computed(() => [
   {
     title: 'Sessions Completed',
     value: user.value.total_study_sessions,
-    change: `${sessionsThisWeek.value} this week · 15 XP each`,
+    change: `${sessionsThisWeek.value} this week · ${SESSION_XP} XP each`,
     icon: '📖',
     color: 'pink',
     explanation:
@@ -956,12 +963,6 @@ const topicProgress = computed(() =>
         latestScore !== null && previousScore !== null
           ? latestScore - previousScore
           : null,
-      status:
-      latestScore === null
-        ? 'Not started'
-        : latestScore >= 80
-          ? 'Completed ✓'
-          : 'In progress',
       color:
         latestScore === null
           ? 'grey'
@@ -1039,15 +1040,6 @@ const recommendedTopics = computed(() => {
     a.topic_order - b.topic_order
   )
 })
-
-const showAllQuizzes = ref(false)
-
-const visibleQuizzes = computed(() =>
-  showAllQuizzes.value
-    ? recommendedTopics.value
-    : recommendedTopics.value.slice(0, 3)
-)
-
 // ======================================================
 // RECENT PROGRESS
 // Built dynamically from quizzes + completed sessions.
@@ -1101,7 +1093,6 @@ const visibleProgress = computed(() =>
 watch(currentUserId, () => {
   expandedTopic.value = null
   showAllProgress.value = false
-  showAllQuizzes.value = false
 })
 
 // Keep date-based calculations current while the page is open.
@@ -1139,42 +1130,22 @@ onUnmounted(() => {
             </p>
           </div>
         </div>
+        <div class="dashboard-buddy">
+          <h3 class="town-buddy-heading">
+            Your Town Buddy Progress
+          </h3>
 
-        <div class="town-buddy">
-          <div class="mascot-header">
-            <h3 class="mascot-title">Your Town Buddy Progress</h3>
-          </div>
-          <div class="header-mascot">
-            <p v-if="pokemonLoading">Loading Pokémon...</p>
+          <p v-if="pokemonLoading" role="status">
+            Loading Pokémon...
+          </p>
 
-            <template v-else-if="selectedPokemon">
-              <img
-                :src="selectedPokemon.sprite"
-                :alt="selectedPokemon.name"
-                class="pokemon-sprite"
-              />
+          <PokemonBuddy
+            v-else-if="selectedPokemon"
+            :key="selectedPokemon.ownedId"
+            :active-pokemon="selectedPokemon"
+          />
 
-              <div class="pokemon-info">
-                <strong>{{ selectedPokemon.name }}</strong>
-                <span>Lv. {{ selectedPokemon.level }}</span>
-                <div class="pokemon-xp">
-                  <div class="xp-label">
-                    <span>XP Progress</span>
-                    <span>{{ pokemonXPProgress }}/100 XP</span>
-                  </div>
-
-                  <div class="xp-bar">
-                    <div
-                      class="xp-fill"
-                      :style="{ width: pokemonXPProgress + '%' }"
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <p v-else>No Pokémon selected</p>
-          </div>
+          <p v-else>No Pokémon selected.</p>
         </div>
 
 
@@ -1208,7 +1179,7 @@ onUnmounted(() => {
           >
             {{
               pendingSession
-                ? 'Complete sample session (+15 XP)'
+                ? `Complete sample session (+${SESSION_XP} XP)`
                 : 'No pending sample session'
             }}
           </button>
@@ -1734,32 +1705,6 @@ summary:focus-visible,
   font-size: 11px;
 }
 
-.header-mascot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.header-mascot img {
-  width: 90px;
-  height: 90px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.header-mascot > span {
-  padding: 9px 12px;
-
-  border: 1px solid #e4c177;
-  border-radius: 11px;
-  background: #ffe6ad;
-  color: #76531d;
-
-  font-size: 12px;
-  font-weight: 600;
-  transform: rotate(5deg);
-}
 
 /* ======================================================
    DEMO CONTROLS
@@ -2056,11 +2001,6 @@ summary:focus-visible,
 .topic-yellow {
   border-color: #eee5cb;
   background: #fffbf1;
-}
-
-.topic-grey {
-  border-color: #e5e8ee;
-  background: #f6f7fa;
 }
 
 .topic-toggle {
@@ -2533,10 +2473,6 @@ summary:focus-visible,
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .activity-chart {
-    height: 260px;
-  }
-
   .activity-empty {
     padding: 24px 16px;
   }
@@ -2551,10 +2487,6 @@ summary:focus-visible,
   .dashboard-panel {
     padding: 20px;
   }
-
-  .header-mascot > span {
-    display: none;
-  }
 }
 
 @media (max-width: 600px) {
@@ -2565,10 +2497,6 @@ summary:focus-visible,
   .dashboard-header {
     padding: 18px;
     border-radius: 17px;
-  }
-
-  .header-mascot {
-    display: none;
   }
 
   .welcome-copy .eyebrow {
@@ -2685,70 +2613,131 @@ summary:focus-visible,
   }
 }
 
-.pokemon-sprite {
-  width: 100px;
-  height: 100px;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.pokemon-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 13px;
+/* Compact town buddy */
+.dashboard-buddy {
+  flex: 0 1 300px;
+  width: 300px;
+  min-width: 0;
   color: #26365b;
 }
 
-.pokemon-info strong {
+.town-buddy-heading {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #ffde59;
+  font-family: 'Luckiest Guy', cursive;
+  font-size: 17px;
+  text-align: center;
+}
+
+/* Pokémon image left, details right */
+.dashboard-buddy :deep(.pokemon-buddy) {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+  padding: 0;
+  text-align: left;
+}
+
+.dashboard-buddy :deep(.pokemon-buddy > h2) {
+  display: none;
+}
+
+.dashboard-buddy :deep(.buddy-image-container) {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  width: 90px;
+  height: 110px;
+}
+
+.dashboard-buddy :deep(.buddy-sprite) {
+  width: auto;
+  height: 75px;
+  max-width: 100%;
+}
+
+.dashboard-buddy :deep(.pokemon-buddy > h3) {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  margin: 0;
   font-size: 18px;
 }
 
-.pokemon-xp {
-  width: 100%;
-  margin-top: 8px;
+.dashboard-buddy :deep(.buddy-level) {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+  font-size: 13px;
 }
 
-.xp-label {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+/* XP label and value above the bar */
+.dashboard-buddy :deep(.buddy-xp) {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  width: 100%;
+  max-width: none;
+  margin-top: 4px;
+}
+
+.dashboard-buddy :deep(.buddy-xp > p) {
+  margin: 0;
   font-size: 11px;
   color: #647394;
-  margin-bottom: 6px;
 }
 
-.xp-bar {
-  width: 100%;
+.dashboard-buddy :deep(.buddy-xp > p:first-child) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.dashboard-buddy :deep(.buddy-xp > p:last-child) {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dashboard-buddy :deep(.buddy-xp .xp-track) {
+  grid-column: 1 / -1;
+  grid-row: 2;
   height: 9px;
+  margin: 0;
+  border-radius: 999px;
   background: #e5e9df;
-  border-radius: 10px;
-  overflow: hidden;
 }
 
-.xp-fill {
-  height: 100%;
+.dashboard-buddy :deep(.buddy-xp .xp-fill) {
   background: #78c98b;
-  border-radius: 10px;
-  transition: width 0.4s ease;
+  border-radius: inherit;
 }
 
-.mascot-title {
-  display: inline-block;
-  background: #ffde59;
-  color: #26365b;
-
-  padding: 8px 16px;
-  border-radius: 10px;
-
-  font-size: 17px;
+/* Keep animation feedback below the details */
+.dashboard-buddy :deep(.buddy-message),
+.dashboard-buddy :deep(.buddy-error),
+.dashboard-buddy :deep(.buddy-status) {
+  grid-column: 1 / -1;
+  font-size: 11px;
   text-align: center;
-  margin: 0 0 15px;
-
-  font-family: "Luckiest Guy", cursive;
 }
 
-.mascot-header{
-  margin-bottom: 5px;
+@media (max-width: 700px) {
+  .dashboard-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dashboard-buddy {
+    flex: none;
+    width: 100%;
+    max-width: 300px;
+    align-self: center;
+  }
 }
 </style>

@@ -10,14 +10,18 @@ import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
 import { DEFAULT_WEATHER_LOCATION, useWeatherLocation } from '../composables/useWeatherLocation'
 
+
+
 // VUE TYPERR
 import VueTyper from 'vue3-typer'
 import 'vue3-typer/dist/vue-typer.css'
 
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import ClockWeather from '@/components/common/ClockWeather.vue'
 
 
 const router = useRouter()
-const { getSavedLocation, selectLocation } = useWeatherLocation()
+const { getSavedLocation } = useWeatherLocation()
 
 const asset = '/town/'
 
@@ -157,11 +161,10 @@ let clockInterval
 // ==========================================
 // 1. WEATHER DATA
 // ==========================================
-const temperature = ref(null)
-const weatherCode = ref(null)
-const cloudCover = ref(null)
-const isDay = ref(true)
-
+const use_device_loc = ref(false)
+function chooseLocation(option){
+  use_device_loc.value = option
+}
 const isRaining = ref(false)
 const rainDataAvailable = ref(false)
 
@@ -181,10 +184,6 @@ let weatherStarted = false
 let weatherPageActive = false
 
 
-function chooseLocation(useDeviceLocation) {
-  startWeather(selectLocation(useDeviceLocation))
-}
-
 async function startWeather(locationPromise) {
   if (weatherStarted) return
 
@@ -199,11 +198,11 @@ async function startWeather(locationPromise) {
   longitude.value = location.longitude
 
   // Fetch weather using selected location
-  fetchWeather()
+  // fetchWeather()
   fetchActualRain()
 
   // Update weather every 10 minutes
-  weatherInterval = setInterval(fetchWeather, 600000)
+  // weatherInterval = setInterval(fetchWeather, 600000)
 
   // Update rainfall every 5 minutes
   rainInterval = setInterval(fetchActualRain, 300000)
@@ -214,33 +213,32 @@ async function startWeather(locationPromise) {
 // ==========================================
 // 3. FETCH WEATHER FROM OPEN-METEO
 // ==========================================
-async function fetchWeather() {
-  try {
-    const response = await axios.get(
-      'https://api.open-meteo.com/v1/forecast',
-      {
-        params: {
-          latitude: latitude.value,
-          longitude: longitude.value,
-          current: 'temperature_2m,weather_code,cloud_cover,is_day',
-          timezone: 'auto'
-        }
-      }
-    )
+// async function fetchWeather() {
+//   try {
+//     const response = await axios.get(
+//       'https://api.open-meteo.com/v1/forecast',
+//       {
+//         params: {
+//           latitude: latitude.value,
+//           longitude: longitude.value,
+//           current: 'temperature_2m,weather_code,cloud_cover,is_day',
+//           timezone: 'auto'
+//         }
+//       }
+//     )
 
-    const current = response.data.current
+//     const current = response.data.current
 
-    temperature.value = current.temperature_2m
-    weatherCode.value = current.weather_code
-    cloudCover.value = current.cloud_cover
-    isDay.value = current.is_day === 1
+//     weatherCode.value = current.weather_code
+//     cloudCover.value = current.cloud_cover
+//     isDay.value = current.is_day === 1
 
-    console.log('Open-Meteo weather:', current)
+//     console.log('Open-Meteo weather:', current)
 
-  } catch (error) {
-    console.error('Error fetching weather:', error)
-  }
-}
+//   } catch (error) {
+//     console.error('Error fetching weather:', error)
+//   }
+// }
 
 // ==========================================
 // 4. CALCULATE DISTANCE BETWEEN LOCATIONS
@@ -344,32 +342,6 @@ async function fetchActualRain() {
     isRaining.value = false
   }
 }
-
-// ==========================================
-// 6. DETERMINE WEATHER IMAGE
-// ==========================================
-const weatherImg = computed(() => {
-  if (rainActive.value) {
-    return '/assets/rain.png'
-  }
-
-  if (weatherCode.value === null) return null
-
-  if (!isDay.value) {
-    return '/assets/moon.png'
-  }
-
-  if (cloudCover.value >= 70) {
-    return '/assets/cloud.png'
-  }
-
-  if (cloudCover.value >= 20) {
-    return '/assets/suncloud.png'
-  }
-
-  return '/assets/sun.png'
-})
-
 
 const hour = computed(() => {
   if (!live.value) return Number(previewHour.value)
@@ -513,14 +485,6 @@ function celestialStyle(isMoon) {
       : 0,
   }
 }
-
-const displayTime = computed(() => {
-  const minutes = Math.floor(hour.value * 60)
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(
-    minutes % 60
-  ).padStart(2, '0')}`
-})
-
 // ==========================================
 // RAIN + UMBRELLA
 // ==========================================
@@ -1077,8 +1041,10 @@ onMounted(() => {
   weatherPageActive = true
   const savedLocation = getSavedLocation()
   if (savedLocation) {
+    console.log('hm?')
     startWeather(savedLocation)
   } else {
+    console.log('modal true leh')
     showLocationModal.value = true
   }
 
@@ -1281,6 +1247,20 @@ const townBuddyImage = computed(() => {
 
   return activeBuddyImage.value
 })
+
+// Convert the homepage record into the format PokemonBuddy uses.
+const homepagePokemon = computed(() => {
+  if (!activeBuddy.value.id) return null
+
+  return {
+    ...activeBuddy.value,
+    isDefeated: activeBuddy.value.is_defeated,
+    evolution_stage: activeBuddy.value.evolution_stage ?? 0,
+    animated_img: activeBuddyImage.value,
+    static_img: buddyData.value?.sprites?.front_default || ''
+  }
+})
+
 // Sample count — connect this to the user's inventory later.
 const unopenedPackCount = ref(3)
 
@@ -1738,15 +1718,18 @@ watch(
       alt="StudyDex"
     />
 
-    <div class="sd-clock" aria-label="Town time">
-      <img v-if="weatherImg" :src="weatherImg" alt="" style="width:40px;">
+    <ClockWeather
+      :use-device-location=use_device_loc
+    />
 
-      <span class="sd-clock-time">{{ displayTime }}</span>
 
-      <span class="sd-clock-divider" aria-hidden="true"></span>
-
-      <span class="sd-clock-period">{{ lighting.name }}</span>
-    </div>
+    <!-- <ClockWeather
+      :use-device-location="true"
+      :hour="hour"
+      :period="lighting.name"
+      :rain-preview="rainPreview"
+      @rain-change="isRaining = $event"
+    /> -->
   </header>
 
   <!-- Click outside to dismiss the profile menu -->
@@ -2297,20 +2280,26 @@ watch(
                 mode="out-in"
                 type="transition"
               >
+                <!-- Keep the existing sleeping Poké Ball behaviour -->
                 <img
-                  :key="townBuddyImage"
+                  v-if="buddySleeping"
+                  key="sleeping-buddy"
                   class="buddy-image"
                   :class="{ 'is-shaking': ballShaking }"
                   :src="townBuddyImage"
-                  :alt="`${activeBuddy.name}, ${
-                    buddySleeping
-                      ? 'resting'
-                      : 'your active study buddy'
-                  }`"
+                  :alt="`${activeBuddy.name}, resting`"
                   draggable="false"
                   @click="shakePokeball"
                   @animationend="ballShaking = false"
                   @error="buddyError = 'Your buddy’s image could not load.'"
+                />
+
+                <!-- Awake Pokémon uses the reusable component -->
+                <PokemonBuddy
+                  v-else-if="homepagePokemon"
+                  :key="homepagePokemon.ownedId"
+                  class="homepage-pokemon"
+                  :active-pokemon="homepagePokemon"
                 />
               </Transition>
 
@@ -3175,53 +3164,6 @@ img.layer {
   filter: drop-shadow(0 4px 3px rgba(8, 25, 60, 0.3));
 }
 
-.sd-clock {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-
-  padding: 9px 15px;
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 999px;
-
-  background: rgba(15, 36, 70, 0.38);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-
-  color: #fff;
-  box-shadow:
-    0 4px 12px rgba(7, 20, 44, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.sd-clock-icon {
-  width: 20px;
-  height: 20px;
-  color: #ffe17a;
-  flex-shrink: 0;
-}
-
-.sd-clock-time {
-  font-size: 19px;
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: 0.5px;
-  font-variant-numeric: tabular-nums;
-}
-
-.sd-clock-divider {
-  width: 1px;
-  height: 17px;
-  background: rgba(255, 255, 255, 0.35);
-}
-
-.sd-clock-period {
-  font-size: 12px;
-  font-weight: 700;
-  color: #eef6ff;
-}
-
 /* NAVBAR GLASS PANEL */
 
 .sd-navbar {
@@ -3462,24 +3404,6 @@ img.layer {
 
   .sd-logo {
     width: 145px;
-  }
-
-  .sd-clock {
-    gap: 7px;
-    padding: 7px 11px;
-  }
-
-  .sd-clock-time {
-    font-size: 16px;
-  }
-
-  .sd-clock-icon {
-    width: 17px;
-    height: 17px;
-  }
-
-  .sd-clock-period {
-    font-size: 10px;
   }
 
   .sd-navbar {
@@ -5776,4 +5700,43 @@ img.layer {
   background: #f5ecd4;
 }
 
+/* Fit the component into the existing town character space */
+.homepage-pokemon {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  padding: 0;
+  gap: 0;
+}
+
+/* Homepage shows only the image and its animation effects */
+.homepage-pokemon :deep(h2),
+.homepage-pokemon :deep(h3),
+.homepage-pokemon :deep(.buddy-level),
+.homepage-pokemon :deep(.buddy-xp),
+.homepage-pokemon :deep(.buddy-message),
+.homepage-pokemon :deep(.buddy-error),
+.homepage-pokemon :deep(.buddy-status),
+.homepage-pokemon :deep(.buddy-placeholder) {
+  display: none;
+}
+
+.homepage-pokemon :deep(.buddy-image-container) {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.homepage-pokemon :deep(.buddy-sprite) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
 </style>

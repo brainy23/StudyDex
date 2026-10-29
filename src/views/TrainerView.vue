@@ -1,14 +1,23 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+
 import { getCurrentProfile } from '../services/profileService'
 import { updateCurrentAvatar } from '../services/accountService'
 import { avatarOptions } from '../data/avatarOptions'
+
 import BackToHome from '../components/common/BackToHome.vue'
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import ClockWeather from '@/components/common/ClockWeather.vue'
+
+// =====================================================
+// CONFIGURATION AND PAGE IMAGES
+// =====================================================
+
 
 const router = useRouter()
-
 const base = import.meta.env.BASE_URL
+const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 
 const images = {
   room: `${base}trainer-home/trainer-home-v3.png`,
@@ -16,8 +25,9 @@ const images = {
   sun: `${base}town/bg_sun.png`,
   moon: `${base}town/bg_moon.png`,
   stars: `${base}town/bg_stars.png`,
-  clouds: `${base}town/bg_clouds.png`,
+  clouds: `${base}town/bg_clouds.png`
 }
+
 const failedImages = ref([])
 
 function reportImageError(event) {
@@ -28,42 +38,34 @@ function reportImageError(event) {
   }
 }
 
+// =====================================================
+// CLOCK — FOR ROOM LIGHTING ONLY
+// =====================================================
+
+// ClockWeather.vue handles the displayed time.
+// This clock controls room lighting, sun, moon and stars.
+
 const currentTime = ref(new Date())
-let clockInterval
+
+let clockInterval = null
 
 function refreshClock() {
   currentTime.value = new Date()
 }
 
-onMounted(() => {
-  refreshClock()
-  clockInterval = setInterval(refreshClock, 1000)
-  document.addEventListener('visibilitychange', refreshClock)
-})
-
-onUnmounted(() => {
-  clearInterval(clockInterval)
-  document.removeEventListener('visibilitychange', refreshClock)
-})
-
 const hour = computed(() => {
   const now = currentTime.value
-  return now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600
+
+  return (
+    now.getHours() +
+    now.getMinutes() / 60 +
+    now.getSeconds() / 3600
+  )
 })
 
-const displayTime = computed(() => {
-  const totalMinutes = Math.floor(hour.value * 60)
-
-  const hours = String(
-    Math.floor(totalMinutes / 60)
-  ).padStart(2, '0')
-
-  const minutes = String(
-    totalMinutes % 60
-  ).padStart(2, '0')
-
-  return `${hours}:${minutes}`
-})
+// =====================================================
+// ROOM LIGHTING
+// =====================================================
 
 const frames = [
   {
@@ -75,7 +77,7 @@ const frames = [
     saturation: 0.8,
     cloud: 0.3,
     stars: 1,
-    lights: 1,
+    lights: 1
   },
   {
     hour: 5.5,
@@ -86,7 +88,7 @@ const frames = [
     saturation: 0.7,
     cloud: 0.38,
     stars: 0.8,
-    lights: 1,
+    lights: 1
   },
   {
     hour: 8,
@@ -97,7 +99,7 @@ const frames = [
     saturation: 1.06,
     cloud: 1,
     stars: 0,
-    lights: 0,
+    lights: 0
   },
   {
     hour: 12,
@@ -108,7 +110,7 @@ const frames = [
     saturation: 1.1,
     cloud: 1,
     stars: 0,
-    lights: 0,
+    lights: 0
   },
   {
     hour: 15.5,
@@ -119,7 +121,7 @@ const frames = [
     saturation: 1.08,
     cloud: 0.95,
     stars: 0,
-    lights: 0,
+    lights: 0
   },
   {
     hour: 18.5,
@@ -130,7 +132,7 @@ const frames = [
     saturation: 1.05,
     cloud: 0.78,
     stars: 0.03,
-    lights: 0.15,
+    lights: 0.15
   },
   {
     hour: 19.25,
@@ -141,7 +143,7 @@ const frames = [
     saturation: 0.85,
     cloud: 0.58,
     stars: 0.35,
-    lights: 0.55,
+    lights: 0.55
   },
   {
     hour: 20.5,
@@ -152,7 +154,7 @@ const frames = [
     saturation: 0.75,
     cloud: 0.4,
     stars: 0.75,
-    lights: 0.9,
+    lights: 0.9
   },
   {
     hour: 22,
@@ -163,15 +165,16 @@ const frames = [
     saturation: 0.8,
     cloud: 0.3,
     stars: 1,
-    lights: 1,
-  },
+    lights: 1
+  }
 ]
 
 frames.push({ ...frames[0], hour: 24 })
 
-const lerp = (a, b, t) => a + (b - a) * t
+const lerp = (start, end, progress) =>
+  start + (end - start) * progress
 
-function mixColor(firstHex, secondHex, t) {
+function mixColor(firstHex, secondHex, progress) {
   const toRgb = hex =>
     hex.match(/[a-f\d]{2}/gi).map(value => parseInt(value, 16))
 
@@ -179,7 +182,7 @@ function mixColor(firstHex, secondHex, t) {
   const second = toRgb(secondHex)
 
   const result = first.map((value, index) =>
-    Math.round(lerp(value, second[index], t))
+    Math.round(lerp(value, second[index], progress))
   )
 
   return `rgb(${result.join(',')})`
@@ -193,23 +196,20 @@ const lighting = computed(() => {
   )
 
   const safeIndex = Math.max(0, index)
-
-  const a = frames[safeIndex]
-  const b = frames[safeIndex + 1]
+  const start = frames[safeIndex]
+  const end = frames[safeIndex + 1]
 
   const progress = Math.max(
     0,
-    Math.min(
-      1,
-      (hour.value - a.hour) / (b.hour - a.hour)
-    )
+    Math.min(1, (hour.value - start.hour) / (end.hour - start.hour))
   )
-  const t = progress * progress * (3 - 2 * progress)
+
+  const smoothProgress = progress * progress * (3 - 2 * progress)
 
   const result = {
-    name: t < 0.5 ? a.name : b.name,
-    top: mixColor(a.top, b.top, t),
-    horizon: mixColor(a.horizon, b.horizon, t),
+    name: smoothProgress < 0.5 ? start.name : end.name,
+    top: mixColor(start.top, end.top, smoothProgress),
+    horizon: mixColor(start.horizon, end.horizon, smoothProgress)
   }
 
   for (const key of [
@@ -217,9 +217,9 @@ const lighting = computed(() => {
     'saturation',
     'cloud',
     'stars',
-    'lights',
+    'lights'
   ]) {
-    result[key] = lerp(a[key], b[key], t)
+    result[key] = lerp(start[key], end[key], smoothProgress)
   }
 
   return result
@@ -231,26 +231,26 @@ const skyStyle = computed(() => ({
     ${lighting.value.top} 0%,
     ${lighting.value.horizon} 55%,
     ${lighting.value.horizon} 100%
-  )`,
+  )`
 }))
 
 const landscapeStyle = computed(() => ({
   filter: `
     brightness(${lighting.value.brightness})
     saturate(${lighting.value.saturation})
-  `,
+  `
 }))
 
 const cloudStyle = computed(() => ({
   opacity: lighting.value.cloud,
-  filter: `brightness(${lighting.value.brightness})`,
+  filter: `brightness(${lighting.value.brightness})`
 }))
 
 const roomStyle = computed(() => ({
   filter: `
     brightness(${0.55 + lighting.value.brightness * 0.45})
     saturate(${0.9 + lighting.value.saturation * 0.1})
-  `,
+  `
 }))
 
 const sunsetStrength = computed(() =>
@@ -258,123 +258,280 @@ const sunsetStrength = computed(() =>
 )
 
 function celestialStyle(isMoon) {
-  const h = hour.value
   const progress = isMoon
-    ? ((h - 19 + 24) % 24) / 11
-    : (h - 6) / 13
+    ? ((hour.value - 19 + 24) % 24) / 11
+    : (hour.value - 6) / 13
 
   const visible = progress > 0 && progress < 1
-  const p = Math.max(0, Math.min(1, progress))
+  const position = Math.max(0, Math.min(1, progress))
 
   return {
-    left: `${18 + p * 64}%`,
-    top: `${48 - Math.sin(p * Math.PI) * 36}%`,
+    left: `${18 + position * 64}%`,
+    top: `${48 - Math.sin(position * Math.PI) * 36}%`,
     opacity: visible
-      ? Math.min(1, p * 12, (1 - p) * 12)
-      : 0,
-  }
-}
-// Buddy preview remains local; avatar selection uses the authenticated profile.
-const STORAGE = {
-  buddy: 'studydex-active-buddy',
-}
-
-function readSaved(key, fallback) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) ?? fallback
-  } catch {
-    return fallback
+      ? Math.min(1, position * 12, (1 - position) * 12)
+      : 0
   }
 }
 
-const saveError = ref('')
-const saveMessage = ref('')
+// =====================================================
+// TRAINER AVATAR — AUTHENTICATED PROFILE
+// =====================================================
+
+const profile = ref(null)
+
 const avatarLoading = ref(false)
 const avatarSaving = ref(false)
 const avatarLoadError = ref('')
-const profile = ref(null)
+
+const saveError = ref('')
+const saveMessage = ref('')
+
 let avatarPageActive = true
 
-const trainerVariants = avatarOptions.map(option => ({ ...option, id: option.value }))
+const trainerVariants = avatarOptions.map(option => ({
+  ...option,
+  id: option.value
+}))
 
 const selectedTrainer = computed(() =>
-  trainerVariants.find(item => item.value === profile.value?.avatar_choice) || null,
+  trainerVariants.find(
+    item => item.value === profile.value?.avatar_choice
+  ) ?? null
 )
-const selectedVariantId = computed(() => selectedTrainer.value?.id || '')
 
-// Fall back to the original avatar if an idle sheet is unavailable.
-const loadedIdle = ref('')
-watch(() => selectedTrainer.value?.idleImage, (src, previous, onCleanup) => {
-  loadedIdle.value = ''
-  if (!src) return
-  const image = new Image()
-  image.onload = () => { loadedIdle.value = src }
-  image.onerror = () => { loadedIdle.value = '' }
-  onCleanup(() => { image.onload = null; image.onerror = null })
-  image.src = src
-}, { immediate: true })
+const selectedVariantId = computed(() =>
+  selectedTrainer.value?.id ?? ''
+)
 
 const genderFilter = ref('male')
 
 const visibleVariants = computed(() =>
-  trainerVariants.filter(item => item.value === genderFilter.value),
+  trainerVariants.filter(
+    item => item.value === genderFilter.value
+  )
+)
+
+// Use the original avatar while its idle image is unavailable.
+const loadedIdle = ref('')
+
+watch(
+  () => selectedTrainer.value?.idleImage,
+  (src, previous, onCleanup) => {
+    loadedIdle.value = ''
+
+    if (!src) return
+
+    const image = new Image()
+
+    image.onload = () => {
+      loadedIdle.value = src
+    }
+
+    image.onerror = () => {
+      loadedIdle.value = ''
+    }
+
+    onCleanup(() => {
+      image.onload = null
+      image.onerror = null
+    })
+
+    image.src = src
+  },
+  { immediate: true }
 )
 
 async function loadTrainerProfile() {
   if (avatarLoading.value || avatarSaving.value) return
+
   avatarLoading.value = true
   avatarLoadError.value = ''
+
   try {
     const saved = await getCurrentProfile()
+
     if (!avatarPageActive) return
+
     profile.value = saved
     genderFilter.value = saved.avatar_choice
   } catch (error) {
-    if (avatarPageActive)
-      avatarLoadError.value = error.message || 'Your avatar could not load. Please try again.'
+    if (avatarPageActive) {
+      avatarLoadError.value =
+        error.message ||
+        'Your avatar could not load. Please try again.'
+    }
   } finally {
-    if (avatarPageActive) avatarLoading.value = false
+    if (avatarPageActive) {
+      avatarLoading.value = false
+    }
   }
 }
 
 async function selectTrainer(variant) {
-  if (avatarLoading.value || avatarSaving.value || !profile.value || selectedVariantId.value === variant.id) return
+  if (
+    avatarLoading.value ||
+    avatarSaving.value ||
+    !profile.value ||
+    selectedVariantId.value === variant.id
+  ) return
+
   avatarSaving.value = true
   saveError.value = ''
   saveMessage.value = ''
+
   try {
     const saved = await updateCurrentAvatar(variant.value)
+
     if (!avatarPageActive) return
+
     profile.value = saved
     saveMessage.value = 'Avatar saved to your profile.'
   } catch (error) {
-    if (avatarPageActive)
-      saveError.value = error.message || 'Your avatar could not be saved. Please try again.'
+    if (avatarPageActive) {
+      saveError.value =
+        error.message ||
+        'Your avatar could not be saved. Please try again.'
+    }
   } finally {
-    if (avatarPageActive) avatarSaving.value = false
+    if (avatarPageActive) {
+      avatarSaving.value = false
+    }
   }
 }
 
-onMounted(() => {
-  loadTrainerProfile()
-  window.addEventListener('focus', loadTrainerProfile)
-})
-onUnmounted(() => {
-  avatarPageActive = false
-  window.removeEventListener('focus', loadTrainerProfile)
-})
-const savedBuddy = readSaved(STORAGE.buddy, null)
-const savedBuddyId = Number(savedBuddy?.id)
+// =====================================================
+// POKÉMON — LOCAL SAMPLE TABLES
+// These records are separate from the live avatar profile.
+// =====================================================
 
-const activeBuddy = ref(
-  Number.isInteger(savedBuddyId) && savedBuddyId > 0
-    ? { ...savedBuddy, id: savedBuddyId }
-    : null,
-)
+const sampleProfiles = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    display_name: 'Jake',
+    school_level_id: null,
+    created_at: '2026-10-01T10:00:00+08:00',
+    avatar_choice: 'male'
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    display_name: 'Ash',
+    school_level_id: null,
+    created_at: '2026-10-02T10:00:00+08:00',
+    avatar_choice: 'female'
+  }
+]
+
+// Change to sampleProfiles[1].id to preview Ash's Pokémon.
+const currentUserId = ref(sampleProfiles[0].id)
+
+const pokemonCatalog = [
+  {
+    id: '00000000-0000-4000-8000-000000000201',
+    pokeapi_id: 172,
+    name: 'Pichu',
+    sprite_url:
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/172.png',
+    evolves_from_id: null,
+    created_at: '2026-10-01T10:00:00+08:00'
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000202',
+    pokeapi_id: 4,
+    name: 'Charmander',
+    sprite_url:
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png',
+    evolves_from_id: null,
+    created_at: '2026-10-01T10:00:00+08:00'
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000203',
+    pokeapi_id: 7,
+    name: 'Squirtle',
+    sprite_url:
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png',
+    evolves_from_id: null,
+    created_at: '2026-10-01T10:00:00+08:00'
+  }
+]
+
+const userPokemons = ref([
+  {
+    id: '00000000-0000-4000-8000-000000000301',
+    user_id: '00000000-0000-4000-8000-000000000101',
+    pokemon_id: '00000000-0000-4000-8000-000000000201',
+    xp: 90,
+    level: 1,
+    is_selected: true,
+    is_defeated: false,
+    obtained_at: '2026-10-01T10:00:00+08:00'
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000302',
+    user_id: '00000000-0000-4000-8000-000000000101',
+    pokemon_id: '00000000-0000-4000-8000-000000000202',
+    xp: 60,
+    level: 1,
+    is_selected: false,
+    is_defeated: false,
+    obtained_at: '2026-10-03T10:00:00+08:00'
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000303',
+    user_id: '00000000-0000-4000-8000-000000000102',
+    pokemon_id: '00000000-0000-4000-8000-000000000203',
+    xp: 30,
+    level: 1,
+    is_selected: true,
+    is_defeated: false,
+    obtained_at: '2026-10-02T10:00:00+08:00'
+  }
+])
+
+// =====================================================
+// FIND THE SAMPLE USER'S ACTIVE POKÉMON
+// =====================================================
+
+const activeBuddy = computed(() => {
+  const owned = userPokemons.value.find(record =>
+    record.user_id === currentUserId.value &&
+    record.is_selected
+  )
+
+  if (!owned) return null
+
+  const species = pokemonCatalog.find(
+    pokemon => pokemon.id === owned.pokemon_id
+  )
+
+  if (!species) return null
+
+  return {
+    ownedId: owned.id,
+    pokemon_id: species.id,
+
+    // The component uses the numeric PokéAPI ID.
+    id: species.pokeapi_id,
+    name: species.name,
+
+    xp: owned.xp,
+    level: owned.level,
+    isDefeated: owned.is_defeated,
+    static_img: species.sprite_url || ''
+  }
+})
+
+// =====================================================
+// FETCH THE BUDDY IMAGE
+// Cached for this page visit.
+// =====================================================
 
 const buddySprite = ref('')
 const buddyLoading = ref(false)
 const buddyError = ref('')
+
+const spriteCache = new Map()
+
 watch(
   () => activeBuddy.value?.id,
   async (id, previousId, onCleanup) => {
@@ -392,50 +549,74 @@ watch(
 
     if (!id) return
 
+    const fallback = activeBuddy.value.static_img
     buddyLoading.value = true
 
     try {
-      const cacheKey = `studydex-pokemon-v1-${id}`
-      let pokemon = readSaved(cacheKey, null)
+      let sprite = spriteCache.get(id)
 
-      if (!pokemon?.sprites) {
+      if (!sprite) {
         const response = await fetch(
-          `https://pokeapi.co/api/v2/pokemon/${id}/`,
-          { signal: controller.signal },
+          `${POKE_API_URL}/pokemon/${id}/`,
+          { signal: controller.signal }
         )
 
-        if (!response.ok) throw new Error('Could not load Pokémon')
+        if (!response.ok) {
+          throw new Error('Could not load Pokémon')
+        }
 
-        pokemon = await response.json()
+        const data = await response.json()
 
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(pokemon))
-        } catch {
-          // Continue without caching if browser storage is full.
+        sprite =
+          data.sprites?.versions?.['generation-v']?.['black-white']
+            ?.animated?.front_default ||
+          data.sprites?.front_default ||
+          fallback
+
+        if (sprite) {
+          spriteCache.set(id, sprite)
         }
       }
 
       if (cancelled) return
 
-      buddySprite.value =
-        pokemon.sprites?.versions?.['generation-v']?.['black-white']
-          ?.animated?.front_default ||
-        pokemon.sprites?.front_default ||
-        ''
+      buddySprite.value = sprite || ''
 
       if (!buddySprite.value) {
         buddyError.value = 'No sprite available.'
       }
     } catch (error) {
-      if (!cancelled && error.name !== 'AbortError') {
+      if (cancelled || error.name === 'AbortError') return
+
+      buddySprite.value = fallback
+
+      if (!fallback) {
         buddyError.value = 'Your buddy could not load.'
       }
     } finally {
-      if (!cancelled) buddyLoading.value = false
+      if (!cancelled) {
+        buddyLoading.value = false
+      }
     }
   },
-  { immediate: true },
+  { immediate: true }
 )
+
+// The single object passed to PokemonBuddy.
+// All sample species above are their initial forms.
+const roomPokemon = computed(() => {
+  if (!activeBuddy.value) return null
+
+  return {
+    ...activeBuddy.value,
+    animated_img: buddySprite.value,
+    evolution_stage: 0
+  }
+})
+
+// =====================================================
+// WARDROBE PANEL
+// =====================================================
 
 const openPanel = ref(null)
 const wardrobeButton = ref(null)
@@ -448,59 +629,129 @@ function closePanel() {
   const previousPanel = openPanel.value
   openPanel.value = null
 
-  if (previousPanel === 'wardrobe') wardrobeButton.value?.focus()
+  if (previousPanel === 'wardrobe') {
+    wardrobeButton.value?.focus()
+  }
 }
 
-// StudyDeck is entered through Poké Lab in town; the other shortcuts open their pages.
-// Coordinates and traced outlines match trainer-home-v3.png.
-// SVG shapes also define the clickable area, rather than a rectangular box.
+// =====================================================
+// ROOM LINKS AND CLICKABLE AREAS
+// =====================================================
+
 const roomLinks = [
   {
-    id: 'dashboard', label: 'Dashboard', path: '/dashboard',
-    left: '74.7%', top: '34.8%', width: '11.5%', height: '23%',
-    outline: 'M 2 2 L 98 2 L 98 98 L 2 98 Z',
+    id: 'dashboard',
+    label: 'Dashboard',
+    path: '/dashboard',
+    left: '74.7%',
+    top: '34.8%',
+    width: '11.5%',
+    height: '23%',
+    outline: 'M 2 2 L 98 2 L 98 98 L 2 98 Z'
   },
   {
-    id: 'studydecks', label: 'Visit Poké Lab in town', path: '/home',
-    left: '12%', top: '49.6%', width: '11.3%', height: '11.2%',
-    outline: 'M 2 8 Q 1 3 5 3 L 58 0 Q 61 0 62 4 L 70 66 L 98 79 Q 100 81 96 84 L 40 98 L 14 88 Z',
+    id: 'studydecks',
+    label: 'Visit Poké Lab in town',
+    path: '/home',
+    left: '12%',
+    top: '49.6%',
+    width: '11.3%',
+    height: '11.2%',
+    outline:
+      'M 2 8 Q 1 3 5 3 L 58 0 Q 61 0 62 4 L 70 66 L 98 79 Q 100 81 96 84 L 40 98 L 14 88 Z'
   },
   {
-    id: 'pokepacks', label: 'Open Poképacks', path: '/rewards',
-    left: '91%', top: '68.7%', width: '11.5%', height: '20%',
-    outline: 'M 43 11 Q 41 0 52 0 Q 63 0 64 11 L 77 12 Q 88 15 91 35 L 96 56 L 99 84 Q 99 93 89 95 L 62 99 L 11 92 Q 2 91 2 80 L 3 68 L 9 57 L 12 34 Q 14 14 26 12 Z',
-  },
+    id: 'pokepacks',
+    label: 'Open Poképacks',
+    path: '/rewards',
+    left: '91%',
+    top: '68.7%',
+    width: '11.5%',
+    height: '20%',
+    outline:
+      'M 43 11 Q 41 0 52 0 Q 63 0 64 11 L 77 12 Q 88 15 91 35 L 96 56 L 99 84 Q 99 93 89 95 L 62 99 L 11 92 Q 2 91 2 80 L 3 68 L 9 57 L 12 34 Q 14 14 26 12 Z'
+  }
 ]
+
+// Coordinates match the 1672 × 941 room artwork.
 const wardrobeArea = {
-  // Pixel coordinates from the 1672 × 941 room artwork.
   left: `${(1400 + 272 / 2) / 1672 * 100}%`,
   top: `${(90 + 560 / 2) / 941 * 100}%`,
   width: `${272 / 1672 * 100}%`,
   height: `${560 / 941 * 100}%`,
-  // Two open segments: do not draw across the bag in front of the cupboard.
-  outline: 'M 1462 589 L 1404 577 L 1404 555 L 1408 551 L 1408 181 L 1401 176 L 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634',
-  // The transparent click area also excludes the visible bag.
-  hitArea: 'M 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634 L 1596 592 L 1580 577 L 1550 574 Q 1545 554 1526 555 Q 1507 556 1506 574 L 1474 574 L 1462 589 L 1404 577 Z',
+
+  outline:
+    'M 1462 589 L 1404 577 L 1404 555 L 1408 551 L 1408 181 L 1401 176 L 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634',
+
+  hitArea:
+    'M 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634 L 1596 592 L 1580 577 L 1550 574 Q 1545 554 1526 555 Q 1507 556 1506 574 L 1474 574 L 1462 589 L 1404 577 Z'
 }
 
-// Visible door leaf above the desk, measured in the 1672 × 941 artwork.
 const exitDoorStyle = {
-  left: `${334 / 1672 * 100}%`, top: `${195 / 941 * 100}%`,
-  width: `${80 / 1672 * 100}%`, height: `${273 / 941 * 100}%`,
+  left: `${334 / 1672 * 100}%`,
+  top: `${195 / 941 * 100}%`,
+  width: `${80 / 1672 * 100}%`,
+  height: `${273 / 941 * 100}%`
 }
+
+// =====================================================
+// NAVIGATION
+// =====================================================
 
 const navigationMessage = ref('')
+
 function openRoomPage(link) {
   if (!router.resolve(link.path).matched.length) {
     navigationMessage.value = `${link.label} is not available yet.`
     return
   }
+
   navigationMessage.value = ''
+
   router.push(link.path).catch(() => {
-    navigationMessage.value = `Could not open ${link.label}. Please try again.`
+    navigationMessage.value =
+      `Could not open ${link.label}. Please try again.`
   })
 }
+// =====================================================
+// LIFECYCLE
+// =====================================================
 
+onMounted(() => {
+  // Update room lighting every second
+  refreshClock()
+  clockInterval = setInterval(refreshClock, 1000)
+
+  // Refresh after returning to the tab
+  document.addEventListener(
+    'visibilitychange',
+    refreshClock
+  )
+
+  // Load trainer profile
+  loadTrainerProfile()
+
+  window.addEventListener(
+    'focus',
+    loadTrainerProfile
+  )
+})
+
+onUnmounted(() => {
+  avatarPageActive = false
+
+  clearInterval(clockInterval)
+
+  document.removeEventListener(
+    'visibilitychange',
+    refreshClock
+  )
+
+  window.removeEventListener(
+    'focus',
+    loadTrainerProfile
+  )
+})
 </script>
 
 <template>
@@ -579,7 +830,6 @@ function openRoomPage(link) {
         class="room-image"
         :src="images.room"
         :style="roomStyle"
-        alt="Trainer room with a study laptop, wall dashboard, clothes cupboard, pack bag, and lake-view window"
         draggable="false"
         @error="reportImageError"
       />
@@ -608,7 +858,34 @@ function openRoomPage(link) {
             {{ avatarLoading ? 'Loading your avatar…' : 'Avatar unavailable. Open the wardrobe to retry.' }}
           </div>
 
-          <div class="buddy-figure" aria-live="polite">
+          <div
+            class="buddy-figure"
+            aria-live="polite"
+            @error.capture="buddyError = 'Your buddy could not load.'"
+          >
+            <span v-if="buddyLoading" class="scene-message">
+              Loading…
+            </span>
+
+            <span v-else-if="buddyError" class="scene-message">
+              {{ buddyError }}
+            </span>
+
+            <PokemonBuddy
+              v-else-if="roomPokemon && buddySprite"
+              :key="roomPokemon.ownedId || roomPokemon.id"
+              class="room-pokemon"
+              :active-pokemon="roomPokemon"
+            />
+
+            <span v-else class="scene-message">
+              No active buddy yet
+            </span>
+          </div>
+
+
+
+          <!-- <div class="buddy-figure" aria-live="polite">
             <span v-if="buddyLoading" class="scene-message">
               Loading…
             </span>
@@ -629,7 +906,7 @@ function openRoomPage(link) {
             <span v-else class="scene-message">
               No active buddy yet
             </span>
-          </div>
+          </div> -->
         </div>
 
         <BackToHome
@@ -779,11 +1056,13 @@ function openRoomPage(link) {
           <h1>Trainer Home</h1>
         </div>
 
-        <div class="clock-pill">
+        <ClockWeather/>
+
+        <!-- <div class="clock-pill">
           <span class="clock-time">{{ displayTime }}</span>
           <span class="clock-divider" aria-hidden="true"></span>
           <span class="clock-period">{{ lighting.name }}</span>
-        </div>
+        </div> -->
       </header>
     </div>
 
@@ -926,8 +1205,14 @@ to { opacity: 1; }
 
 .buddy-figure { width: 26.36%; flex-shrink: 0; min-width: 0; }
 
-.trainer-sprite,
-.buddy-sprite { display: block; width: 100%; height: auto; image-rendering: pixelated; user-select: none; filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%)); }
+.trainer-sprite {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  user-select: none;
+  filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%));
+}
 
 .scene-message { display: block; padding: 6px; background: #fff6dd; border-radius: 8px; color: #493c2e; font-size: clamp(9px, 1vw, 13px); text-align: center; }
 
@@ -1089,4 +1374,170 @@ to { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .door-outline { transition: none; }
 }
+
+/* Poke component */
+/* Image-only Pokémon component inside the room */
+
+.room-pokemon {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+/* Hide the heading and extra messages only */
+.room-pokemon :deep(h2),
+.room-pokemon :deep(.buddy-message),
+.room-pokemon :deep(.buddy-error),
+.room-pokemon :deep(.buddy-status),
+.room-pokemon :deep(.buddy-placeholder) {
+  display: none;
+}
+
+/* Pokémon name */
+.room-pokemon :deep(h3) {
+  position: absolute;
+  bottom: calc(100% + 68px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 180px;
+  margin: 0;
+  color: #26365b;
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Pokémon level */
+.room-pokemon :deep(.buddy-level) {
+  position: absolute;
+  bottom: calc(100% + 48px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 180px;
+  margin: 0;
+  color: #493c2e;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* XP information above the sprite */
+.room-pokemon :deep(.buddy-xp) {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 8px;
+
+  width: 160px;
+  max-width: none;
+  margin: 0;
+}
+
+.room-pokemon :deep(.buddy-xp > p) {
+  margin: 0;
+  color: #493c2e;
+  font-size: 10px;
+}
+
+.room-pokemon :deep(.buddy-xp > p:first-child) {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: left;
+}
+
+.room-pokemon :deep(.buddy-xp > p:last-child) {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.room-pokemon :deep(.xp-track) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+
+  width: 100%;
+  height: 9px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e9df;
+  image-rendering: pixelated;
+}
+
+.room-pokemon :deep(.xp-fill) {
+  height: 100%;
+  border-radius: inherit;
+  background: #78c98b;
+}
+
+/* Preserve the sprite size and evolution effects */
+.room-pokemon :deep(.buddy-image-container) {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  margin: 0;
+}
+
+.room-pokemon :deep(.buddy-sprite) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  user-select: none;
+  filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%));
+}
+
+@media (max-width: 600px) {
+  .room-pokemon :deep(h3) {
+    width: 130px;
+    font-size: 14px;
+  }
+
+  .room-pokemon :deep(.buddy-level) {
+    width: 130px;
+    font-size: 11px;
+  }
+
+  .room-pokemon :deep(.buddy-xp) {
+    width: 130px;
+  }
+}
+
+.room-pokemon {
+  isolation: isolate;
+}
+
+.room-pokemon::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% - 2px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 200px;
+  height: 110px;
+  background: #fff0e8;
+  border-radius: 14px;
+
+  z-index: -1;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .room-pokemon::before {
+    width: 150px;
+  }
+}
+
 </style>

@@ -2,6 +2,7 @@
 import axios from 'axios'
 import { computed, onBeforeUnmount, ref } from 'vue'
 
+
 const props = defineProps({
   activePokemon: {
     type: Object,
@@ -495,6 +496,9 @@ onBeforeUnmount(() => {
       </div>
 
       <h3>{{ displayedPokemon?.name }}</h3>
+      <p v-if="displayedPokemon.level != null" class="buddy-level">
+        Lv. {{ displayedPokemon.level }}
+      </p>
 
       <p
         v-if="busy && !isAnimating"
