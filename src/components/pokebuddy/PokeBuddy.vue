@@ -1,54 +1,18 @@
-
-
 <script setup>
 import axios from 'axios'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import NavBar from '../common/NavBar.vue'
+import PokemonBuddy from './PokemonBuddy.vue'
 
-// =====================================================
-// CONFIGURATION
-// =====================================================
+const API = 'https://pokeapi.co/api/v2'
+const MAX_XP = 100
 
-const POKEAPI = 'https://pokeapi.co/api/v2'
-const max_xp = 100
-const GEN1_COUNT = 151
-
-
-const showMaxedGift = ref(false)
-const isOpeningGift = ref(false)
-const giftError = ref('')
-
-
-// Available starter Pokémon.
-// Evolution information is retrieved from PokéAPI.
-const starterPokemon = [
-  { id: 172, species: 'Pichu' },
-  { id: 4, species: 'Charmander' },
-  { id: 7, species: 'Squirtle' },
-  { id: 1, species: 'Bulbasaur' },
-  { id: 133, species: 'Eevee' },
-  { id: 446, species: 'Munchlax' }
-]
-
-// =====================================================
-// USER DATA
-// =====================================================
-
-// Temporary sample data. Can later be loaded from Supabase.
-//
-// id                = Current Pokémon ID
-// originalSpeciesId = Original Pokémon ID (never changes)
-// name              = Current Pokémon name
-// species           = Original Pokémon name (never changes)
-// animated_img      = Animated GIF, with static fallback
-// static_img        = Static PNG
-//
-// XP and evolution progress belong to each Pokémon.
+// =========================================
+// SAMPLE USER
+// =========================================
 
 const user = ref({
   name: 'Jake',
-  age: 8,
-  avatar_img: '/assets/male.png',
   avatar_gender: 'male',
   active_pokemon_species: 'Pichu',
 
@@ -78,2338 +42,761 @@ const user = ref({
   ]
 })
 
-// =====================================================
-// REACTIVE STATE
-// =====================================================
-
-const pokemon = ref(null)
-
-const availableImages = ref({})
-
-// Evolution animations
-const isEvolving = ref(false)
-const isDevolving = ref(false)
-const isRevealing = ref(false)
-const isSwapping = ref(false)
-const isFetchingEvolution = ref(false)
-
-const evolutionMessage = ref('')
-
-// Random Pokémon
-const isAddingRandomPokemon = ref(false)
-const randomPokemonNotice = ref('')
-
-// Reward modal
-const showPokemonReward = ref(false)
-const rewardedPokemon = ref(null)
-
-// =====================================================
-// API CACHE
-// =====================================================
-
-// Cache requests during this page session.
-// Prevents repeatedly fetching the same Pokémon data.
-
-const pokemonCache = new Map()
-const speciesCache = new Map()
-const evolutionCache = new Map()
-
-async function cachedRequest(cache, url) {
-  if (!cache.has(url)) {
-    const request = axios.get(url)
-      .then(response => response.data)
-      .catch(error => {
-        cache.delete(url)
-        throw error
-      })
-
-    cache.set(url, request)
-  }
-
-  return cache.get(url)
-}
-
-function fetchPokemon(identifier) {
-  return cachedRequest(
-    pokemonCache,
-    `${POKEAPI}/pokemon/${String(identifier).toLowerCase()}/`
-  )
-}
-
-function fetchSpecies(identifier) {
-  return cachedRequest(
-    speciesCache,
-    `${POKEAPI}/pokemon-species/${String(identifier).toLowerCase()}/`
-  )
-}
-
-function fetchEvolutionChain(url) {
-  return cachedRequest(evolutionCache, url)
-}
-
-// =====================================================
-// HELPER FUNCTIONS
-// =====================================================
-
-const wait = ms =>
-  new Promise(resolve => setTimeout(resolve, ms))
-
-function capitalise(name) {
-  return name.charAt(0).toUpperCase() + name.slice(1)
-}
-
-// Extract both image formats from one PokéAPI response.
-//
-// Animated GIF: Generation V Black & White
-// Static PNG: Default Pokémon sprite
-//
-// If animated GIF is unavailable, use the static PNG.
-
-function getPokemonImages(data) {
-  const static_img = data.sprites.front_default || ''
-
-  const animated_img =
-    data.sprites.versions?.['generation-v']?.['black-white']
-      ?.animated?.front_default || static_img
-
-  return {
-    animated_img,
-    static_img
-  }
-}
-
-// Create a Pokémon record for the user.
-
-function createPokemon(data) {
-  const name = capitalise(data.name)
-  const images = getPokemonImages(data)
-
-  return {
-    id: data.id,
-    originalSpeciesId: data.id,
-    name,
-    species: name,
-    evolution_stage: 0,
-    xp: 0,
-    isDefeated: false,
-    ...images
-  }
-}
-
-// Check whether the user already owns a Pokémon.
-// Uses original species ID rather than current evolution ID.
-
-function ownsPokemon(originalSpeciesId) {
-  return user.value.pokemons.some(
-    p => p.originalSpeciesId === originalSpeciesId
-  )
-}
-
-// =====================================================
-// COMPUTED PROPERTIES
-// =====================================================
-
 const activePokemon = computed(() =>
   user.value.pokemons.find(
-    p => p.species === user.value.active_pokemon_species
+    pokemon => pokemon.species === user.value.active_pokemon_species
   )
 )
 
-const availablePokemon = computed(() =>
-  starterPokemon.filter(p => !ownsPokemon(p.id))
+const avatarImage = computed(() =>
+  `/assets/${user.value.avatar_gender}.png`
 )
 
-// =====================================================
-// AVATAR
-// =====================================================
-
-function avatar_click(gender) {
-  user.value.avatar_gender = gender
-  user.value.avatar_img = `/assets/${gender}.png`
-}
-
-// =====================================================
-// FETCH POKÉMON DETAILS AND IMAGES
-// =====================================================
-
-// Fetch Pokémon details and update both image fields.
-//
-// Battle Buddy uses animated_img.
-// Pokédex uses static_img.
-//
-// Images are stored in the individual user's Pokémon
-// record after fetching.
-
-async function getPokemon(identifier, species) {
-  try {
-    const data = await fetchPokemon(identifier)
-    const images = getPokemonImages(data)
-
-    const details = {
-      id: data.id,
-      name: capitalise(data.name),
-      ...images,
-      image: images.animated_img,
-      image2:
-        data.sprites.other['official-artwork'].front_default,
-      type: data.types.map(t => t.type.name)
-    }
-
-    // Find Pokémon in user's collection.
-    const ownedPokemon = user.value.pokemons.find(
-      p => p.species === species
-    )
-
-    if (ownedPokemon && ownedPokemon.id === data.id) {
-      // Store both image formats in the user's data.
-      ownedPokemon.animated_img = images.animated_img
-      ownedPokemon.static_img = images.static_img
-    }
-
-    // Active Battle Buddy gets the animated sprite.
-    if (
-      user.value.active_pokemon_species === species &&
-      activePokemon.value?.id === data.id
-    ) {
-      pokemon.value = details
-    }
-
-    return details
-
-  } catch (error) {
-    console.error('Unable to fetch Pokémon:', error)
-    return null
-  }
-}
-
-// Load images for Pokémon already owned.
-
-async function getBagImages() {
-  await Promise.all(
-    user.value.pokemons.map(
-      p => getPokemon(p.id, p.species)
-    )
-  )
-}
-
-// Starter cards use STATIC images only.
-
-async function getAvailableImages() {
-  await Promise.all(
-    starterPokemon.map(async p => {
-      try {
-        const data = await fetchPokemon(p.id)
-        const images = getPokemonImages(data)
-
-        availableImages.value[p.species] =
-          images.static_img
-
-      } catch (error) {
-        console.error(
-          `Unable to fetch ${p.species}:`,
-          error
-        )
-      }
-    })
-  )
-}
-
-// =====================================================
-// SELECT ACTIVE POKÉMON
-// =====================================================
-
-function selectPoke(poke) {
-  if (isEvolving.value || isFetchingEvolution.value) {
-    return
-  }
-
-  user.value.active_pokemon_species = poke.species
-
-  // Immediately display existing animated GIF.
-  pokemon.value = {
-    id: poke.id,
-    name: poke.name,
-    image: poke.animated_img || poke.static_img,
-    animated_img: poke.animated_img,
-    static_img: poke.static_img
-  }
-
-  // Retrieve any additional details if needed.
-  getPokemon(poke.id, poke.species)
-}
-
-// =====================================================
-// ADD STARTER POKÉMON
-// =====================================================
-
-async function addPokemon(poke) {
-  if (ownsPokemon(poke.id)) return
-
-  try {
-    const data = await fetchPokemon(poke.id)
-    const newPokemon = createPokemon(data)
-
-    user.value.pokemons.push(newPokemon)
-
-  } catch (error) {
-    console.error('Unable to add Pokémon:', error)
-  }
-}
-
-// =====================================================
-// ADD RANDOM GEN 1 POKÉMON
-// =====================================================
-
-// Requirements:
-// 1. Gen 1 Pokémon (ID 1-151)
-// 2. Must be first-stage Pokémon
-// 3. Must not already be owned
-//
-
-// Returns a random, unowned, first-stage Gen 1 Pokémon.
-// Does not add the Pokémon to the user's collection.
-
-async function addRandomPokemon(forXPTransfer = false) {
-  if (
-    isAddingRandomPokemon.value ||
-    isEvolving.value ||
-    isFetchingEvolution.value ||
-    (
-      !forXPTransfer &&
-      (isProcessingXP.value || showXPTransfer.value)
-    )
-  ) return
-
-  isAddingRandomPokemon.value = true
-  randomPokemonNotice.value = ''
-
-  try {
-    const availableIds = Array.from(
-      { length: GEN1_COUNT },
-      (_, i) => i + 1
-    ).filter(id => id !== 132 && !ownsPokemon(id))
-
-    while (availableIds.length > 0) {
-      const randomIndex = Math.floor(
-        Math.random() * availableIds.length
-      )
-
-      // Remove this candidate so it cannot be picked again.
-      const [randomId] = availableIds.splice(randomIndex, 1)
-
-      const speciesData = await fetchSpecies(randomId)
-
-      // Only award first-stage Pokémon.
-      if (speciesData.evolves_from_species !== null) {
-        continue
-      }
-
-      const data = await fetchPokemon(randomId)
-      const newPokemon = createPokemon(data)
-
-      // All new Pokémon start at 0/100 XP,
-      // including Pokémon without another evolution.
-      user.value.pokemons.push(newPokemon)
-
-      rewardedPokemon.value = {
-        name: newPokemon.name,
-        image: newPokemon.animated_img
-      }
-
-      // For gifts, apply the remaining XP before showing the reward.
-      if (!forXPTransfer) {
-        showPokemonReward.value = true
-      }
-
-      return newPokemon
-    }
-
-    randomPokemonNotice.value = forXPTransfer
-      ? 'No eligible unowned Pokémon remain. Your leftover XP is kept.'
-      : 'You already own all available first-stage Gen 1 Pokémon!'
-  } catch (error) {
-    console.error('Unable to add Pokémon:', error)
-
-    randomPokemonNotice.value = forXPTransfer
-      ? 'Unable to find a Pokémon. Your leftover XP is kept. Please try again.'
-      : 'Unable to find a Pokémon. Please try again.'
-  } finally {
-    isAddingRandomPokemon.value = false
-  }
-}
-
-// =====================================================
-// REWARD MODAL
-// =====================================================
-
-function closePokemonReward() {
-  showPokemonReward.value = false
-
-  if (pendingXP.value > 0) {
-    showXPTransfer.value = true
-  }
-}
-
-// =====================================================
-// FETCH EVOLUTION CHAIN
-// =====================================================
-
-async function getEvolutionOptions(name) {
-  const pokemonName = name.toLowerCase()
-
-  // Fetch Pokémon species information.
-  const speciesData = await fetchSpecies(pokemonName)
-
-  // Fetch full evolution chain.
-  const evolutionData = await fetchEvolutionChain(
-    speciesData.evolution_chain.url
-  )
-
-  // Recursively find the Pokémon in the evolution tree.
-  function findPokemon(node, previous = null) {
-    if (node.species.name === pokemonName) {
-      return {
-        previous,
-        next: node.evolves_to
-          .filter(child => {
-            const id = Number(
-              child.species.url
-                .split('/')
-                .filter(Boolean)
-                .pop()
-            )
-
-            return id >= 1 && id <= GEN1_COUNT
-          })
-          .map(child => child.species.name)
-      }
-    }
-
-    for (const child of node.evolves_to) {
-      const result = findPokemon(
-        child,
-        node.species.name
-      )
-
-      if (result) return result
-    }
-
-    return null
-  }
-
-  const options = findPokemon(evolutionData.chain)
-
-  if (!options) {
-    throw new Error(
-      `Evolution information unavailable for ${name}`
-    )
-  }
-
-  return options
-}
-
-// =====================================================
-// UPDATE POKÉMON FORM
-// =====================================================
-
-// Shared helper for evolution and devolution.
-//
-// Updates:
-// - Current Pokémon ID
-// - Current Pokémon name
-// - Animated GIF
-// - Static PNG
-// - Evolution stage
-// - XP
-//
-// Original species information remains unchanged.
-
-function updatePokemonForm(poke, data, stageChange, xp) {
-  const images = getPokemonImages(data)
-
-  poke.id = data.id
-  poke.name = capitalise(data.name)
-  // Preserve the numeric stage separately because 'MAX' is a string.
-  const currentStage =
-    poke.evolution_stage === 'MAX'
-      ? (poke.stageBeforeMax ?? 0)
-      : poke.evolution_stage
-
-  poke.evolution_stage = Math.max(0, currentStage + stageChange)
-  poke.xp = xp
-
-  poke.animated_img = images.animated_img
-  poke.static_img = images.static_img
-
-
-  // Active Battle Buddy displays animated image.
-  if (user.value.active_pokemon_species === poke.species) {
-    pokemon.value = {
-      id: data.id,
-      name: poke.name,
-      image: images.animated_img,
-      ...images,
-      image2:
-        data.sprites.other['official-artwork'].front_default,
-      type: data.types.map(t => t.type.name)
-    }
-  }
-}
-
-// =====================================================
-// EVOLUTION ANIMATION
-// =====================================================
-
-async function playEvolution(poke, newName, remainingXP) {
-  isEvolving.value = true
-  isRevealing.value = false
-  isSwapping.value = false
-  evolutionMessage.value = ''
-
-  const oldName = poke.name
-
-  try {
-    const data = await fetchPokemon(newName)
-
-    await wait(1600)
-
-    isSwapping.value = true
-    await wait(250)
-
-    updatePokemonForm(poke, data, 1, remainingXP)
-
-    isSwapping.value = false
-    isRevealing.value = true
-
-    await wait(1600)
-
-    evolutionMessage.value =
-      `${oldName} evolved into ${poke.name}! 🎉`
-
-    return true
-  } catch (error) {
-    console.error('Evolution failed:', error)
-
-    evolutionMessage.value =
-      'Evolution failed. Your reward is still available. Please retry.'
-
-    return false
-  } finally {
-    isEvolving.value = false
-    isRevealing.value = false
-    isSwapping.value = false
-  }
-}
-
-// =====================================================
-// DEVOLUTION ANIMATION
-// =====================================================
-
-async function playDevolution(poke, newName) {
-  isDevolving.value = true
-  isEvolving.value = true
-  isRevealing.value = false
-  isSwapping.value = false
-  evolutionMessage.value = ''
-
-  const oldName = poke.name
-
-  try {
-    const data = await fetchPokemon(newName)
-
-    // Phase 1: Flash Pokémon.
-    await wait(1600)
-
-    // Phase 2: Red burst.
-    isSwapping.value = true
-    await wait(250)
-
-    // Update form and both image formats.
-    updatePokemonForm(poke, data, -1, max_xp - 10)
-
-    isSwapping.value = false
-
-    // Phase 3: Reveal previous Pokémon.
-    isRevealing.value = true
-    await wait(1600)
-
-    evolutionMessage.value =
-      `${oldName} devolved into ${poke.name}!`
-
-  } catch (error) {
-    console.error('Devolution failed:', error)
-
-    evolutionMessage.value =
-      'Devolution failed. Please try again.'
-
-  } finally {
-    isEvolving.value = false
-    isDevolving.value = false
-    isRevealing.value = false
-    isSwapping.value = false
-  }
-}
-
-// =====================================================
-// XP SYSTEM
-// =====================================================
-
-async function updateXP(action) {
-  const poke = activePokemon.value
-
-  if (
-    !poke ||
-    isProcessingXP.value ||
-    isEvolving.value ||
-    isFetchingEvolution.value ||
-    showXPTransfer.value ||
-    showPokemonReward.value ||
-    showMaxedGift.value
-  ) return
-
-  // Resolve any existing reward before subtracting XP.
-  if (action === 'minus' && pendingXP.value > 0) return
-
-  isProcessingXP.value = true
-  evolutionMessage.value = ''
-
-  try {
-    if (action === 'add') {
-      // On retry, reuse the existing reward instead of awarding again.
-      if (pendingXP.value === 0) {
-        lastXPGain.value = Math.floor(Math.random() * 41) + 10
-        pendingXP.value = lastXPGain.value
-      }
-
-      await applyPendingXP(poke)
-    } else if (action === 'minus') {
-      if (poke.isDefeated) return
-
-      const newXP = poke.xp - 10
-
-      if (newXP >= 0) {
-        poke.xp = newXP
-
-        if (
-          poke.evolution_stage === 'MAX' &&
-          poke.xp < max_xp
-        ) {
-          poke.evolution_stage = poke.stageBeforeMax ?? 0
-        }
-
-        return
-      }
-
-      const evolution = await getEvolutionOptions(poke.name)
-
-      if (evolution.previous) {
-        await playDevolution(poke, evolution.previous)
-      } else {
-        poke.xp = 0
-        poke.isDefeated = true
-
-        evolutionMessage.value = `${poke.name} has been defeated!`
-      }
-    }
-  } catch (error) {
-    console.error('Unable to update XP:', error)
-
-    evolutionMessage.value =
-      action === 'add'
-        ? 'Unable to apply XP. Your reward is kept — press Retry XP.'
-        : 'Unable to subtract XP. Please try again.'
-  } finally {
-    isProcessingXP.value = false
-  }
-}
-
-// =====================================================
-// LIFECYCLE
-// =====================================================
-
-onMounted(() => {
-  getBagImages()
-  getAvailableImages()
-})
-
-onUnmounted(() => {
-})
-
-
-const isProcessingXP = ref(false)
-const pendingXP = ref(0)
-const lastXPGain = ref(0)
-
-const showXPTransfer = ref(false)
-const maxEvolutionName = ref('')
-const xpTransferError = ref('')
+// =========================================
+// PAGE STATE
+// =========================================
+
+const buddyRef = ref(null)
+
+const loadingImages = ref(false)
+const addingPokemon = ref(false)
+const processingReward = ref(false)
+
+const notice = ref('')
+const pageError = ref('')
+const lastReward = ref(0)
+const unallocatedXP = ref(0)
+
+const controlsLocked = computed(() =>
+  loadingImages.value ||
+  addingPokemon.value ||
+  processingReward.value ||
+  Boolean(buddyRef.value?.busy)
+)
 
 const xpRecipients = computed(() =>
-  user.value.pokemons.filter(p =>
-    p.evolution_stage !== 'MAX' &&
-    p.species !== user.value.active_pokemon_species
+  user.value.pokemons.filter(
+    pokemon => pokemon.evolution_stage !== 'MAX'
   )
 )
 
-function markPokemonMax(poke) {
-  if (poke.evolution_stage !== 'MAX') {
-    poke.stageBeforeMax = poke.evolution_stage
-    poke.evolution_stage = 'MAX'
+// =========================================
+// COLLECTION IMAGES
+// Evolution requests belong to PokemonBuddy.
+// These requests load collection images/new Pokémon.
+// =========================================
+
+const apiCache = new Map()
+
+async function request(url) {
+  if (!apiCache.has(url)) {
+    apiCache.set(
+      url,
+      axios.get(url, { timeout: 15000 })
+        .then(response => response.data)
+        .catch(error => {
+          apiCache.delete(url)
+          throw error
+        })
+    )
+  }
+
+  return apiCache.get(url)
+}
+
+function getImages(data) {
+  const staticImage = data.sprites.front_default || ''
+
+  return {
+    static_img: staticImage,
+    animated_img:
+      data.sprites.versions?.['generation-v']?.['black-white']
+        ?.animated?.front_default || staticImage
   }
 }
 
-// Check other Pokémon before displaying transfer choices.
-// This also identifies Pokémon that have no Gen 1 evolution.
-async function refreshXPRecipients() {
-  const candidates = user.value.pokemons.filter(
-    p => p.evolution_stage !== 'MAX' && p.xp >= max_xp
-  )
+async function loadCollectionImages() {
+  if (loadingImages.value) return
 
-  await Promise.all(
-    candidates.map(async p => {
-      const options = await getEvolutionOptions(p.name)
-
-      if (options.next.length === 0) {
-        markPokemonMax(p)
-      }
-    })
-  )
-}
-
-async function openXPTransfer(poke) {
-  maxEvolutionName.value = poke.name
-  xpTransferError.value = ''
-  giftError.value = ''
+  loadingImages.value = true
+  pageError.value = ''
 
   try {
-    await refreshXPRecipients()
+    const results = await Promise.allSettled(
+      user.value.pokemons.map(async pokemon => {
+        const requestedId = pokemon.id
+        const data = await request(`${API}/pokemon/${requestedId}/`)
 
-    if (
-      pendingXP.value > 0 &&
-      xpRecipients.value.length === 0
-    ) {
-      // Show the gift invitation before fetching a Pokémon.
-      showXPTransfer.value = false
-      showMaxedGift.value = true
-      return
-    }
+        // Avoid overwriting images if the Pokémon changed form.
+        if (pokemon.id === requestedId) {
+          Object.assign(pokemon, getImages(data))
+        }
+      })
+    )
 
-    showXPTransfer.value = true
-  } catch (error) {
-    console.error(error)
-
-    xpTransferError.value =
-      'Unable to load Pokémon. Your remaining XP is kept.'
-
-    showXPTransfer.value = true
-  }
-}
-
-// Applies the existing pending reward without generating another reward.
-async function applyPendingXP(poke) {
-  if (!poke || pendingXP.value <= 0) return
-
-  // A Pokémon that has already filled its final XP bar.
-  if (poke.evolution_stage === 'MAX') {
-    await openXPTransfer(poke)
-    return
-  }
-
-  while (pendingXP.value > 0) {
-    const totalXP = poke.xp + pendingXP.value
-
-    if (totalXP < max_xp) {
-      poke.xp = totalXP
-      poke.isDefeated = false
-      pendingXP.value = 0
-      return
-    }
-
-    const evolution = await getEvolutionOptions(poke.name)
-    const remainingXP = totalXP - max_xp
-
-    // Final form becomes MAX only after reaching 100 XP.
-    if (evolution.next.length === 0) {
-      poke.xp = max_xp
-      poke.isDefeated = false
-      markPokemonMax(poke)
-
-      pendingXP.value = remainingXP
-
-      await openXPTransfer(poke)
-      return
-    }
-
-    const newName = evolution.next[
-      Math.floor(Math.random() * evolution.next.length)
-    ]
-
-    // Apply overflow after the evolution succeeds.
-    const succeeded = await playEvolution(poke, newName, 0)
-
-    if (!succeeded) {
-      throw new Error(
-        'Evolution failed. Your XP has been kept for retry.'
-      )
-    }
-
-    poke.isDefeated = false
-    pendingXP.value = remainingXP
-
-    // The next loop applies the leftover XP to the new form.
-  }
-}
-
-async function transferRemainingXP(poke) {
-  if (
-    isProcessingXP.value ||
-    pendingXP.value <= 0 ||
-    !xpRecipients.value.includes(poke)
-  ) return
-
-  isProcessingXP.value = true
-  xpTransferError.value = ''
-
-  try {
-    // Validate the recipient before changing the active buddy.
-    const options = await getEvolutionOptions(poke.name)
-
-    if ( poke.evolution_stage === 'MAX' || (options.next.length === 0 && poke.xp >= max_xp)
-      ) {
-      markPokemonMax(poke)
-
-      xpTransferError.value =
-        `${poke.name} is already at maximum evolution. Choose another Pokémon.`
-
-      return
-    }
-
-    // Use your existing function to update the Battle Buddy.
-    selectPoke(poke)
-
-    showXPTransfer.value = false
-
-    await applyPendingXP(poke)
-  } catch (error) {
-    console.error(error)
-
-    evolutionMessage.value =
-      'Unable to apply XP. Your remaining XP is saved for retry.'
-
-    // If selection already changed, the main XP button retries
-    // the same pending reward on that active Pokémon.
-    if (showXPTransfer.value) {
-      xpTransferError.value = 'Unable to check this Pokémon. Please retry.'
+    if (results.some(result => result.status === 'rejected')) {
+      pageError.value = 'Some Pokémon images could not load. Please retry.'
     }
   } finally {
-    isProcessingXP.value = false
+    loadingImages.value = false
   }
 }
 
-async function openMaxedGift() {
-  if (
-    isOpeningGift.value ||
-    isProcessingXP.value ||
-    isAddingRandomPokemon.value
-  ) return
+onMounted(loadCollectionImages)
 
-  isOpeningGift.value = true
-  isProcessingXP.value = true
-  giftError.value = ''
+// =========================================
+// AVATAR AND ACTIVE BUDDY
+// =========================================
+
+function selectAvatar(gender) {
+  user.value.avatar_gender = gender
+}
+
+function selectPokemon(pokemon) {
+  if (controlsLocked.value) return
+
+  user.value.active_pokemon_species = pokemon.species
+  notice.value = ''
+}
+
+// =========================================
+// RECEIVE UPDATES FROM POKEMONBUDDY
+// =========================================
+
+function savePokemonUpdate({ pokemon, changes }) {
+  // Update the same owned record.
+  // Both PokemonBuddy and the Pokédex read this record.
+  if (user.value.pokemons.includes(pokemon)) {
+    Object.assign(pokemon, changes)
+  }
+}
+
+function keepOverflowXP({ amount }) {
+  unallocatedXP.value += amount
+}
+
+// =========================================
+// TEST XP REWARDS AND PENALTIES
+// No evolution calculations belong here.
+// =========================================
+
+async function giveXP(amount) {
+  if (
+    controlsLocked.value ||
+    !activePokemon.value ||
+    !buddyRef.value
+  ) {
+    return { accepted: false }
+  }
+
+  processingReward.value = true
+  notice.value = ''
 
   try {
-    const newPokemon = await addRandomPokemon(true)
+    const result = await buddyRef.value.addXP(amount)
+
+    if (result.accepted) {
+      lastReward.value = amount
+    }
+
+    return result
+  } finally {
+    processingReward.value = false
+  }
+}
+
+function giveRandomXP() {
+  const amount = Math.floor(Math.random() * 41) + 10
+  return giveXP(amount)
+}
+
+async function removeXP() {
+  if (
+    controlsLocked.value ||
+    !activePokemon.value ||
+    activePokemon.value.isDefeated ||
+    !buddyRef.value
+  ) return
+
+  processingReward.value = true
+  notice.value = ''
+
+  try {
+    await buddyRef.value.subtractXP(10)
+  } finally {
+    processingReward.value = false
+  }
+}
+
+// =========================================
+// TRANSFER LEFTOVER XP
+// PokemonBuddy still calculates the result.
+// =========================================
+
+async function transferXP(pokemon) {
+  if (
+    controlsLocked.value ||
+    unallocatedXP.value <= 0 ||
+    pokemon.evolution_stage === 'MAX'
+  ) return
+
+  processingReward.value = true
+
+  const amount = unallocatedXP.value
+
+  try {
+    user.value.active_pokemon_species = pokemon.species
+
+    // Allow the component to receive the new active Pokémon.
+    await nextTick()
+
+    if (!buddyRef.value) return
+
+    const result = await buddyRef.value.addXP(amount)
+
+    if (result.accepted) {
+      // Any new overflow has already been added by keepOverflowXP().
+      // Deduct only the amount we attempted to transfer.
+      unallocatedXP.value -= amount
+    }
+  } finally {
+    processingReward.value = false
+  }
+}
+
+// =========================================
+// RANDOM POKÉMON / MAXED COLLECTION GIFT
+// =========================================
+
+async function addRandomPokemon(asGift = false) {
+  if (controlsLocked.value) return
+
+  if (
+    asGift &&
+    (unallocatedXP.value <= 0 || xpRecipients.value.length > 0)
+  ) return
+
+  addingPokemon.value = true
+  pageError.value = ''
+  notice.value = ''
+
+  let newPokemon = null
+
+  try {
+    const ownedIds = new Set(
+      user.value.pokemons.map(pokemon => pokemon.originalSpeciesId)
+    )
+
+    // Preserve your original rule:
+    // Gen 1, unevolved species, not already owned, excluding Ditto.
+    const candidates = Array.from(
+      { length: 151 },
+      (_, index) => index + 1
+    ).filter(id => id !== 132 && !ownedIds.has(id))
+
+    while (candidates.length) {
+      const index = Math.floor(Math.random() * candidates.length)
+      const [id] = candidates.splice(index, 1)
+
+      const species = await request(`${API}/pokemon-species/${id}/`)
+
+      if (species.evolves_from_species !== null) continue
+
+      const data = await request(`${API}/pokemon/${id}/`)
+      const name = data.name.charAt(0).toUpperCase() + data.name.slice(1)
+
+      newPokemon = {
+        id: data.id,
+        originalSpeciesId: data.id,
+        name,
+        species: name,
+        evolution_stage: 0,
+        xp: 0,
+        isDefeated: false,
+        ...getImages(data)
+      }
+
+      user.value.pokemons.push(newPokemon)
+      notice.value = `${name} joined your Pokédex! 🎉`
+      break
+    }
 
     if (!newPokemon) {
-      giftError.value =
-        randomPokemonNotice.value ||
-        'Unable to open your gift. Please try again.'
-
-      return
+      notice.value =
+        'No eligible unowned Pokémon remain. Any leftover XP is kept.'
     }
-
-    // Make the gift Pokémon the active Battle Buddy.
-    selectPoke(newPokemon)
-
-    // New Pokémon starts at 0 XP.
-    // Leftover XP from a 10–50 XP reward fits in its 100 XP bar.
-    const transferredXP = pendingXP.value
-
-    newPokemon.xp = transferredXP
-    newPokemon.isDefeated = false
-    pendingXP.value = 0
-
-    rewardedPokemon.value = {
-      name: newPokemon.name,
-      image: newPokemon.animated_img || newPokemon.static_img,
-      transferredXP,
-      xp: newPokemon.xp
-    }
-
-    showMaxedGift.value = false
-    showXPTransfer.value = false
-    showPokemonReward.value = true
   } catch (error) {
-    console.error('Unable to open gift:', error)
-
-    giftError.value =
-      'Unable to open your gift. Your remaining XP is kept.'
+    console.error('Unable to add Pokémon:', error)
+    pageError.value = 'Unable to load a new Pokémon. Please try again.'
   } finally {
-    isOpeningGift.value = false
-    isProcessingXP.value = false
+    addingPokemon.value = false
+  }
+
+  // A gift becomes the new buddy and receives the saved XP.
+  // If applying XP fails, the Pokémon and saved XP remain available.
+  if (asGift && newPokemon) {
+    await transferXP(newPokemon)
   }
 }
 </script>
 
-
-
 <template>
-  <main>
-    <div class="content">
+  <main class="trainer-page">
+    <div class="page-content">
       <NavBar />
 
-      <div class="content-grid">
+      <div class="page-layout">
+        <!-- AVATAR AND ACTIVE BUDDY -->
+        <section class="trainer-panel">
+          <div class="avatar-panel">
+            <h2>{{ user.name }}'s Avatar</h2>
+            <p>Selected style: {{ user.avatar_gender }}</p>
 
-        <!-- LEFT SECTION -->
-        <div class="left-section">
+            <img
+              :src="avatarImage"
+              alt="Trainer avatar"
+              class="avatar-image"
+            />
 
-          <!-- AVATAR + BATTLE BUDDY -->
-          <div class="current-avatar">
-
-            <!-- TRAINER AVATAR -->
-            <div class="avatar">
-              <h2>{{ user.name }}'s Avatar</h2>
-              <p>Selected Style: {{ user.avatar_gender }}</p>
-
-              <img
-                :src="user.avatar_img"
-                alt="Trainer"
-                class="avatar-img"
-              />
-
-              <div class="avatar-buttons">
-                <button @click="avatar_click('female')">
-                  Female
-                </button>
-
-                <button @click="avatar_click('male')">
-                  Male
-                </button>
-              </div>
-            </div>
-
-            <!-- BATTLE BUDDY -->
-            <div class="pokemon-div">
-              <h2>Battle Buddy</h2>
-
-              <div class="pokemon-image-container">
-
-                <!-- Evolution glow -->
-                <Transition name="glow-fade">
-                  <div
-                    v-if="isEvolving || isRevealing || isSwapping"
-                    class="evo-glow"
-                    :class="{ 'devolve-glow': isDevolving }"
-                  ></div>
-                </Transition>
-
-                <!-- Sparkles -->
-                <div
-                  v-if="isEvolving || isRevealing || isSwapping"
-                  class="sparkle-layer"
-                >
-                  <span class="sparkle s1"></span>
-                  <span class="sparkle s2"></span>
-                  <span class="sparkle s3"></span>
-                  <span class="sparkle s4"></span>
-                  <span class="sparkle s5"></span>
-                  <span class="sparkle s6"></span>
-                </div>
-
-                <!-- Sprite-swap flash -->
-                <div
-                  v-if="isSwapping"
-                  class="swap-flash"
-                ></div>
-
-                <!-- Active Pokémon -->
-                <img
-                  v-if="pokemon?.image"
-                  :src="pokemon.image"
-                  :alt="pokemon.name"
-                  class="active-pokemon-img"
-                  :class="{
-                    evolving: isEvolving && !isRevealing && !isSwapping,
-                    revealing: isRevealing,
-                    swapping: isSwapping,
-                    defeated: activePokemon?.isDefeated
-                  }"
-                />
-
-              </div>
-
-              <p
-                v-if="evolutionMessage"
-                class="evolution-message"
+            <div class="button-row">
+              <button
+                type="button"
+                class="btn btn-warning"
+                @click="selectAvatar('female')"
               >
-                {{ evolutionMessage }}
-              </p>
-
-              <!-- Individual Pokémon XP -->
-              <div v-if="activePokemon" class="xp-section">
-                <p>
-                  {{
-                    activePokemon.evolution_stage === 'MAX'
-                      ? 'Maximum evolution reached!'
-                      : 'XP Progress'
-                  }}
-                </p>
-
-                <div class="xp-bar">
-                  <div
-                    class="xp-fill"
-                    :style="{
-                      width:
-                        activePokemon.evolution_stage === 'MAX'
-                          ? '100%'
-                          : `${activePokemon.xp / max_xp * 100}%`
-                    }"
-                  ></div>
-                </div>
-
-                <p>
-                  {{
-                    activePokemon.evolution_stage === 'MAX'
-                      ? 'MAX'
-                      : `${activePokemon.xp} / ${max_xp} XP`
-                  }}
-                </p>
-              </div>
-
-              <div class="xp-buttons">
-                <button
-                  type="button"
-                  :disabled="
-                    isProcessingXP ||
-                    isEvolving ||
-                    isFetchingEvolution ||
-                    showXPTransfer ||
-                    showPokemonReward
-                  "
-                  @click="updateXP('add')"
-                >
-                  {{
-                    isProcessingXP
-                      ? 'Updating…'
-                      : pendingXP > 0
-                        ? `Retry XP (${pendingXP})`
-                        : '🎲 Add 10–50 XP'
-                  }}
-                </button>
-
-                <button
-                  type="button"
-                  :disabled="
-                    isProcessingXP ||
-                    isEvolving ||
-                    isFetchingEvolution ||
-                    pendingXP > 0 ||
-                    showXPTransfer ||
-                    showPokemonReward
-                  "
-                  @click="updateXP('minus')"
-                >
-                  Minus 10 XP
-                </button>
-              </div>
-
-              <p v-if="lastXPGain" class="evolution-message">
-                Last reward: +{{ lastXPGain }} XP
-              </p>
-
-            </div>
-          </div>
-
-          <!-- USER'S POKÉDEX -->
-          <div class="bag">
-            <h2>My Pokédex</h2>
-
-            <div class="bag-list">
-
-              <div
-                v-for="poke in user.pokemons"
-                :key="poke.species"
-                class="bag-pokemon"
-              >
-                <img
-                  v-if="poke.static_img"
-                  :src="poke.static_img"
-                  :alt="poke.name"
-                />
-
-                <p>{{ poke.name }}</p>
-
-                <p>
-                  Stage: {{ poke.evolution_stage }}
-                </p>
-
-                <p>
-                  {{
-                    poke.evolution_stage === 'MAX'
-                      ? 'Maximum evolution'
-                      : `XP: ${poke.xp}/${max_xp}`
-                  }}
-                </p>
-
-                <button
-                  :disabled="
-                    isEvolving ||
-                    isFetchingEvolution ||
-                    user.active_pokemon_species === poke.species
-                  "
-                  @click="selectPoke(poke)"
-                >
-                  {{
-                    user.active_pokemon_species === poke.species
-                      ? 'Active'
-                      : 'Make Active'
-                  }}
-                </button>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-
-      </div>
-    </div>
-    <!-- RANDOM POKEMON BUTTON -->
-    <div
-      v-if="randomPokemonNotice"
-      class="random-pokemon-notice"
-      role="status"
-    >
-      {{ randomPokemonNotice }}
-    </div>
-
-    <button
-      type="button"
-      class="random-pokemon-button"
-      :disabled="isAddingRandomPokemon || isEvolving"
-      @click="addRandomPokemon()"
-    >
-      {{ isAddingRandomPokemon ? 'Finding Pokémon...' : '🎲 Add Random Pokémon' }}
-    </button>
-
-
-      <!-- POKÉMON REWARD MODAL -->
-      <div
-        v-if="showPokemonReward && rewardedPokemon"
-        class="modal fade show d-block"
-        tabindex="-1"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="pokemonRewardTitle"
-        @click.self="closePokemonReward"
-        @keydown.esc="closePokemonReward"
-      >
-        <div class="modal-dialog modal-dialog-centered">
-          <div
-            class="modal-content rounded-4 shadow-lg border-0 reward-pop"
-          >
-            <!-- HEADER -->
-            <div class="modal-header border-0 pb-0">
-              <span class="text-muted small fw-bold">
-                STUDYDEX / NEW POKÉMON
-              </span>
+                Female
+              </button>
 
               <button
                 type="button"
-                class="btn-close"
-                aria-label="Close"
-                @click="closePokemonReward"
-              ></button>
-            </div>
-
-            <!-- BODY -->
-            <div class="modal-body text-center px-4 pb-4">
-              <div class="fs-3 mb-2">✨ ⭐ ✨</div>
-
-              <h2
-                id="pokemonRewardTitle"
-                class="fw-bold fs-4 mb-4"
+                class="btn btn-warning"
+                @click="selectAvatar('male')"
               >
-                You Got a Pokémon!
-              </h2>
-
-              <!-- POKÉMON IMAGE WITH SPARKLES -->
-              <div
-                class="reward-image-box bg-warning bg-opacity-25 rounded-4
-                      d-flex justify-content-center align-items-center
-                      mx-auto mb-3"
-              >
-                <div class="reward-sparkles" aria-hidden="true">
-                  <span v-for="n in 8" :key="n">✦</span>
-                </div>
-
-                <img
-                  v-if="rewardedPokemon.image"
-                  :src="rewardedPokemon.image"
-                  :alt="rewardedPokemon.name"
-                  class="reward-pokemon-sprite img-fluid"
-                />
-              </div>
-
-              <!-- POKÉMON NAME -->
-              <h3 class="fw-bold text-capitalize mb-2">
-                {{ rewardedPokemon.name }}
-              </h3>
-
-              <!-- GIFT WITH AUTOMATIC XP TRANSFER -->
-              <div
-                v-if="rewardedPokemon.transferredXP > 0"
-                class="mb-4"
-              >
-                <p class="text-secondary small mb-3">
-                  Meet your new Battle Buddy!
-                  Your remaining XP has been added automatically.
-                </p>
-
-                <p class="text-success fw-bold mb-2">
-                  +{{ rewardedPokemon.transferredXP }} XP added!
-                </p>
-
-                <div
-                  class="progress"
-                  role="progressbar"
-                  aria-label="Pokémon XP"
-                  :aria-valuenow="rewardedPokemon.xp"
-                  :aria-valuemin="0"
-                  :aria-valuemax="max_xp"
-                >
-                  <div
-                    class="progress-bar bg-success"
-                    :style="{
-                      width: `${(rewardedPokemon.xp / max_xp) * 100}%`
-                    }"
-                  ></div>
-                </div>
-
-                <p class="small mt-2 mb-0">
-                  XP: {{ rewardedPokemon.xp }} / {{ max_xp }}
-                </p>
-              </div>
-
-              <!-- NORMAL RANDOM POKÉMON REWARD -->
-              <p v-else class="text-secondary small mb-4">
-                A new Pokémon has joined your adventure!
-              </p>
-
-              <!-- CLOSE BUTTON -->
-              <button
-                type="button"
-                class="btn btn-warning fw-bold rounded-3 w-100 py-3"
-                @click="closePokemonReward"
-              >
-                Awesome! 🎉
+                Male
               </button>
             </div>
           </div>
-        </div>
+
+          <div class="buddy-panel">
+            <PokemonBuddy
+              ref="buddyRef"
+              :active-pokemon="activePokemon"
+              @update-pokemon="savePokemonUpdate"
+              @xp-overflow="keepOverflowXP"
+            />
+
+            <!-- Testing controls belong to the parent -->
+            <div class="testing-panel">
+              <p class="testing-label">XP testing</p>
+
+              <div class="button-row">
+                <button
+                  type="button"
+                  class="btn btn-success"
+                  :disabled="controlsLocked || !activePokemon"
+                  @click="giveXP(10)"
+                >
+                  +10 XP
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-success"
+                  :disabled="controlsLocked || !activePokemon"
+                  @click="giveXP(50)"
+                >
+                  +50 XP
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-outline-success"
+                  :disabled="controlsLocked || !activePokemon"
+                  @click="giveRandomXP"
+                >
+                  🎲 +10–50 XP
+                </button>
+
+                <button
+                  type="button"
+                  class="btn btn-danger"
+                  :disabled="
+                    controlsLocked ||
+                    !activePokemon ||
+                    activePokemon?.isDefeated
+                  "
+                  @click="removeXP"
+                >
+                  −10 XP
+                </button>
+              </div>
+
+              <p v-if="controlsLocked" class="small mt-2" role="status">
+                {{
+                  loadingImages
+                    ? 'Loading Pokémon…'
+                    : addingPokemon
+                      ? 'Finding a Pokémon…'
+                      : 'Updating Pokémon…'
+                }}
+              </p>
+
+              <p v-if="lastReward" class="small mt-2">
+                Last accepted reward: +{{ lastReward }} XP
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- COLLECTION -->
+        <section class="collection-panel">
+          <div class="collection-header">
+            <h2>My Pokédex</h2>
+            <span>{{ user.pokemons.length }} Pokémon</span>
+          </div>
+
+          <div class="pokemon-grid">
+            <article
+              v-for="pokemon in user.pokemons"
+              :key="pokemon.originalSpeciesId"
+              class="pokemon-card"
+              :class="{
+                selected:
+                  pokemon.species === user.active_pokemon_species
+              }"
+            >
+              <img
+                v-if="pokemon.static_img"
+                :src="pokemon.static_img"
+                :alt="pokemon.name"
+              />
+
+              <div v-else class="image-placeholder">…</div>
+
+              <h3>{{ pokemon.name }}</h3>
+
+              <p>Stage: {{ pokemon.evolution_stage }}</p>
+
+              <p>
+                {{
+                  pokemon.evolution_stage === 'MAX'
+                    ? 'Maximum evolution'
+                    : `${pokemon.xp} / ${MAX_XP} XP`
+                }}
+              </p>
+
+              <p v-if="pokemon.isDefeated" class="text-danger">
+                Defeated
+              </p>
+
+              <button
+                type="button"
+                class="btn btn-warning w-100 mt-2"
+                :disabled="
+                  controlsLocked ||
+                  pokemon.species === user.active_pokemon_species
+                "
+                @click="selectPokemon(pokemon)"
+              >
+                {{
+                  pokemon.species === user.active_pokemon_species
+                    ? 'Active buddy'
+                    : 'Make active'
+                }}
+              </button>
+            </article>
+          </div>
+
+          <button
+            type="button"
+            class="btn btn-warning"
+            :disabled="controlsLocked"
+            @click="addRandomPokemon(false)"
+          >
+            {{ addingPokemon ? 'Finding Pokémon…' : '🎲 Add Random Pokémon' }}
+          </button>
+
+          <p v-if="notice" class="notice" role="status">
+            {{ notice }}
+          </p>
+
+          <div v-if="pageError" class="alert alert-warning mb-0" role="alert">
+            {{ pageError }}
+
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-dark mt-2 d-block"
+              :disabled="controlsLocked"
+              @click="loadCollectionImages"
+            >
+              Reload collection images
+            </button>
+          </div>
+        </section>
+
+        <!-- LEFTOVER XP -->
+        <section v-if="unallocatedXP > 0" class="overflow-panel">
+          <h2>⭐ {{ unallocatedXP }} XP waiting to be transferred</h2>
+
+          <template v-if="xpRecipients.length">
+            <p>
+              Choose a Pokémon to receive this XP.
+              It will become your active buddy.
+            </p>
+
+            <div class="button-row">
+              <button
+                v-for="pokemon in xpRecipients"
+                :key="pokemon.originalSpeciesId"
+                type="button"
+                class="btn btn-outline-dark"
+                :disabled="controlsLocked"
+                @click="transferXP(pokemon)"
+              >
+                Give XP to {{ pokemon.name }}
+              </button>
+            </div>
+          </template>
+
+          <template v-else>
+            <p>
+              All your Pokémon are MAX! Open a gift to receive a new buddy
+              and transfer your leftover XP.
+            </p>
+
+            <button
+              type="button"
+              class="btn btn-warning"
+              :disabled="controlsLocked"
+              @click="addRandomPokemon(true)"
+            >
+              {{ addingPokemon ? 'Opening…' : 'Open gift 🎁' }}
+            </button>
+          </template>
+        </section>
       </div>
-
-      <!-- REWARD MODAL BACKDROP -->
-      <div
-        v-if="showPokemonReward && rewardedPokemon"
-        class="modal-backdrop fade show"
-      ></div>
-
-      <!-- BOOTSTRAP BACKDROP -->
-      <div
-        v-if="showPokemonReward"
-        class="modal-backdrop fade show"
-      ></div>
-
-      <!-- MAX EVOLUTION / LEFTOVER XP -->
-        <div
-          v-if="showXPTransfer"
-          class="modal show d-block"
-          tabindex="-1"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="xpTransferTitle"
-        >
-          <div class="modal-dialog modal-dialog-centered xp-transfer-dialog">
-            <div class="modal-content rounded-4 shadow-lg border-0">
-
-              <div class="modal-header border-0">
-                <h2 id="xpTransferTitle" class="fs-5 mb-0">
-                  Maximum Evolution! 🎉
-                </h2>
-              </div>
-
-              <div class="modal-body text-center">
-                <h3 class="fs-5">
-                  {{ maxEvolutionName }} has reached max evolution!
-                </h3>
-
-                <template v-if="pendingXP > 0">
-                  <p>
-                    You have <strong>{{ pendingXP }} XP</strong> left to add.
-                    Which Pokémon would you like to give it to?
-                  </p>
-
-                  <p class="small text-secondary">
-                    Your selected Pokémon will become your new Battle Buddy.
-                  </p>
-
-                  <p v-if="xpTransferError" class="text-danger" role="alert">
-                    {{ xpTransferError }}
-                  </p>
-
-                  <div
-                    v-if="xpRecipients.length"
-                    class="row g-3 xp-recipient-list"
-                  >
-                    <div
-                      v-for="poke in xpRecipients"
-                      :key="poke.originalSpeciesId"
-                      class="col-6 col-sm-4"
-                    >
-                      <button
-                        type="button"
-                        class="btn btn-outline-dark w-100 h-100 rounded-3 p-2"
-                        :disabled="isProcessingXP"
-                        @click="transferRemainingXP(poke)"
-                      >
-                        <img
-                          :src="poke.static_img || poke.animated_img"
-                          :alt="poke.name"
-                          class="xp-recipient-image"
-                        />
-
-                        <span class="d-block fw-bold">{{ poke.name }}</span>
-
-                        <span class="d-block small">
-                          {{ poke.xp }} / {{ max_xp }} XP
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <p v-else class="text-secondary">
-                    No eligible Pokémon are available.
-                    Add another Pokémon, then use Retry XP to allocate your reward.
-                  </p>
-                </template>
-
-                <p v-else class="text-secondary">
-                  All of this round’s XP was used. No XP remains to transfer.
-                </p>
-
-                <button
-                  v-if="pendingXP === 0"
-                  type="button"
-                  class="btn btn-warning fw-bold w-100 mt-4"
-                  :disabled="isProcessingXP"
-                  @click="showXPTransfer = false"
-                >
-                  Awesome! 🎉
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-if="showXPTransfer"
-          class="modal-backdrop fade show"
-        ></div>
-
-        <!-- Gift invitation when every owned Pokémon is MAX -->
-        <div
-          v-if="showMaxedGift"
-          class="modal fade show d-block"
-          tabindex="-1"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="maxedGiftTitle"
-        >
-          <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content rounded-4 shadow-lg border-0">
-              <div class="modal-body text-center p-4">
-                <h2 id="maxedGiftTitle" class="fs-5 mb-3">
-                  A gift for you! 🎁
-                </h2>
-
-                <p>
-                  You have maxed out
-                  <strong>{{ maxEvolutionName }}</strong>!
-                </p>
-
-                <p>
-                  None of your other Pokémon can receive more XP.
-                  Here is a gift from us to you!
-                </p>
-
-                <p class="small">
-                  Your new Pokémon will receive your remaining
-                  <strong>{{ pendingXP }} XP</strong>
-                  and become your Battle Buddy.
-                </p>
-
-                <p v-if="giftError" class="text-danger small" role="alert">
-                  {{ giftError }}
-                </p>
-
-                <button
-                  type="button"
-                  class="btn btn-warning fw-bold w-100 mt-3"
-                  :disabled="isOpeningGift || isProcessingXP || isAddingRandomPokemon"
-                  @click="openMaxedGift"
-                >
-                  {{ isOpeningGift ? 'Opening...' : 'Open 🎁' }}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          v-if="showMaxedGift"
-          class="modal-backdrop fade show"
-        ></div>
+    </div>
   </main>
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Silkscreen:wght@400;700&display=swap');
-
-/* =====================================================
-   MAIN PAGE
-===================================================== */
-
-main {
-  background: #ffd000;
-  height: 100vh;
-  width: 100%;
+.trainer-page {
+  min-height: 100dvh;
   padding: 16px;
-  box-sizing: border-box;
-  overflow: hidden;
+  background: #ffd000;
+  color: #30304b;
 }
 
-.content {
-  background: url('/backgrounds/morning_homepage.png') center/cover no-repeat;
-  height: 100%;
-  padding: 25px;
-  box-sizing: border-box;
+.page-content {
+  min-height: calc(100dvh - 32px);
+  padding: 24px;
+  background:
+    url('/backgrounds/morning_homepage.png')
+    center / cover no-repeat;
 
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 20px;
-
-  overflow: hidden;
+  gap: 24px;
 }
 
-/* =====================================================
-   DASHBOARD LAYOUT
-===================================================== */
-
-.content-grid {
+.page-layout {
   display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 25px;
-
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
   width: 100%;
   max-width: 1250px;
-
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
 }
 
-.left-section {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-
+.trainer-panel,
+.collection-panel,
+.overflow-panel {
   min-width: 0;
-  min-height: 0;
+  padding: 22px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.9);
 }
 
-/* =====================================================
-   AVATAR + BATTLE BUDDY
-===================================================== */
-
-.current-avatar {
-  display: flex;
-  gap: 15px;
-
-  width: 100%;
-  flex: 1.5;
-  min-height: 0;
-
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 15px;
-
-  padding: 15px;
-  box-sizing: border-box;
-  overflow: hidden;
+.trainer-panel {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
 }
 
-.avatar,
-.pokemon-div {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-
+.avatar-panel,
+.buddy-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-
+  gap: 12px;
+  min-width: 0;
   text-align: center;
-  gap: 8px;
 }
 
-.avatar h2,
-.pokemon-div h2 {
-  font-size: clamp(17px, 1.6vw, 24px);
+.avatar-panel {
+  padding: 12px;
+}
+
+h2 {
+  margin: 0;
+  font-size: clamp(18px, 1.7vw, 24px);
   font-weight: 900;
-  color: #30304b;
-  margin: 0 0 5px;
 }
 
-.avatar p,
-.pokemon-div p {
+p {
   margin: 0;
   font-size: 13px;
+  line-height: 1.6;
 }
 
-/* =====================================================
-   TRAINER AVATAR
-===================================================== */
-
-.avatar-img {
-  width: auto;
-  height: clamp(95px, 24vh, 220px);
-  max-width: 100%;
-  min-height: 0;
-
-  object-fit: contain;
-  image-rendering: pixelated;
-  margin: auto 0;
-}
-
-/* =====================================================
-   BATTLE BUDDY IMAGE
-===================================================== */
-
-.pokemon-image-container {
-  position: relative;
+.avatar-image {
   width: 100%;
-  height: clamp(90px, 22vh, 200px);
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-
-  margin: auto 0;
-  overflow: hidden;
-}
-
-.active-pokemon-img {
-  position: relative;
-  z-index: 4;
-
-  width: auto;
-  height: 100px;
-  max-width: 100%;
-  max-height: 100%;
-
+  height: 220px;
   object-fit: contain;
   image-rendering: pixelated;
-  transform-origin: center;
 }
 
-.active-pokemon-img.defeated {
-  filter: grayscale(100%);
-  opacity: 0.5;
-  transform: rotate(90deg);
-}
-
-/* =====================================================
-   EVOLUTION GLOW
-===================================================== */
-
-.evo-glow {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-
-  width: 85%;
-  max-width: 200px;
-  aspect-ratio: 1 / 1;
-  border-radius: 50%;
-  z-index: 1;
-
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 0.95) 0%,
-    rgba(255, 255, 180, 0.75) 25%,
-    rgba(160, 255, 220, 0.35) 50%,
-    rgba(160, 255, 220, 0.10) 65%,
-    transparent 80%
-  );
-
-  filter: blur(12px);
-  animation: evo-glow-pulse 1s ease-in-out infinite alternate;
-}
-
-.evo-glow.devolve-glow {
-  background: radial-gradient(
-    circle,
-    rgba(255, 120, 120, 0.95) 0%,
-    rgba(255, 40, 40, 0.75) 25%,
-    rgba(244, 17, 17, 0.35) 50%,
-    rgba(250, 49, 49, 0.1) 65%,
-    transparent 80%
-  );
-}
-
-@keyframes evo-glow-pulse {
-  from {
-    transform: translate(-50%, -50%) scale(0.96);
-    filter: blur(12px) brightness(0.85);
-  }
-
-  to {
-    transform: translate(-50%, -50%) scale(1.08);
-    filter: blur(16px) brightness(1.15);
-  }
-}
-
-/* =====================================================
-   SPARKLE EFFECTS
-===================================================== */
-
-.sparkle-layer {
-  position: absolute;
-  inset: 0;
-  z-index: 5;
-  pointer-events: none;
-}
-
-.sparkle {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-
-  background: rgba(255, 255, 255, 0.95);
-
-  box-shadow:
-    0 0 10px rgba(255, 255, 255, 0.95),
-    0 0 22px rgba(255, 255, 210, 0.8);
-
-  animation: sparkle-float 1.5s ease-in-out infinite;
-}
-
-.s1 {
-  left: 18%;
-  bottom: 12%;
-  animation-delay: 0s;
-}
-
-.s2 {
-  left: 30%;
-  bottom: 18%;
-  animation-delay: 0.2s;
-}
-
-.s3 {
-  left: 45%;
-  bottom: 8%;
-  animation-delay: 0.45s;
-}
-
-.s4 {
-  right: 28%;
-  bottom: 16%;
-  animation-delay: 0.15s;
-}
-
-.s5 {
-  right: 16%;
-  bottom: 10%;
-  animation-delay: 0.5s;
-}
-
-.s6 {
-  left: 58%;
-  bottom: 20%;
-  animation-delay: 0.3s;
-}
-
-@keyframes sparkle-float {
-  0% {
-    transform: translateY(0) scale(0.7);
-    opacity: 0;
-  }
-
-  20% {
-    opacity: 1;
-  }
-
-  60% {
-    opacity: 0.95;
-  }
-
-  100% {
-    transform: translateY(-70px) scale(1.25);
-    opacity: 0;
-  }
-}
-
-/* =====================================================
-   SPRITE SWAP FLASH
-===================================================== */
-
-.swap-flash {
-  position: absolute;
-  inset: 0;
-  z-index: 6;
-
-  background: radial-gradient(
-    circle,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.95) 35%,
-    rgba(255, 255, 220, 0.7) 60%,
-    rgba(255, 255, 255, 0) 100%
-  );
-
-  pointer-events: none;
-  animation: swap-burst 0.5s ease-out forwards;
-}
-
-@keyframes swap-burst {
-  0% {
-    opacity: 0.2;
-    transform: scale(0.9);
-  }
-
-  35% {
-    opacity: 1;
-    transform: scale(1.08);
-  }
-
-  100% {
-    opacity: 0;
-    transform: scale(1.18);
-  }
-}
-
-/* =====================================================
-   EVOLUTION SPRITE ANIMATIONS
-===================================================== */
-
-.active-pokemon-img.evolving,
-.active-pokemon-img.revealing {
-  animation: pokemon-flash 0.36s ease-in-out infinite alternate;
-}
-
-.active-pokemon-img.swapping {
-  filter: brightness(0) invert(1);
-  transform: scale(1.22);
-  opacity: 0.9;
-}
-
-@keyframes pokemon-flash {
-  from {
-    filter: brightness(1);
-    transform: scale(1);
-    opacity: 1;
-  }
-
-  to {
-    filter: brightness(0) invert(1);
-    transform: scale(1.18);
-    opacity: 0.78;
-  }
-}
-
-.evolution-message {
-  font-weight: bold;
-  font-size: 13px;
-  color: #795500;
-  text-align: center;
-}
-
-/* =====================================================
-   EVOLUTION GLOW FADE
-===================================================== */
-
-.glow-fade-enter-active {
-  transition: opacity 0.7s ease-in;
-}
-
-.glow-fade-leave-active {
-  transition: opacity 1s ease-out;
-}
-
-.glow-fade-enter-from,
-.glow-fade-leave-to {
-  opacity: 0;
-}
-
-.glow-fade-enter-to,
-.glow-fade-leave-from {
-  opacity: 1;
-}
-
-/* =====================================================
-   BUTTONS
-===================================================== */
-
-.avatar-buttons,
-.xp-buttons {
+.button-row {
   display: flex;
+  align-items: center;
   justify-content: center;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.avatar-buttons button,
-.xp-buttons button,
-.bag-pokemon button {
-  background: #ffd21f;
-  border: 2px solid #30304b;
-  border-radius: 8px;
-
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: bold;
-  color: #30304b;
-
-  cursor: pointer;
+.btn {
+  font-size: 13px;
+  font-weight: 700;
 }
 
-.avatar-buttons button:hover,
-.xp-buttons button:hover,
-.bag-pokemon button:hover:not(:disabled) {
-  background: #ffbd00;
+.testing-panel {
+  width: 100%;
+  padding: 14px;
+  border: 1px dashed #d9c37a;
+  border-radius: 12px;
+  background: #fff9e8;
+}
+
+.testing-label {
+  margin-bottom: 10px;
+  color: #79621c;
+  font-weight: 800;
+}
+
+.collection-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.collection-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.collection-header span {
+  font-size: 13px;
+  color: #697386;
+}
+
+.pokemon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(135px, 1fr));
+  gap: 12px;
+  max-height: 65vh;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.pokemon-card {
+  min-width: 0;
+  padding: 12px;
+  border: 2px solid #eee2aa;
+  border-radius: 12px;
+  background: #fff;
+  text-align: center;
+}
+
+.pokemon-card.selected {
+  border-color: #e9b800;
+  background: #fffbea;
+}
+
+.pokemon-card img,
+.image-placeholder {
+  width: 100%;
+  height: 100px;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+
+.image-placeholder {
+  display: grid;
+  place-items: center;
+  color: #697386;
+}
+
+.pokemon-card h3 {
+  margin: 8px 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.pokemon-card p {
+  margin: 4px 0;
+  font-size: 12px;
+}
+
+.notice {
+  padding: 12px;
+  border-radius: 10px;
+  background: #e9f7ed;
+  color: #246b40;
+}
+
+.overflow-panel {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+  border: 2px solid #efd16a;
+  background: #fff9e8;
 }
 
 button:disabled {
-  opacity: 0.6;
   cursor: not-allowed;
 }
 
-/* =====================================================
-   XP BAR
-===================================================== */
-
-.xp-section {
-  width: 100%;
-  max-width: 220px;
-}
-
-.xp-bar {
-  width: 100%;
-  height: 18px;
-
-  background: lightgray;
-  border-radius: 15px;
-  overflow: hidden;
-  margin: 8px auto;
-}
-
-.xp-fill {
-  height: 100%;
-  background: #4caf50;
-  transition: width 0.3s ease;
-}
-
-/* =====================================================
-   MY POKÉDEX
-===================================================== */
-
-.bag {
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  width: 100%;
-
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 15px;
-  padding: 15px;
-  box-sizing: border-box;
-
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow: hidden;
-}
-
-.bag h2,
-.available-section h2 {
-  font-size: clamp(18px, 1.7vw, 24px);
-  font-weight: 900;
-  color: #30304b;
-
-  margin: 0 0 12px;
-  flex-shrink: 0;
-}
-
-.bag-list {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: flex-start;
-
-  gap: 12px;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-
-  overflow-y: auto;
-}
-
-.bag-pokemon {
-  width: 145px;
-  flex-shrink: 0;
-
-  background: rgba(255, 255, 255, 0.85);
-  border: 2px solid #ffcc00;
-  border-radius: 10px;
-
-  padding: 8px;
-  box-sizing: border-box;
-  text-align: center;
-}
-
-.bag-pokemon img {
-  width: 100%;
-  height: clamp(60px, 11vh, 100px);
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.bag-pokemon p {
-  font-size: 12px;
-  font-weight: bold;
-  margin: 3px 0;
-  text-transform: capitalize;
-}
-
-.bag-pokemon button {
-  width: 100%;
-  margin-top: 5px;
-  padding: 5px;
-}
-
-/* =====================================================
-   AVAILABLE POKÉMON
-===================================================== */
-
-.available-section {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-
-  min-width: 0;
-  min-height: 0;
-  width: 100%;
-
-  background: rgba(255, 255, 255, 0.85);
-  border-radius: 15px;
-
-  padding: 20px;
-  box-sizing: border-box;
-  overflow: hidden;
-}
-
-.available-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-content: start;
-
-  gap: 12px;
-  width: 100%;
-  flex: 1;
-  min-height: 0;
-
-  overflow-y: auto;
-}
-
-.available-card {
-  background: rgba(255, 255, 255, 0.85);
-  border: 2px solid #ffcc00;
-  border-radius: 12px;
-
-  padding: 10px;
-  min-width: 0;
-  box-sizing: border-box;
-  text-align: center;
-}
-
-.available-card img {
-  width: 100%;
-  height: clamp(65px, 12vh, 110px);
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-.available-card h3 {
-  font-size: 15px;
-  font-weight: bold;
-  color: #30304b;
-  margin: 5px 0;
-}
-
-.available-card p {
-  font-size: 12px;
-  margin: 4px 0;
-}
-
-.available-card button {
-  background: #96c0f1;
-  border: 2px solid white;
-  border-radius: 8px;
-
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: bold;
-  color: #30304b;
-
-  cursor: pointer;
-}
-
-.available-card button:hover {
-  background: #76a9e8;
-}
-
-/* =====================================================
-   RESPONSIVE DESIGN
-===================================================== */
-
-@media (max-width: 1100px) {
-  .content {
-    gap: 12px;
-    padding: 15px;
-  }
-
-  .content-grid {
-    gap: 15px;
+@media (max-width: 950px) {
+  .page-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 800px) {
-  main {
-    height: auto;
-    min-height: 100vh;
-    overflow: visible;
-  }
-
-  .content {
-    height: auto;
-    min-height: calc(100vh - 32px);
-    overflow: visible;
-  }
-
-  .content-grid {
-    grid-template-columns: 1fr;
-    flex: none;
-  }
-
-  .current-avatar {
-    min-height: 350px;
-  }
-
-  .bag {
-    min-height: 220px;
-  }
-
-  .available-section {
-    min-height: 300px;
-  }
-
-  .bag-list,
-  .available-list {
-    overflow: visible;
-  }
-}
-
-@media (max-width: 500px) {
-  main {
+@media (max-width: 540px) {
+  .trainer-page {
     padding: 8px;
   }
 
-  .content {
+  .page-content {
+    min-height: calc(100dvh - 16px);
     padding: 12px;
   }
 
-  .current-avatar {
-    flex-direction: column;
-    align-items: center;
+  .trainer-panel {
+    grid-template-columns: minmax(0, 1fr);
   }
 
-  .avatar,
-  .pokemon-div {
-    width: 100%;
-  }
-
-  .available-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bag-pokemon {
-    width: 130px;
+  .trainer-panel,
+  .collection-panel,
+  .overflow-panel {
+    padding: 16px;
   }
 }
-
-/* =====================================================
-   ACCESSIBILITY
-===================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-  .active-pokemon-img.evolving,
-  .active-pokemon-img.revealing,
-  .evo-glow,
-  .sparkle,
-  .swap-flash {
-    animation: none;
-  }
-
-  .glow-fade-enter-active,
-  .glow-fade-leave-active {
-    transition: none;
-  }
-}
-
-
-/* RANDOM POKEMON BUTTON */
-
-.random-pokemon-button {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 1000;
-
-  padding: 14px 22px;
-  background: #ffde59;
-  color: #30304b;
-
-  border-radius: 14px;
-
-  font-family: 'Nunito', sans-serif;
-  font-size: 14px;
-  font-weight: 800;
-
-  cursor: pointer;
-  box-shadow: 0 5px 0 #c69d20;
-
-  transition: transform 0.2s;
-}
-
-.random-pokemon-button:hover:not(:disabled) {
-  transform: translateY(-3px);
-}
-
-.random-pokemon-button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* FEEDBACK MESSAGE */
-
-.random-pokemon-notice {
-  position: fixed;
-  bottom: 95px;
-  right: 24px;
-  z-index: 1000;
-
-  max-width: 300px;
-  padding: 12px 18px;
-
-  background: #fffdf5;
-  color: #30304b;
-  border: 2px solid #30304b;
-  border-radius: 12px;
-
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-}
-
-/* POKEMON REWARD MODAL */
-
-.modal-content {
-  background: #fff9e8;
-  color: #293c60;
-  font-family: 'Silkscreen', monospace;
-  font-size: 15px;
-}
-
-.modal-body h2,
-.modal-body h3 {
-  font-family: 'Silkscreen', monospace;
-}
-
-.modal-dialog {
-  max-width: 350px;
-}
-
-.modal-backdrop {
-  background-color: #0a1730;
-}
-
-/* ========================================
-   POKEMON REWARD - MODAL ENTRANCE
-======================================== */
-
-.reward-pop {
-  animation: reward-popup 0.5s cubic-bezier(0.2, 1.4, 0.4, 1) both;
-}
-
-@keyframes reward-popup {
-  from {
-    opacity: 0;
-    transform: translateY(30px) scale(0.7);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-
-/* ========================================
-   POKEMON IMAGE REVEAL
-======================================== */
-
-.reward-image-box {
-  position: relative;
-  width: 180px;
-  height: 180px;
-}
-
-.reward-pokemon-sprite {
-  position: relative;
-  z-index: 1;
-
-  width: 150px;
-  height: 150px;
-  object-fit: contain;
-  image-rendering: pixelated;
-
-  animation: pokemon-reveal 0.6s ease-out 0.2s both;
-}
-
-@keyframes pokemon-reveal {
-  0% {
-    opacity: 0;
-    transform: scale(0.3);
-  }
-
-  65% {
-    opacity: 1;
-    transform: scale(1.2);
-  }
-
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-
-/* ========================================
-   GOLDEN SPARKLE BURST
-======================================== */
-
-.reward-sparkles {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.reward-sparkles span {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-
-  color: #ffca28;
-  font-size: 25px;
-  text-shadow: 0 0 8px rgba(255, 222, 89, 0.9);
-
-  animation: reward-sparkle-burst 1s ease-out 0.3s both;
-}
-
-/* Position each sparkle in a different direction */
-.reward-sparkles span:nth-child(1) { --x: -100px; --y: -90px; }
-.reward-sparkles span:nth-child(2) { --x: 0px;    --y: -110px; }
-.reward-sparkles span:nth-child(3) { --x: 100px;  --y: -90px; }
-.reward-sparkles span:nth-child(4) { --x: 120px;  --y: 0px; }
-.reward-sparkles span:nth-child(5) { --x: 90px;   --y: 90px; }
-.reward-sparkles span:nth-child(6) { --x: 0px;    --y: 110px; }
-.reward-sparkles span:nth-child(7) { --x: -90px;  --y: 90px; }
-.reward-sparkles span:nth-child(8) { --x: -120px; --y: 0px; }
-
-@keyframes reward-sparkle-burst {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0);
-  }
-
-  30% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0;
-    transform:
-      translate(-50%, -50%)
-      translate(var(--x), var(--y))
-      scale(0.6)
-      rotate(120deg);
-  }
-}
-
-/* Accessibility */
-@media (prefers-reduced-motion: reduce) {
-  .reward-pop,
-  .reward-pokemon-sprite,
-  .reward-sparkles span {
-    animation: none;
-  }
-
-  .reward-sparkles {
-    display: none;
-  }
-}
-
-
-.modal-dialog.xp-transfer-dialog {
-  max-width: 560px;
-}
-
-.xp-recipient-list {
-  max-height: 320px;
-  overflow-y: auto;
-}
-
-.xp-recipient-image {
-  display: block;
-  width: 80px;
-  height: 80px;
-  margin: 0 auto;
-  object-fit: contain;
-  image-rendering: pixelated;
-}
-
-
 </style>
