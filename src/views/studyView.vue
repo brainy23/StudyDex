@@ -1,43 +1,32 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch, nextTick } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
   getStudyCatalogue,
   getTopicLesson,
   getTopicFlashcards,
-  getSelectedStudyBuddy,
   studyErrorMessage,
 } from '../services/studyService'
-import { useTimer } from '../components/timer/useTimer'
-import StudyLearn from '../components/study/StudyLearn.vue'
-import StudyFlashcards from '../components/study/StudyFlashcards.vue'
-import StudyTimerPanel from '../components/study/StudyTimerPanel.vue'
 import StudyImage from '../components/study/StudyImage.vue'
-import BackToHome from '../components/common/BackToHome.vue'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
 import '../assets/study.css'
 
 const route = useRoute()
 const router = useRouter()
-const timer = useTimer()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
-const buddy = ref(null)
-const buddyError = ref(null)
-const buddyLoading = ref(false)
 const resources = reactive({})
 const progress = reactive({})
 let alive = true
 let generation = 0
 
-const mode = computed(() =>
-  ['learn', 'flashcards'].includes(route.query.mode) ? route.query.mode : 'learn',
-)
+// This page is now a dedicated flashcard room, including older ?mode=learn links.
+const mode = computed(() => 'flashcards')
 const subject = computed(() => {
   const subjects = catalogue.value.subjects
   if (route.query.subject) return subjects.find((item) => item.id === route.query.subject) || null
@@ -66,7 +55,7 @@ const readingProgress = computed(
   () =>
     progress[topic.value?.id] || {
       read: 0,
-      total: currentResources.value?.lesson.data?.concepts.length || 0,
+      total: currentResources.value?.lesson.data?.concepts?.length || 0,
     },
 )
 const progressPercent = computed(() =>
@@ -79,9 +68,6 @@ const activeResource = computed(() => {
   if (!data) return null
   return mode.value === 'learn' ? data.lesson : data.flashcards
 })
-const modeComponent = computed(
-  () => ({ learn: StudyLearn, flashcards: StudyFlashcards })[mode.value],
-)
 const modeKey = computed(() => `${topic.value?.id}:${mode.value}`)
 
 async function initialise() {
@@ -98,8 +84,6 @@ async function initialise() {
     if (!alive || request !== generation) return
     profile.value = student
     topicCompletion.bindStudent(student.id, student.school_level_id)
-    timer.bindUser(student.id)
-    loadBuddy(student.id, request)
     if (student.school_level_id) {
       const data = await getStudyCatalogue(student.school_level_id)
       if (alive && request === generation) catalogue.value = data
@@ -108,20 +92,6 @@ async function initialise() {
     if (alive && request === generation) error.value = cause
   } finally {
     if (alive && request === generation) loading.value = false
-  }
-}
-
-async function loadBuddy(userId, request) {
-  buddyLoading.value = true
-  buddy.value = null
-  buddyError.value = null
-  try {
-    const data = await getSelectedStudyBuddy(userId)
-    if (alive && request === generation) buddy.value = data
-  } catch (cause) {
-    if (alive && request === generation) buddyError.value = cause
-  } finally {
-    if (alive && request === generation) buddyLoading.value = false
   }
 }
 
@@ -174,14 +144,14 @@ function chooseSubject(id) {
   const firstTopic = catalogue.value.topics.find((item) => item.subject_id === id)
   router.push({
     name: 'study-decks',
-    query: { subject: id, ...(firstTopic ? { topic: firstTopic.id } : {}), mode: 'learn' },
+    query: { subject: id, ...(firstTopic ? { topic: firstTopic.id } : {}), mode: 'flashcards' },
   })
 }
 
 function chooseTopic(selected) {
   router.push({
     name: 'study-decks',
-    query: { subject: selected.subject_id, topic: selected.id, mode: 'learn' },
+    query: { subject: selected.subject_id, topic: selected.id, mode: 'flashcards' },
   })
 }
 
@@ -197,189 +167,1506 @@ function retryMode() {
 watch(() => topic.value?.id, loadTopic)
 onMounted(initialise)
 onBeforeRouteLeave(() => {
-  timer.pause('Your session was paused when you left Poké Lab. Resume when you return.')
+  pauseFocusTimer()
 })
 onUnmounted(() => {
   alive = false
   generation++
 })
+
+
+// Mewtwo companion; change this ID to select another Pokémon.
+const POKE_API_BASE = 'https://pokeapi.co/api/v2'
+const pokemonCache = new Map()
+const reduceMotion = ref(false)
+let motionQuery
+function updateMotionPreference() { reduceMotion.value = !!motionQuery?.matches; spriteIndex.value = 0 }
+onMounted(() => {
+  motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
+  updateMotionPreference()
+  motionQuery.addEventListener('change', updateMotionPreference)
+})
+onUnmounted(() => motionQuery?.removeEventListener('change', updateMotionPreference))
+const apiPokemon = ref(null)
+const spriteLoading = ref(false)
+const spriteError = ref('')
+const spriteIndex = ref(0)
+const spriteRetry = ref(0)
+const buddyApiKey = computed(() => '150')
+const buddyDisplayName = computed(() => apiPokemon.value?.name || 'Mewtwo')
+const spriteChoices = computed(() => {
+  const sprites = apiPokemon.value?.sprites
+  return [...new Set([
+    !reduceMotion.value && sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default,
+    sprites?.front_default,
+    sprites?.other?.['official-artwork']?.front_default,
+  ].filter((url) => typeof url === 'string' && url.startsWith('https://')))]
+})
+const buddySprite = computed(() => spriteChoices.value[spriteIndex.value] || '')
+function nextBuddySprite() {
+  if (spriteIndex.value < spriteChoices.value.length - 1) spriteIndex.value++
+  else { spriteIndex.value = spriteChoices.value.length; spriteError.value = 'The Pokémon image could not load. Try again.' }
+}
+watch([buddyApiKey, spriteRetry], async ([key], previous, onCleanup) => {
+  const controller = new AbortController()
+  let cancelled = false
+  let timeout
+  onCleanup(() => { cancelled = true; controller.abort(); clearTimeout(timeout) })
+  apiPokemon.value = null
+  spriteIndex.value = 0
+  spriteError.value = ''
+  spriteLoading.value = false
+  if (!key) {
+    return
+  }
+  spriteLoading.value = true
+  try {
+    let data = pokemonCache.get(key)
+    if (!data) {
+      timeout = setTimeout(() => controller.abort(), 12000)
+      const response = await fetch(`${POKE_API_BASE}/pokemon/${encodeURIComponent(key)}/`, { signal: controller.signal })
+      if (!response.ok) throw new Error(`PokéAPI returned HTTP ${response.status}`)
+      data = await response.json()
+      if (!data?.sprites || typeof data.name !== 'string') throw new Error('Invalid Pokémon response')
+      pokemonCache.set(key, data)
+    }
+    if (cancelled) return
+    apiPokemon.value = data
+    if (!spriteChoices.value.length) spriteError.value = 'No sprite is available for this Pokémon.'
+  } catch (cause) {
+    if (!cancelled) {
+      console.error('PokéAPI buddy load failed:', key, cause)
+      spriteError.value = 'Could not load your Pokémon from PokéAPI. Check your connection and retry.'
+    }
+  } finally {
+    clearTimeout(timeout)
+    if (!cancelled) spriteLoading.value = false
+  }
+}, { immediate: true })
+
+// Geometry below matches public/poke-lab/poke-lab-interior.png (1672 × 941).
+const labBackground = `${import.meta.env.BASE_URL}poke-lab/poke-lab-interior.png`
+const backgroundFailed = ref(false)
+const enteredLab = ref(false)
+const pickerSubjectId = ref(null)
+const pickerBusy = ref(false)
+const pickerError = ref('')
+const visibleSubjects = computed(() => catalogue.value.subjects.filter(item => !/\bmath(?:s|ematics)?\b/i.test(item.name || '')))
+const pickerSubject = computed(() => visibleSubjects.value.find(item => item.id === pickerSubjectId.value))
+const pickerTopics = computed(() => catalogue.value.topics.filter(item => item.subject_id === pickerSubjectId.value))
+function returnToSelection() {
+  pauseFocusTimer()
+  enteredLab.value = false
+  pickerSubjectId.value = subject.value?.id || null
+  pickerError.value = ''
+}
+
+const reviewQueue = ref([])
+const cardIndex = computed(() => reviewQueue.value[0] ?? -1)
+const answerVisible = ref(false)
+const completedCards = ref(0)
+const ratingMessage = ref('')
+// A local, independent 25-minute focus session. No server timer API is assumed.
+const focusSeconds = ref(25 * 60)
+const timerRunning = ref(false)
+const timerFinished = ref(false)
+// Paused/idle/completed is always red, even when fewer than two minutes remain.
+const timerBorderColor = computed(() => !timerRunning.value ? '#ff4057' : focusSeconds.value <= 120 ? '#ffd43b' : '#34e782')
+const timerBorderStyle = computed(() => ({ '--timer-border': timerBorderColor.value }))
+let timerDeadline = 0
+let focusInterval
+const focusTime = computed(() => `${String(Math.floor(focusSeconds.value / 60)).padStart(2, '0')}:${String(focusSeconds.value % 60).padStart(2, '0')}`)
+function tickFocusTimer() {
+  if (!timerRunning.value) return
+  focusSeconds.value = Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000))
+  if (!focusSeconds.value) {
+    timerRunning.value = false
+    timerFinished.value = true
+    clearInterval(focusInterval)
+  }
+}
+function pauseFocusTimer() {
+  tickFocusTimer()
+  timerRunning.value = false
+  clearInterval(focusInterval)
+}
+function startFocusTimer() {
+  if (timerRunning.value) return
+  if (!focusSeconds.value) focusSeconds.value = 25 * 60
+  timerFinished.value = false
+  timerDeadline = Date.now() + focusSeconds.value * 1000
+  timerRunning.value = true
+  focusInterval = setInterval(tickFocusTimer, 250)
+}
+function resetFocusTimer() {
+  pauseFocusTimer()
+  focusSeconds.value = 25 * 60
+  timerFinished.value = false
+}
+const now = ref(new Date())
+const live = ref(true)
+const previewHour = ref(12)
+const autoPreview = ref(false)
+let previewInterval
+function stopAutoPreview() {
+  clearInterval(previewInterval)
+  previewInterval = undefined
+  autoPreview.value = false
+}
+function useLiveTime() {
+  stopAutoPreview()
+  now.value = new Date()
+  live.value = true
+}
+function setPreview(value) {
+  const next = Number(value)
+  if (!Number.isFinite(next)) return
+  stopAutoPreview()
+  live.value = false
+  previewHour.value = ((next % 24) + 24) % 24
+}
+function toggleAutoPreview() {
+  if (autoPreview.value) { stopAutoPreview(); return }
+  previewHour.value = hour.value
+  live.value = false
+  autoPreview.value = true
+  const startedAt = performance.now()
+  const startHour = previewHour.value
+  previewInterval = setInterval(() => {
+    previewHour.value = (startHour + (performance.now() - startedAt) / 60000 * 24) % 24
+  }, 50)
+}
+onUnmounted(stopAutoPreview)
+
+let clockInterval
+const hour = computed(() => live.value ? now.value.getHours() + now.value.getMinutes() / 60 + now.value.getSeconds() / 3600 : previewHour.value)
+const displayTime = computed(() => {
+  const minutes = Math.floor(hour.value * 60)
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+})
+const landscapeImage = `${import.meta.env.BASE_URL}trainer-home/window-landscape-clean.png`
+const landscapeFailed = ref(false)
+const landscapeStyle = computed(() => ({
+  filter: `brightness(${lighting.value.brightness}) saturate(${lighting.value.saturation})`,
+}))
+const skyImages = {
+  sun: `${import.meta.env.BASE_URL}town/bg_sun.png`,
+  moon: `${import.meta.env.BASE_URL}town/bg_moon.png`,
+  clouds: `${import.meta.env.BASE_URL}town/bg_clouds.png`,
+  stars: `${import.meta.env.BASE_URL}town/bg_stars.png`,
+}
+const skyImageFailed = reactive({ sun: false, moon: false, clouds: false, stars: false })
+// Same lighting keyframes and celestial paths as QuizView.vue.
+const frames = [
+  [0, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
+  [5.5, 'Night', '#081229', '#354564', 0.38, 0.7, 0.38, 0.8],
+  [8, 'Day', '#258be0', '#c7eeff', 1, 1.06, 1, 0],
+  [12, 'Day', '#1685df', '#c4efff', 1.04, 1.1, 1, 0],
+  [15.5, 'Afternoon', '#579bd5', '#ffe0ad', 1.02, 1.08, 0.95, 0],
+  [18.5, 'Sunset', '#67518e', '#ffad7b', 0.82, 1.05, 0.78, 0.03],
+  [19.25, 'Dusk', '#30345f', '#a77b9d', 0.58, 0.85, 0.58, 0.35],
+  [20.5, 'Evening', '#101f43', '#405477', 0.43, 0.75, 0.4, 0.75],
+  [22, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
+  [24, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
+].map(
+  ([
+    hour,
+    name,
+    top,
+    horizon,
+    brightness,
+    saturation,
+    cloud,
+    stars,
+  ]) => ({
+    hour,
+    name,
+    top,
+    horizon,
+    brightness,
+    saturation,
+    cloud,
+    stars,
+  }),
+)
+
+const lerp = (a, b, t) => a + (b - a) * t
+
+function mixColor(a, b, t) {
+  const channels = [1, 3, 5].map((position) => {
+    const start = parseInt(a.slice(position, position + 2), 16)
+    const end = parseInt(b.slice(position, position + 2), 16)
+
+    return Math.round(lerp(start, end, t))
+  })
+
+  return `rgb(${channels.join(',')})`
+}
+
+const lighting = computed(() => {
+  const h = hour.value
+
+  const index = frames.findIndex(
+    (frame, i) =>
+      i < frames.length - 1 &&
+      h >= frame.hour &&
+      h < frames[i + 1].hour,
+  )
+
+  const start = frames[Math.max(0, index)]
+  const end = frames[Math.max(0, index) + 1]
+
+  const progress = (h - start.hour) / (end.hour - start.hour)
+  const t = progress * progress * (3 - 2 * progress)
+
+  return {
+    name: t < 0.5 ? start.name : end.name,
+    top: mixColor(start.top, end.top, t),
+    horizon: mixColor(start.horizon, end.horizon, t),
+    brightness: lerp(start.brightness, end.brightness, t),
+    saturation: lerp(start.saturation, end.saturation, t),
+    cloud: lerp(start.cloud, end.cloud, t),
+    stars: lerp(start.stars, end.stars, t),
+  }
+})
+
+const skyStyle = computed(() => ({
+  background: `linear-gradient(
+    to bottom,
+    ${lighting.value.top} 0%,
+    ${lighting.value.horizon} 30%
+  )`,
+}))
+
+const cloudStyle = computed(() => ({
+  opacity: lighting.value.cloud,
+  filter: `brightness(${lighting.value.brightness})`,
+}))
+
+function celestialStyle(isMoon) {
+  const h = hour.value
+
+  const progress = isMoon
+    ? ((h - 19 + 24) % 24) / 11
+    : (h - 6) / 13
+
+  const visible = progress > 0 && progress < 1
+  const p = Math.max(0, Math.min(1, progress))
+
+  return {
+    left: `${12 + p * 76}%`,
+    top: `${25 - Math.sin(p * Math.PI) * 19}%`,
+    opacity: visible
+      ? Math.min(1, p * 10, (1 - p) * 10)
+      : 0,
+  }
+}
+
+const roomLighting = computed(() => ({
+  filter: `brightness(${Math.max(.78, lighting.value.brightness)}) saturate(${Math.max(.9, lighting.value.saturation)})`,
+}))
+// Deterministic fallback stars, used only if the existing town asset is absent.
+const skyStars = Array.from({ length: 65 }, (_, index) => ({
+  left: `${(index * 37.3 + 7) % 100}%`, top: `${(index * 19.7 + 3) % 65}%`,
+  width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`,
+}))
+
+// The uploaded page did not include StudyFlashcards.vue or studyService.
+// This adapter supports common card shapes; adjust here if your service differs.
+function cardRows(data) {
+  if (Array.isArray(data)) return data
+  for (const key of ['cards', 'flashcards', 'items']) {
+    if (Array.isArray(data?.[key])) return data[key]
+  }
+  return []
+}
+function cardText(value) {
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (value && typeof value.text === 'string') return value.text
+  return ''
+}
+function firstText(...values) { return values.map(cardText).find(Boolean) || '' }
+const cards = computed(() => cardRows(currentResources.value?.flashcards.data).map((card, index) => ({
+  id: card?.id ?? index,
+  front: firstText(card?.front, card?.front_text, card?.question, card?.question_text, card?.prompt, card?.term),
+  back: firstText(card?.back, card?.back_text, card?.answer, card?.answer_text, card?.definition, card?.explanation),
+  frontImage: card?.front_image_url || card?.question_image_url || '',
+  backImage: card?.back_image_url || card?.answer_image_url || '',
+})))
+const currentCard = computed(() => cards.value[cardIndex.value] || null)
+const flashResource = computed(() => currentResources.value?.flashcards)
+const reviewedCount = computed(() => completedCards.value)
+const unsupportedCards = computed(() => {
+  const data = flashResource.value?.data
+  return data != null && !Array.isArray(data) &&
+    !['cards', 'flashcards', 'items'].some((key) => Array.isArray(data[key]))
+})
+function revealCard() {
+  if (currentCard.value) answerVisible.value = !answerVisible.value
+}
+// Ratings apply only to this visit: Again repeats soon, Hard later, Easy retires it.
+function rateCard(rating) {
+  if (mode.value !== 'flashcards' || !currentCard.value || !answerVisible.value ||
+      !['again', 'easy', 'hard'].includes(rating)) return
+  const next = [...reviewQueue.value]
+  const index = next.shift()
+  if (rating === 'easy') {
+    completedCards.value++
+    ratingMessage.value = 'Easy — finished for this round.'
+  } else {
+    next.splice(Math.min(rating === 'again' ? 1 : 3, next.length), 0, index)
+    ratingMessage.value = rating === 'again' ? 'Again — this card will return soon.' : 'Hard — this card will return later in the round.'
+  }
+  reviewQueue.value = next
+  answerVisible.value = false
+}
+function restartCards() {
+  reviewQueue.value = cards.value.map((_, index) => index)
+  completedCards.value = 0
+  answerVisible.value = false
+  ratingMessage.value = ''
+}
+function handleCardKey(event) {
+  if (mode.value !== 'flashcards' || !currentCard.value || event.target !== event.currentTarget) return
+  if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); revealCard() }
+}
+async function selectLabTopic(item) {
+  if (pickerBusy.value) return
+  pickerBusy.value = true
+  pickerError.value = ''
+  try {
+    await router.push({ name: 'study-decks', query: { subject: item.subject_id, topic: item.id, mode: 'flashcards' } })
+    if (String(route.query.topic) === String(item.id)) enteredLab.value = true
+  } catch {
+    pickerError.value = 'Could not open this topic. Please try again.'
+  } finally { pickerBusy.value = false }
+}
+watch([() => topic.value?.id, () => flashResource.value?.data], restartCards, { immediate: true, flush: 'sync' })
+onUnmounted(() => { clearInterval(focusInterval) })
+onMounted(() => { clockInterval = window.setInterval(() => { now.value = new Date() }, 1000) })
+onUnmounted(() => window.clearInterval(clockInterval))
+
+const navigationSleeping = computed(() => hour.value >= 23 || hour.value < 7)
+// No pack count is supplied to these views; do not display a fabricated badge.
+const navPackCount = 0
+const navPackLabel = ''
+async function openTownTodos() {
+  await router.push('/home')
+  await nextTick()
+  document.querySelector('[data-bs-target="#todoModal"]')?.click()
+}
 </script>
 
 <template>
-  <main class="study-page">
-    <div class="study-layout study-screen">
-      <header class="study-header study-panel">
-        <div class="study-header-title">
-          <BackToHome variant="text" class="study-town-link" />
-          <h1>Poké Lab</h1>
-          <p>Explore a little. Remember a little more.</p>
-        </div>
-        <!-- <div v-if="profile" class="study-header-context">
-          <p class="study-level">{{ profile.school_level?.name || 'School level not set' }}</p>
-          <p>
-            {{ subject?.name || 'Choose a subject' }} <span v-if="topic">· {{ topic.name }}</span>
-          </p>
-          <a href="#study-topics">Choose subject or topic</a>
-        </div> -->
-        <div v-if="topic" class="study-header-progress">
-          <label for="topic-reading-progress"
-            >{{ readingProgress.read }} / {{ readingProgress.total }} concepts read</label
+  <div class="arena-with-preview lab-with-preview">
+  <main class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
+    <header class="arena-hud">
+      <div class="arena-clock"><strong>{{ displayTime }}</strong><span>{{ lighting.name }}</span></div>
+    </header>
+  <nav class="sd-navbar sd-navbar-vertical" aria-label="Main navigation">
+
+    <!-- TOWN: ACTIVE ON HOMEVIEW2 -->
+    <button
+      type="button"
+      class="sd-nav-button sd-town-button"
+      @click="router.push('/home')"
+
+    >
+      <span class="sd-pokeball" aria-hidden="true"></span>
+      <span class="sd-nav-label">Town</span>
+    </button>
+
+    <!-- STUDY -->
+    <button type="button" class="sd-nav-button is-active" aria-current="page" disabled>
+      <span class="sd-icon-tile sd-icon-study">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path
+            d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
+              4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
+            fill="#fff9e8"
+          />
+          <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
+        </svg>
+      </span>
+      <span class="sd-nav-label">Study</span>
+    </button>
+
+    <!-- QUIZ -->
+    <button type="button" class="sd-nav-button" :disabled="navigationSleeping" @click="router.push('/quiz')">
+      <span class="sd-icon-tile sd-icon-quiz">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path
+            d="m7 3 5 2 13 17-4 4L7 9Z"
+            fill="#fff9e8"
+          />
+          <path
+            d="m25 3-5 2L7 22l4 4L25 9Z"
+            fill="#fff9e8"
+          />
+          <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
+        </svg>
+      </span>
+      <span class="sd-nav-label">Quiz</span>
+    </button>
+
+    <!-- TO-DO LIST — available even while the buddy sleeps -->
+    <button
+      type="button"
+      class="sd-nav-button"
+      @click="openTownTodos"
+    >
+      <span class="sd-icon-tile sd-icon-todos">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <rect x="6" y="4" width="21" height="25" rx="3" fill="#fff9e8" />
+          <path d="M11 2v5M22 2v5M16 13h7M16 19h7M16 25h7" />
+          <path d="m9 12 2 2 3-4m-5 8 2 2 3-4" />
+          <circle cx="11" cy="25" r="1" fill="currentColor" stroke="none" />
+        </svg>
+      </span>
+      <span class="sd-nav-label">To-Do List</span>
+    </button>
+
+    <!-- BAG -->
+    <!-- BAG WITH UNOPENED PACK COUNT -->
+    <button
+      type="button"
+      class="sd-nav-button"
+      :aria-label="
+        navPackCount > 0
+          ? `Bag, ${navPackCount} unopened packs`
+          : 'Bag, no unopened packs'
+      "
+
+      :disabled="navigationSleeping"
+      @click="router.push('/trainer')"
+    >
+      <span class="sd-icon-tile sd-icon-bag">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <path d="M12 7V5a4 4 0 0 1 8 0v2" />
+
+          <rect
+            x="6"
+            y="7"
+            width="20"
+            height="22"
+            rx="6"
+            fill="#ffcf65"
+          />
+
+          <path d="M6 15h20" />
+
+          <rect
+            x="10"
+            y="18"
+            width="12"
+            height="7"
+            rx="2"
+            fill="#fff0bb"
+          />
+
+          <path d="M16 13v4" />
+        </svg>
+
+        <Transition name="pack-badge">
+          <span
+            v-if="navPackCount > 0"
+            :key="navPackLabel"
+            class="sd-pack-badge"
+            aria-hidden="true"
           >
-          <progress id="topic-reading-progress" :value="progressPercent" max="100" />
-          <span class="study-note">Progress for this visit</span>
-        </div>
-        <div class="study-header-actions">
-          <button class="study-button" :disabled="!quizUnlocked" @click="goToArena">Quiz me!</button>
-          <p v-if="topic" class="study-note">
-            {{ quizUnlocked ? 'Topic covered — your quiz is unlocked.' : 'Finish this topic to unlock its quiz.' }}
-          </p>
-          <p v-if="!savedInBrowser" class="study-note" role="status">
-            Browser storage is unavailable. Completed topics will stay unlocked for this app visit only.
-          </p>
-        </div>
-      </header>
+            {{ navPackLabel }}
+          </span>
+        </Transition>
+      </span>
 
-      <section v-if="loading" class="study-page-state study-panel" role="status">
-        Loading your Poké Lab…
-      </section>
-      <section v-else-if="error" class="study-page-state study-panel" role="alert">
-        <h2>We could not open your study content</h2>
-        <p>{{ studyErrorMessage(error, 'Your study content') }}</p>
-        <button class="study-button" @click="initialise">Try again</button>
-      </section>
-      <section v-else-if="!profile?.school_level_id" class="study-page-state study-panel">
-        <h2>Set your school level first</h2>
-        <p>Add your Primary level in Account Settings so we can show you the right topics.</p>
-        <RouterLink to="/account" class="study-button">Open Account Settings</RouterLink>
-      </section>
-      <template v-else>
-        <aside class="study-buddy study-panel" aria-labelledby="study-buddy-heading">
-          <div class="study-buddy-art">
-            <StudyImage
-              v-if="buddy?.pokemon?.sprite_url"
-              :path="buddy.pokemon.sprite_url"
-              :alt="buddy.pokemon.name"
-            />
-            <img v-else src="/assets/quiz_buddy.png" alt="" />
-          </div>
-          <div>
-            <p class="study-eyebrow">Your study companion</p>
-            <h2 id="study-buddy-heading">{{ buddy?.pokemon?.name || 'Pokémon Buddy' }}</h2>
-            <p v-if="buddyLoading" class="study-note" role="status">Looking for your buddy…</p>
-            <p v-else-if="buddyError" class="study-note" role="alert">
-              {{ studyErrorMessage(buddyError, 'Your buddy') }}
-            </p>
-            <template v-else-if="buddy">
-              <p>Level {{ buddy.level }} · {{ buddy.xp }} XP</p>
-              <p class="study-note">Your saved buddy stats. Studying does not award XP yet.</p>
-            </template>
-            <p v-else class="study-note">
-              Buddy preview — your selected Pokémon will appear here when your collection is
-              connected.
-            </p>
-          </div>
-        </aside>
+      <span class="sd-nav-label">Bag</span>
+    </button>
 
-        <section class="main-study study-panel" aria-label="Learning content">
-          <nav v-if="topic" class="study-mode-nav" aria-label="Learning modes">
-            <button
-              v-for="item in [
-                { id: 'learn', label: 'Learn' },
-                { id: 'flashcards', label: 'Flashcards' },
-              ]"
-              :key="item.id"
-              :aria-pressed="mode === item.id"
-              @click="setMode(item.id)"
-            >
-              {{ item.label }}
-            </button>
-          </nav>
-          <p v-if="topic && activeResource" class="study-eyebrow study-topic-label">
-            {{ subject?.name }} · {{ topic.name }}
-          </p>
-          <!-- Keep the cache alive when browsing a subject with no available topic. -->
-          <KeepAlive>
-            <component
-              v-if="topic && activeResource"
-              :is="modeComponent"
-              :key="modeKey"
-              :topic="topic"
-              :resource="activeResource"
-              @progress="updateProgress"
-              @complete="completeTopic"
-              @mode="setMode"
-              @retry="retryMode"
-              @arena="goToArena"
-            />
-          </KeepAlive>
-          <div v-if="!topic || !activeResource" class="study-empty">
-            <h2>
-              {{
-                route.query.topic ? 'This topic is unavailable' : 'No study content is available'
-              }}
-            </h2>
-            <p v-if="!catalogue.subjects.length">
-              No subjects are visible to your account. Content may not be published yet, or read
-              access may not have been enabled.
-            </p>
-            <p v-else>
-              {{
-                route.query.topic
-                  ? 'Choose a topic available for your registered school level.'
-                  : `There are no available ${subject?.name || ''} topics for ${profile.school_level?.name || 'your school level'} yet.`
-              }}
-            </p>
-            <p class="study-note">
-              Content may also be unavailable if your account has not been granted read access.
-            </p>
-            <a href="#study-topics" class="study-button">Browse available topics</a>
+  </nav>
+
+
+    <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
+    <div v-else-if="error" class="lab-state" role="alert">
+      <p>{{ studyErrorMessage(error, 'Your study content') }}</p>
+      <button @click="initialise">Try again</button>
+    </div>
+    <div v-else-if="!profile?.school_level_id" class="lab-state">
+      <h1>Set your school level first</h1>
+      <RouterLink to="/account">Open Account Settings</RouterLink>
+    </div>
+
+    <template v-else>
+      <section class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="[skyStyle, timerBorderStyle]" aria-label="Poké Lab study room">
+        <div class="lab-sky" :style="skyStyle" aria-hidden="true">
+          <div class="lab-celestial lab-sun" :style="celestialStyle(false)">
+            <img v-if="!skyImageFailed.sun" :src="skyImages.sun" alt="" @error="skyImageFailed.sun = true" />
+            <span v-else class="sun-fallback"></span>
           </div>
+          <div class="lab-celestial lab-moon" :style="celestialStyle(true)">
+            <img v-if="!skyImageFailed.moon" :src="skyImages.moon" alt="" @error="skyImageFailed.moon = true" />
+            <span v-else class="moon-fallback"></span>
+          </div>
+          <div class="lab-stars" :style="{ opacity: lighting.stars }">
+            <img v-if="!skyImageFailed.stars" :src="skyImages.stars" alt="" @error="skyImageFailed.stars = true" />
+            <div v-else class="fallback-stars"><i v-for="(star, index) in skyStars" :key="index" :style="star"></i></div>
+          </div>
+          <div class="lab-clouds" :style="cloudStyle">
+            <img v-if="!skyImageFailed.clouds" :src="skyImages.clouds" alt="" @error="skyImageFailed.clouds = true" />
+            <div v-else class="fallback-clouds"><i></i><i></i><i></i></div>
+          </div>
+          <img
+            v-if="!landscapeFailed"
+            class="lab-landscape"
+            :src="landscapeImage"
+            :style="landscapeStyle"
+            alt=""
+            draggable="false"
+            @error="landscapeFailed = true"
+          />
+        </div>
+        <img class="lab-room" :src="labBackground" :style="roomLighting" alt="" @error="backgroundFailed = true" />
+
+        <!-- This coloured ring overlays the red trim baked into the room artwork. -->
+        <div class="timer-frame" aria-hidden="true"></div>
+        <!-- Timer screen: paused red, running green, final two minutes yellow. -->
+        <section class="lab-screen prompt-screen timer-screen" aria-label="25-minute focus timer">
+          <p class="screen-eyebrow">25-minute focus</p>
+          <strong class="focus-digits" role="timer" aria-label="Time remaining">{{ focusTime }}</strong>
+          <div class="focus-actions">
+            <button @click="timerRunning ? pauseFocusTimer() : startFocusTimer()">{{ timerRunning ? 'Pause' : focusSeconds === 1500 ? 'Start' : focusSeconds === 0 ? 'Start again' : 'Resume' }}</button>
+            <button @click="resetFocusTimer">Reset</button>
+          </div>
+          <span v-if="timerFinished" class="focus-finished" role="status">Session complete — take a break!</span>
         </section>
 
-        <aside class="study-utilities" aria-label="Study tools">
-          <StudyTimerPanel :topic-id="topic?.id || null" />
-          <section
-            id="study-topics"
-            class="study-panel study-topic-browser"
-            aria-labelledby="topic-browser-heading"
-          >
-            <h2 id="topic-browser-heading">Your study topics</h2>
-            <label for="study-subject">Subject</label>
-            <select
-              id="study-subject"
-              :value="subject?.id || ''"
-              @change="chooseSubject($event.target.value)"
-            >
-              <option v-if="!subject" value="" disabled>Choose a subject</option>
-              <option v-for="item in catalogue.subjects" :key="item.id" :value="item.id">
-                {{ item.name }}
-              </option>
-            </select>
-            <ul v-if="availableTopics.length" class="study-topic-list">
-              <li v-for="item in availableTopics" :key="item.id">
-                <button
-                  :aria-current="topic?.id === item.id ? 'true' : undefined"
-                  @click="chooseTopic(item)"
-                >
-                  {{ item.name }}
-                </button>
-              </li>
-            </ul>
-            <p v-else class="study-note">
-              No topics are available for this subject at your level yet.
-            </p>
-            <div v-if="topic" class="study-topic-progress">
-              <h3>Current learning progress</h3>
-              <p>{{ readingProgress.read }} of {{ readingProgress.total }} concepts read</p>
-              <progress :value="progressPercent" max="100" aria-label="Topic reading progress" />
-              <p class="study-note">
-                Reading progress and answer choices stay for this visit. They reset after leaving or
-                refreshing.
-              </p>
+        <nav class="lab-navigation" aria-label="Room navigation">
+          <button type="button" @click="returnToSelection">Topics</button>
+        </nav>
+
+        <!-- Blue screen: question and answer on the same display. -->
+        <section class="lab-screen answer-screen" aria-label="Flashcard answer and learning content" tabindex="0" @keydown="handleCardKey">
+          <template v-if="mode === 'flashcards'">
+            <p class="screen-eyebrow">{{ answerVisible ? 'Flashcard · Answer' : 'Flashcard · Question' }}</p>
+            <div v-if="!topic" class="screen-message"><h2>Choose a study topic</h2><p>Use Topics above to get started.</p></div>
+            <div v-else-if="flashResource?.loading || !flashResource" class="screen-message" role="status">Loading your flashcards…</div>
+            <div v-else-if="flashResource.error" class="screen-message" role="alert">
+              <p>{{ studyErrorMessage(flashResource.error, 'Your flashcards') }}</p>
+              <button @click="retryMode">Try again</button>
             </div>
-          </section>
+            <div v-else-if="unsupportedCards" class="screen-message" role="alert">
+              <h2>This deck format needs connecting</h2>
+              <p>Your cards loaded, but this view could not read their format.</p>
+            </div>
+            <div v-else-if="!cards.length" class="screen-message"><h2>No flashcards yet</h2><p>Choose another topic using the Topics button.</p></div>
+            <div v-else-if="!currentCard" class="screen-message" role="status"><h2>Round complete!</h2><p>All {{ cards.length }} cards marked Easy.</p><button @click="restartCards">Study again</button></div>
+            <div v-else class="answer-content" aria-live="polite">
+              <template v-if="answerVisible">
+                <p class="question-reminder">{{ currentCard.front }}</p>
+                <p class="answer-copy">{{ currentCard.back || (currentCard.backImage ? '' : 'This card has no answer text.') }}</p>
+                <StudyImage v-if="currentCard.backImage" :path="currentCard.backImage" alt="Flashcard answer illustration" />
+              </template>
+              <template v-else>
+                <h1 class="answer-copy">{{ currentCard.front || (currentCard.frontImage ? '' : 'This card has no question text.') }}</h1>
+                <StudyImage v-if="currentCard.frontImage" :path="currentCard.frontImage" alt="Flashcard question illustration" />
+              </template>
+              <button class="screen-flip" :aria-pressed="answerVisible" @click="revealCard">{{ answerVisible ? 'Show question' : 'Reveal answer' }}</button>
+            </div>
+          </template>
+        </section>
+
+        <!-- The sprite's bottom edge sits on the chamber's purple platform. -->
+        <aside class="buddy-chamber" :class="{ 'has-pokemon': !!buddySprite }" aria-label="Your study buddy">
+          <div v-if="buddySprite" class="buddy-contact-shadow" aria-hidden="true"></div>
+          <div class="buddy-sprite">
+            <img v-if="buddySprite" :key="buddySprite" :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }" :src="buddySprite" :alt="buddyDisplayName" @error="nextBuddySprite" />
+            <span v-else class="chamber-status" role="status">{{ spriteLoading ? 'Loading…' : spriteError ? 'Try again below' : 'Loading companion…' }}</span>
+          </div>
         </aside>
-      </template>
-    </div>
+
+        <!-- Only the three requested rating buttons live on the control panel. -->
+        <nav class="lab-console" aria-label="Flashcard ratings">
+          <div class="console-actions rating-actions">
+            <button class="rate-again" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('again')">Again</button>
+            <button class="rate-easy" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('easy')">Easy</button>
+            <button class="rate-hard" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('hard')">Hard</button>
+          </div>
+          <p class="console-status">{{ mode === 'learn' ? 'Switch to Flashcards to review.' : currentCard ? answerVisible ? 'How well did you remember?' : 'Reveal the answer to rate this card.' : cards.length ? 'Round complete' : 'Choose a deck to begin' }}</p>
+          <span v-if="cards.length && mode === 'flashcards'" class="console-status">{{ reviewedCount }} / {{ cards.length }} finished</span>
+        </nav>
+      </section>
+      <footer v-if="enteredLab" class="lab-footer">
+        <span role="status">{{ ratingMessage }}</span>
+        <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
+        <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
+        <p v-if="!savedInBrowser" role="status">Progress can only be kept for this visit because browser storage is unavailable.</p>
+        <p v-if="landscapeFailed" role="status">Mountain background missing. Copy window-landscape-clean.png into public/trainer-home/.</p>
+        <p v-if="backgroundFailed" role="alert">Room image missing. Put poke-lab-interior.png in public/poke-lab/.</p>
+      </footer>
+    </template>
+
+    <section v-if="!enteredLab && !loading && !error && profile?.school_level_id" class="arena-picker" aria-labelledby="picker-title">
+      <div class="picker-shell">
+        <span class="picker-eyebrow">STUDYDEX · POKÉ LAB</span>
+        <h1 id="picker-title">{{ pickerSubject ? 'Choose your topic' : 'What will you master today?' }}</h1>
+        <p class="picker-intro">{{ pickerSubject ? pickerSubject.name + ' · ' + (profile.school_level?.name || 'Your school level') : 'Choose a subject to begin your study session.' }}</p>
+        <button v-if="pickerSubject" type="button" class="picker-back" @click="pickerSubjectId = null">← All subjects</button>
+        <div v-if="!pickerSubject" class="bubble-grid">
+          <button v-for="item in visibleSubjects" :key="item.id" type="button" class="bubble-card" @click="pickerSubjectId = item.id">
+            <span class="bubble-symbol" aria-hidden="true">{{ /science/i.test(item.name) ? '⚗' : /math/i.test(item.name) ? '✦' : '✎' }}</span>
+            <strong>{{ item.name }}</strong><span>Explore topics →</span>
+          </button>
+        </div>
+        <template v-else>
+          <div class="science-filters">
+            <strong class="science-level-label">{{ profile.school_level?.name }}</strong>
+            <p>Showing study topics for your saved school level. Choose a topic to practise.</p>
+          </div>
+          <div class="bubble-grid topic-grid">
+            <div v-for="item in pickerTopics" :key="item.id" class="topic-choice">
+              <button type="button" class="bubble-card" :disabled="pickerBusy" @click="selectLabTopic(item)">
+                <span class="bubble-symbol" aria-hidden="true">✦</span>
+                <span v-if="item.theme" class="science-theme">{{ item.theme }}</span>
+                <strong>{{ item.name }}</strong>
+                <span>Study flashcards →</span>
+              </button>
+            </div>
+          </div>
+        </template>
+        <p v-if="!visibleSubjects.length">No published study subjects are available for your school level yet.</p>
+        <p v-else-if="pickerSubject && !pickerTopics.length">No published topics are available for this subject yet.</p>
+        <p v-if="pickerError" role="alert">{{ pickerError }}</p>
+        <p class="picker-footnote">Study at your own pace. Take a break after your focus session.</p>
+      </div>
+    </section>
   </main>
+  <footer class="time-preview-bar" aria-label="Time preview controls">
+    <div class="time-bar-inner">
+      <strong class="time-bar-title">Time preview <span>{{ displayTime }}</span></strong>
+      <button type="button" :aria-pressed="live" @click="useLiveTime">Live</button>
+      <button v-for="preset in [{ label: '7am', hour: 7 }, { label: 'Day', hour: 12 }, { label: 'Sunset', hour: 18.5 }, { label: 'Night', hour: 21 }, { label: 'Midnight', hour: 0 }]" :key="preset.label" type="button" :aria-pressed="!live && !autoPreview && Math.abs(previewHour - preset.hour) < .001" @click="setPreview(preset.hour)">{{ preset.label }}</button>
+      <button type="button" :aria-pressed="autoPreview" @click="toggleAutoPreview">{{ autoPreview ? 'Pause cycle' : '▶ Cycle day' }}</button>
+      <label class="time-bar-slider"><span>Time</span><input type="range" min="0" max="1439" step="1" :value="Math.floor(hour * 60)" :aria-valuetext="displayTime" @input="setPreview(Number($event.target.value) / 60)" /></label>
+      <span class="time-bar-status">{{ live ? 'Live clock' : autoPreview ? '24 hours in 60 seconds' : 'Preview paused' }}</span>
+    </div>
+  </footer>
+  </div>
 </template>
+
+<style scoped>
+.poke-lab-page { min-height: 100dvh; background: #0c172b; color: #eef7ff; font-family: system-ui, sans-serif; padding: 12px; box-sizing: border-box; }
+.poke-lab-page *, .poke-lab-page *::before, .poke-lab-page *::after { box-sizing: border-box; }
+.poke-lab-page button, .poke-lab-page select { font: inherit; }
+.poke-lab-page button { cursor: pointer; border: 1px solid #5b799e; border-radius: 9px; padding: 9px 14px; background: #203959; color: #f4f9ff; font-weight: 750; }
+.poke-lab-page button:hover:not(:disabled) { background: #31547a; }
+.poke-lab-page button:disabled { opacity: .42; cursor: default; }
+.poke-lab-page :focus-visible { outline: 3px solid #ffdf7a; outline-offset: 3px; }
+.lab-toolbar { max-width: 1672px; margin: 0 auto 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.lab-title { display: flex; flex: 1; gap: 12px; align-items: baseline; }
+.lab-title span { color: #bbcee5; font-size: 13px; }
+.lab-state { padding: 50px 24px; max-width: 800px; margin: auto; text-align: center; }
+.lab-state a { color: #9de7ff; }
+.lab-stage { position: relative; width: 100%; max-width: 1672px; aspect-ratio: 1672 / 941; margin: auto; container-type: inline-size; overflow: hidden; border-radius: 16px; isolation: isolate; }
+.lab-room { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; z-index: 1; pointer-events: none; }
+.lab-screen { z-index: 2; position: absolute; display: flex; flex-direction: column; color: #f2f8ff; overflow: auto; scrollbar-width: thin; scrollbar-color: #589ac5 transparent; padding: 1cqw; overflow-wrap: anywhere; }
+.prompt-screen { left: 7.8%; top: 21.3%; width: 19.5%; height: 15.8%; }
+.answer-screen { left: 32.1%; top: 22%; width: 35.8%; height: 30.8%; padding: 1.3cqw; }
+.screen-eyebrow { margin: 0 0 .65cqw; font-size: clamp(10px, .8cqw, 14px); color: #a4dafb; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }
+.prompt-screen h1 { font-size: clamp(12px, 1.28cqw, 23px); line-height: 1.35; font-weight: 750; margin: 0 0 .45cqw; white-space: pre-wrap; }
+.prompt-screen p:not(.screen-eyebrow), .card-position { font-size: clamp(10px, .85cqw, 15px); margin: 0; }
+.card-position { margin-top: auto; color: #b9d5f5; padding-top: .4cqw; }
+.lab-screen :deep(img) { display: block; max-width: 100%; max-height: 12cqw; object-fit: contain; margin: .5cqw auto; }
+.answer-content { display: flex; flex-direction: column; flex: 1; }
+.answer-copy { margin: auto 0; padding-block: .7cqw; white-space: pre-wrap; font-size: clamp(14px, 1.5cqw, 27px); line-height: 1.55; }
+.answer-placeholder { margin: auto; text-align: center; }
+.answer-placeholder > span { color: #62d5ff; font-size: 4cqw; line-height: 1; }
+.answer-placeholder h2, .screen-message h2 { font-size: clamp(14px, 1.45cqw, 25px); margin: .6cqw 0; }
+.answer-placeholder p, .screen-message { font-size: clamp(12px, 1cqw, 18px); line-height: 1.5; }
+.answer-screen :deep(.study-button) { padding: 6px 10px; font-size: inherit; }
+.answer-screen :deep(h2) { font-size: clamp(14px, 1.5cqw, 25px); }
+.answer-screen :deep(h3) { font-size: clamp(13px, 1.2cqw, 21px); }
+.answer-screen :deep(p), .answer-screen :deep(li) { font-size: clamp(12px, 1cqw, 18px); }
+.buddy-chamber { z-index: 2; position: absolute; left: 74.6%; top: 41.3%; width: 15.7%; height: 29.8%; overflow: hidden; contain: paint; padding: .4cqw .5cqw 0; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; }
+.buddy-sprite { position: relative; z-index: 2; width: 92%; height: 92%; min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: flex-end; justify-content: center;  }
+.buddy-sprite :deep(img) { width: 100%; height: 100%; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; object-fit: contain; object-position: center bottom; image-rendering: pixelated; display: block; }
+.buddy-sprite img.is-artwork { image-rendering: auto; }
+.buddy-sprite :deep(> *) { max-width: 100%; max-height: 100%; }
+.lab-console { z-index: 2; position: absolute; left: 33.2%; top: 82.1%; width: 33.6%; height: 12.2%; display: flex; flex-direction: column; justify-content: center; gap: .45cqw; }
+.console-modes, .console-actions, .console-status { display: flex; align-items: center; justify-content: center; gap: .6cqw; }
+.poke-lab-page .lab-console button { font-size: clamp(10px, .9cqw, 16px); padding: .42cqw .8cqw; border-radius: .5cqw; white-space: nowrap; }
+.console-modes button { font-size: clamp(9px, .7cqw, 13px) !important; padding: .15cqw .7cqw !important; background: transparent; border-color: transparent; }
+.poke-lab-page button[aria-pressed='true'], .topic-options button[aria-current='true'] { background: #a9edff; color: #102845; border-color: #a9edff; }
+.console-actions .reveal-button { background: #a9edff; color: #102845; flex: 1; }
+.console-actions > button { flex: 1; }
+.console-status { font-size: clamp(9px, .7cqw, 13px); color: #b9d5f5; }
+.console-status button { border: 0; background: transparent; padding: 0 .5cqw !important; font-size: inherit !important; text-decoration: underline; }
+.console-learn { text-align: center; font-size: clamp(12px, 1cqw, 18px); }
+.console-learn progress { display: block; width: 85%; height: 8px; margin: 8px auto; accent-color: #6bddff; }
+.lab-footer { max-width: 1672px; margin: 10px auto 0; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; color: #adc5df; font-size: 12px; }
+.lab-footer p { flex-basis: 100%; margin: 0; }
+.lab-dialog { color: #eff8ff; background: #132742; border: 1px solid #6b9bc8; border-radius: 20px; padding: 24px; width: min(540px, calc(100vw - 24px)); max-height: 85dvh; overflow: auto; }
+.lab-dialog::backdrop { background: #050e20bb; backdrop-filter: blur(7px); }
+.dialog-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; }
+.dialog-heading h2 { margin: 0; }
+.lab-dialog label { display: block; margin-bottom: 8px; }
+.lab-dialog select { padding: 12px; background: #203959; color: #fff; width: 100%; border: 1px solid #6b9bc8; border-radius: 9px; }
+.topic-options { display: grid; gap: 10px; margin-top: 16px; }
+.topic-options button { text-align: left; min-height: 44px; }
+.missing-background .lab-screen, .missing-background .lab-console { background: #122c4f; border-radius: 12px; }
+/* Phones/tablets use readable cards below the room rather than tiny overlay text. */
+@media (max-width: 1000px) {
+  .poke-lab-page { padding: 8px; }
+  .lab-toolbar { gap: 8px; }
+  .lab-title { min-width: 50%; flex-direction: column; gap: 2px; }
+  .lab-toolbar button { padding: 9px; font-size: 12px; min-height: 44px; }
+  .lab-stage { aspect-ratio: auto; padding-top: 56.28%; background: #142b48 !important; }
+  .lab-room { height: auto; aspect-ratio: 1672 / 941; }
+  .lab-screen, .lab-console { position: relative; top: auto; left: auto; width: auto; height: auto; margin: 12px; padding: 20px; background: #142e53; border: 2px solid #39bdff; border-radius: 14px; }
+  .prompt-screen { border-color: #f06874; }
+  .prompt-screen h1 { font-size: 20px; }
+  .answer-screen { min-height: 230px; max-height: 70dvh; }
+  .screen-eyebrow, .card-position { font-size: 12px; }
+  .answer-copy { font-size: 20px; }
+  .answer-placeholder > span { font-size: 48px; }
+  .answer-placeholder h2, .screen-message h2 { font-size: 21px; }
+  .answer-placeholder p, .screen-message { font-size: 15px; }
+  .lab-screen :deep(img) { max-height: 220px; }
+  .buddy-chamber { top: 23.24cqw; height: 16.77cqw; }
+  .lab-console { gap: 12px; }
+  .console-actions, .console-modes, .console-status { gap: 8px; }
+  .poke-lab-page .lab-console button { min-height: 44px; font-size: 13px !important; border-radius: 8px; padding: 8px !important; white-space: normal; }
+  .console-status, .console-learn { font-size: 13px; }
+  .console-actions button span { display: none; }
+}
+
+.timer-screen { align-items: center; justify-content: center; gap: .25cqw; text-align: center; padding: .5cqw; }
+.timer-screen .screen-eyebrow { margin: 0; }
+.focus-digits { font-size: clamp(24px, 3.4cqw, 58px); font-variant-numeric: tabular-nums; line-height: 1.12; letter-spacing: .03em; }
+.focus-actions { display: flex; gap: .6cqw; }
+.poke-lab-page .focus-actions button { padding: .3cqw .8cqw; font-size: clamp(10px, .85cqw, 15px); }
+.focus-finished { font-size: clamp(9px, .72cqw, 13px); color: #ffd3a6; }
+.question-reminder { font-size: clamp(11px, .9cqw, 16px); color: #a6c6e6; margin: 0 0 .5cqw; white-space: pre-wrap; }
+.screen-flip { align-self: center; margin-top: .7cqw; font-size: clamp(11px, .9cqw, 16px) !important; padding: .5cqw 1cqw !important; }
+.console-status { margin: 0; text-align: center; }
+.poke-lab-page .rating-actions button { min-height: 3.2cqw; font-size: clamp(12px, 1.2cqw, 21px); }
+.poke-lab-page .rate-again { background: #ab354c; border-color: #f17e90; }
+.poke-lab-page .rate-easy { background: #24694f; border-color: #6ddaa2; }
+.poke-lab-page .rate-hard { background: #9c681a; border-color: #f2c46d; }
+@media (max-width: 1000px) {
+  .timer-screen { padding: 20px; gap: 10px; }
+  .focus-digits { font-size: 52px; }
+  .poke-lab-page .focus-actions button { min-height: 44px; padding: 8px 18px; font-size: 14px; }
+  .focus-finished { font-size: 13px; }
+  .screen-flip { min-height: 44px; font-size: 14px !important; padding: 8px 16px !important; }
+  .question-reminder { font-size: 14px; }
+}
+.chamber-status { align-self: center; color: #e0cfff; text-align: center; font-size: clamp(8px, .8cqw, 14px); }
+
+.lab-sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.lab-celestial { position: absolute; z-index: 1; width: 10%; transform: translate(-50%, -50%); transition: opacity 1.5s ease; }
+.lab-moon { width: 7%; }
+.lab-celestial img { width: 100%; height: auto; display: block; }
+.lab-stars, .lab-clouds { position: absolute; inset: 0; }
+.lab-stars { z-index: 2; }
+.lab-clouds { z-index: 3; }
+.lab-stars > img, .lab-clouds > img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: fill; }
+.lab-clouds > img, .fallback-clouds { left: -5%; width: 110%; animation: lab-cloud-drift 80s ease-in-out infinite alternate; }
+.lab-stars > img, .fallback-stars { animation: lab-twinkle 5s ease-in-out infinite alternate; }
+.fallback-stars, .fallback-clouds { position: absolute; inset: 0; }
+.fallback-stars i { position: absolute; background: #fff; border-radius: 50%; box-shadow: 0 0 4px #fff; }
+.sun-fallback, .moon-fallback { display: block; width: 100%; aspect-ratio: 1; border-radius: 50%; }
+.sun-fallback { background: radial-gradient(circle, #fff7b4 25%, #ffdb6e 70%); box-shadow: 0 0 35px #ffe79b88; }
+.moon-fallback { background: radial-gradient(circle at 35% 35%, #fffdeb, #c1d4eb); box-shadow: 0 0 20px #d3e7ff55; }
+.fallback-clouds i { position: absolute; width: 25%; height: 8%; background: #ffffffaa; border-radius: 50%; filter: blur(8px); }
+.fallback-clouds i:nth-child(1) { left: 4%; top: 17%; }
+.fallback-clouds i:nth-child(2) { left: 45%; top: 6%; width: 35%; }
+.fallback-clouds i:nth-child(3) { left: 80%; top: 32%; }
+@keyframes lab-cloud-drift { from { transform: translateX(-2%); } to { transform: translateX(2%); } }
+@keyframes lab-twinkle { from { opacity: .7; } to { opacity: 1; } }
+@media (max-width: 1000px) { .lab-sky { bottom: auto; height: 56.28cqw; } }
+@media (prefers-reduced-motion: reduce) {
+  .lab-clouds > img, .fallback-clouds, .lab-stars > img, .fallback-stars { animation: none; }
+  .lab-celestial { transition: none; }
+}
+
+.timer-frame {
+  position: absolute;
+  z-index: 2;
+  left: 7.05%;
+  top: 11.2cqw;
+  width: 21.25%;
+  height: 10.44cqw;
+  border: .25cqw solid var(--timer-border, #ff4057);
+  border-radius: 1.2cqw;
+  box-shadow: 0 0 .3cqw var(--timer-border, #ff4057), inset 0 0 .15cqw var(--timer-border, #ff4057);
+  pointer-events: none;
+  transition: border-color .25s ease, box-shadow .25s ease;
+}
+@media (max-width: 1000px) {
+  .timer-screen { border-width: 2px; border-color: var(--timer-border, #ff4057); box-shadow: 0 0 5px var(--timer-border, #ff4057); }
+}
+@media (prefers-reduced-motion: reduce) { .timer-frame { transition: none; } }
+.lab-landscape {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 85%;
+  max-width: none;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+.lab-navigation {
+  position: absolute;
+  z-index: 2;
+  left: 9.15%;
+  top: 45.2%;
+  width: 15.3%;
+  height: 13.6%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: .7cqw;
+  padding: .6cqw;
+}
+.poke-lab-page .lab-navigation button,
+.lab-navigation a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 2.5cqw;
+  padding: .5cqw;
+  border: 1px solid #72c9ed;
+  border-radius: .55cqw;
+  background: #203959;
+  color: #f4f9ff;
+  text-decoration: none;
+  font: inherit;
+  font-size: clamp(11px, 1.05cqw, 18px);
+  font-weight: 750;
+  text-align: center;
+}
+.lab-navigation a:hover { background: #31547a; }
+.state-home-link { color: #c4edff; }
+@media (max-width: 1000px) {
+  .lab-navigation {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: auto;
+    height: auto;
+    margin: 12px;
+    padding: 16px;
+    flex-direction: row;
+    gap: 10px;
+    border: 2px solid #39bdff;
+    border-radius: 14px;
+    background: #142e53;
+  }
+  .poke-lab-page .lab-navigation button, .lab-navigation a {
+    min-height: 44px;
+    padding: 10px;
+    font-size: 14px;
+    border-radius: 8px;
+  }
+}
+
+/* Contact with the platform and a faint glass reflection give the sprite depth.
+   The image itself keeps crisp pixel rendering with no blur or colour filter. */
+.buddy-contact-shadow {
+  position: absolute;
+  z-index: 1;
+  left: 12%;
+  bottom: 0;
+  width: 76%;
+  height: 8%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(24 6 55 / 72%) 10%, rgb(31 8 63 / 36%) 52%, transparent 74%);
+  pointer-events: none;
+}
+.buddy-chamber.has-pokemon::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 4%, rgb(187 238 255 / 10%) 8%, transparent 16%, transparent 78%, rgb(187 180 255 / 8%) 91%, transparent 96%);
+  pointer-events: none;
+}
+
+/* Same glass-card selection design as PokéArena. */
+.poke-lab-page.is-selecting { position: fixed; inset: 0; overflow: hidden; }
+.lab-stage.selection-blur { filter: blur(9px) brightness(.64); pointer-events: none; }
+.is-selecting .lab-toolbar { position: relative; z-index: 10; }
+.poke-lab-page .arena-picker { position: absolute; z-index: 8; inset: 90px 0 0; overflow-y: auto; padding: 28px 24px 130px; color: white; text-align: center; }
+.poke-lab-page .picker-shell { width: min(940px, 100%); margin: auto; padding: 28px 0; }
+.poke-lab-page .picker-eyebrow { color: #ffe9ae; font-size: 12px; font-weight: 800; letter-spacing: .2em; }
+.poke-lab-page .picker-shell h1 { margin: 16px 0 12px; color: white; font-size: clamp(28px, 4vw, 48px); font-weight: 800; text-shadow: 0 3px 18px #0007; }
+.poke-lab-page .picker-intro { margin-bottom: 28px; color: #fff6e3; font-size: 17px; }
+.poke-lab-page .bubble-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px; }
+.poke-lab-page .bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, background .18s, box-shadow .18s; }
+.poke-lab-page .bubble-card strong { font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
+.poke-lab-page .bubble-card > span:last-child { font-size: 13px; color: #fff5df; }
+.poke-lab-page .bubble-symbol { font-size: 36px; color: #ffe699; text-shadow: 0 0 18px #ffe4a455; }
+.poke-lab-page .bubble-card:hover:not(:disabled) { transform: translateY(-5px); background: linear-gradient(145deg, #ffffff55, #ffffff22); box-shadow: 0 0 0 2px #ffe19a, 0 18px 38px #071b3555; }
+.poke-lab-page .bubble-card:disabled { opacity: .65; cursor: not-allowed; }
+.poke-lab-page .topic-choice { display: flex; flex-direction: column; gap: 12px; }
+.poke-lab-page .topic-choice .bubble-card { flex: 1; }
+.poke-lab-page .revise-link { color: #ffe6a1; font-weight: 700; font-size: 14px; }
+.poke-lab-page .picker-back, .poke-lab-page .glass-action { display: inline-block; margin: 0 0 22px; padding: 12px 20px; border: 1px solid #ffffff88; border-radius: 20px; background: #ffffff22; color: white; text-decoration: none; font: inherit; cursor: pointer; }
+.poke-lab-page .picker-footnote { margin: 28px 0 0; font-size: 12px; color: #e0e8f5; }
+.poke-lab-page .picker-notice { padding: 12px; border: 1px solid #ffe19a77; border-radius: 12px; background: #203046b3; }
+
+.poke-lab-page .arena-picker { position: absolute; inset: 90px 0 0; padding-bottom: 24px; }
+.science-filters { display: grid; justify-items: center; gap: 14px; margin-bottom: 24px; }
+.science-filters p { margin: 0; max-width: 650px; font-size: 12px; line-height: 1.6; color: #e2ebf6; }
+.science-level-label { padding: 10px 20px; border: 1px solid #ffe29b; border-radius: 20px; background: #ffe29b; color: #20334b; }
+.science-theme { color: #ffe49b; text-transform: uppercase; font-size: 10px; letter-spacing: .12em; }
+@media (max-width: 700px) {
+  .poke-lab-page .arena-picker { padding: 12px 18px 24px; }
+  .poke-lab-page .bubble-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .poke-lab-page .bubble-card { min-height: 160px; padding: 18px 10px; border-radius: 24px; }
+  .poke-lab-page .bubble-card strong { font-size: 17px; }
+}
+@media (prefers-reduced-motion: reduce) { .poke-lab-page .bubble-card { transition: none; } }
+
+.arena-hud {
+  position: absolute;
+  top: max(16px, env(safe-area-inset-top));
+  left: 16px;
+  right: 16px;
+  z-index: 10;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.home-link,
+.arena-clock {
+  border: 1px solid rgb(255 255 255 / 40%);
+  border-radius: 14px;
+  background: rgb(16 30 52 / 80%);
+  color: white;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
+}
+
+.home-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  pointer-events: auto;
+}
+
+.home-link:hover {
+  border-color: #ffdc77;
+  color: #ffdc77;
+}
+
+.arena-clock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.arena-clock strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.arena-clock span {
+  color: #e2eafa;
+  font-size: 12px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 3px solid #ffdc55;
+  outline-offset: 4px;
+}
+
+@media (max-width: 600px) {
+  .arena-hud {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+
+  .home-link,
+  .arena-clock {
+    padding: 8px 10px;
+  }
+
+  .arena-clock {
+    gap: 6px;
+  }
+
+  .arena-clock strong {
+    font-size: 15px;
+  }
+
+  .arena-clock span {
+    font-size: 10px;
+  }
+}
+
+/* The footer is a separate grid row, never an overlay on the battle. */
+.arena-with-preview { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: #101d30; }
+.arena-with-preview > .arena-page { position: relative; inset: auto; width: 100%; height: 100%; min-height: 0; container-type: size; }
+.arena-with-preview .arena-scene { width: min(100%, calc(100cqh * 1672 / 941)); }
+.time-preview-bar { position: relative; min-width: 0; overflow-x: auto; border-top: 2px solid #b99a58; background: #14243a; color: #fff1cf; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); font-family: system-ui, sans-serif; }
+.time-bar-inner { display: flex; align-items: center; justify-content: center; gap: 8px; width: max-content; min-width: 100%; }
+.time-bar-title { display: flex; align-items: center; gap: 10px; margin-right: 8px; font-size: 12px; white-space: nowrap; }
+.time-bar-title span { color: #ffdf85; font-variant-numeric: tabular-nums; }
+.time-preview-bar button { min-height: 36px; padding: 7px 11px; border: 1px solid #718096; border-radius: 8px; background: #253951; color: #fff3d6; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.time-preview-bar button:hover { background: #3b526d; }
+.time-preview-bar button[aria-pressed='true'] { background: #ffdf85; border-color: #ffdf85; color: #233047; }
+.time-bar-slider { display: flex; align-items: center; gap: 8px; margin: 0 8px; font-size: 12px; }
+.time-bar-slider input { width: clamp(100px, 12vw, 200px); accent-color: #ffdf85; }
+.time-bar-status { font-size: 11px; color: #c6d4e7; white-space: nowrap; }
+.time-preview-bar button:focus-visible, .time-preview-bar input:focus-visible { outline: 2px solid #ffdf85; outline-offset: 2px; }
+@media (max-width: 700px) {
+  .arena-with-preview .arena-scene { width: 100%; }
+  .time-bar-inner { justify-content: flex-start; }
+  .arena-picker { padding-bottom: 24px; }
+  .battle-dock { margin-bottom: 24px; }
+}
+
+/* Shared Studydex shell: identical font, navigation and clock on both pages. */
+.arena-hud { position: fixed; font-family: system-ui, sans-serif; }
+.arena-hud .home-link { font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
+.arena-hud .change-topic { margin-inline: auto; }
+.arena-hud .arena-clock { margin-left: auto; }
+.arena-hud button.home-link { border: 1px solid rgb(255 255 255 / 40%); border-radius: 14px; background: rgb(16 30 52 / 80%); padding: 10px 14px; color: white; }
+.arena-hud button.home-link:hover { border-color: #ffdc77; color: #ffdc77; background: rgb(16 30 52 / 80%); }
+.arena-picker { font-family: system-ui, sans-serif; }
+@media(max-width:600px) { .arena-hud button.home-link { padding: 8px 10px; } }
+
+.lab-with-preview > .poke-lab-page { position: relative; inset: auto; min-height: 0; height: 100%; padding: 0; overflow-y: auto; container-type: size; background: #101d30; }
+.lab-with-preview .lab-stage { width: min(100%, calc(100cqh * 1672 / 941)); margin: auto; }
+.lab-with-preview .poke-lab-page.is-selecting { overflow: hidden; }
+.lab-with-preview .lab-footer { padding: 0 16px; }
+.lab-with-preview .lab-state { margin-top: 90px; }
+@media(max-width:1000px) {
+ .lab-with-preview .poke-lab-page:not(.is-selecting) { padding-top: 75px; }
+ .lab-with-preview .lab-stage { width: 100%; }
+}
+/* NAVBAR GLASS PANEL */
+
+.sd-navbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  z-index: 100;
+
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.1fr 1fr 1fr;
+  align-items: center;
+  gap: 8px;
+
+  width: min(480px, calc(100% - 24px));
+  height: 94px;
+  padding: 10px 14px;
+
+  border: 2px solid rgba(207, 234, 255, 0.78);
+  border-radius: 30px;
+  font-size: 20px;
+
+  background: linear-gradient(
+    180deg,
+    rgba(81, 125, 179, 0.62),
+    rgba(22, 48, 87, 0.78)
+  );
+
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+
+  box-shadow:
+    0 12px 28px rgba(6, 19, 44, 0.3),
+    0 4px 0 rgba(15, 36, 70, 0.65),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* REGULAR NAV BUTTONS */
+
+.sd-nav-button {
+  position: relative;
+  min-width: 0;
+  width: 100%;
+  height: 70px;
+  padding: 5px 2px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  border: 1px solid transparent;
+  border-radius: 19px;
+  background: transparent;
+
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+
+  transition:
+    transform 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.sd-nav-label {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+  white-space: nowrap;
+  text-shadow: 0 2px 3px rgba(5, 20, 45, 0.6);
+}
+
+.sd-icon-tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 38px;
+  border-radius: 12px;
+
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 3px 0 rgba(7, 23, 49, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.sd-icon-tile svg {
+  width: 29px;
+  height: 29px;
+  fill: none;
+  stroke: #263d63;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sd-icon-study {
+  background: linear-gradient(#a2edda, #54c5ac);
+}
+
+.sd-icon-quiz {
+  background: linear-gradient(#ffcf92, #f6a95e);
+}
+
+.sd-icon-pokemon {
+  background: linear-gradient(#b6dfff, #7eb2ee);
+}
+
+.sd-icon-bag {
+  background: linear-gradient(#e0cbff, #b496e7);
+}
+
+/* RAISED TOWN BUTTON */
+
+.sd-town-button {
+  justify-self: center;
+  align-self: center;
+
+  width: 88px;
+  height: 88px;
+  margin-top: -22px;
+  gap: 4px;
+
+  border: 3px solid #fff0ae;
+  border-radius: 50%;
+
+  background: linear-gradient(160deg, #fff3b0, #ffd15a);
+  color: #243c68;
+
+  box-shadow:
+    0 5px 0 #b77d2c,
+    0 9px 18px rgba(7, 20, 45, 0.3),
+    inset 0 2px 0 rgba(255, 255, 255, 0.8);
+}
+
+.sd-town-button .sd-nav-label {
+  color: #243c68;
+  text-shadow: none;
+}
+
+.sd-pokeball {
+  position: relative;
+  display: block;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  overflow: hidden;
+
+  border: 3px solid #263d63;
+  border-radius: 50%;
+
+  background: linear-gradient(
+    to bottom,
+    #ff626c 0%,
+    #ed3d50 44%,
+    #263d63 44%,
+    #263d63 56%,
+    #fff 56%,
+    #e5edf9 100%
+  );
+
+  box-shadow: inset -3px -3px 0 rgba(25, 45, 75, 0.12);
+}
+
+.sd-pokeball::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  width: 14px;
+  height: 14px;
+  border: 3px solid #263d63;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* ACTIVE STATE FOR FUTURE PAGES */
+
+.sd-nav-button.is-active:not(.sd-town-button) {
+  background: rgba(255, 221, 112, 0.2);
+  border-color: rgba(255, 226, 137, 0.7);
+}
+
+.sd-nav-button.is-active::after {
+  content: "";
+  position: absolute;
+  bottom: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 16px;
+  height: 4px;
+  border-radius: 999px;
+  background: #ffe17a;
+}
+
+.sd-town-button.is-active::after {
+  bottom: -12px;
+}
+
+/* INTERACTION */
+
+  .sd-nav-button:not(:disabled):hover {
+    transform: translateY(-3px);
+    background-color: rgba(255, 255, 255, 0.14);
+  }
+
+  .sd-town-button:hover {
+    transform: translateY(-3px);
+    box-shadow:
+      0 6px 0 #b77d2c,
+      0 12px 22px rgba(7, 20, 45, 0.3),
+      0 0 16px rgba(255, 219, 103, 0.35);
+  }
+
+
+.sd-nav-button:active {
+  transform: translateY(2px) scale(0.96);
+}
+
+.sd-nav-button:focus-visible {
+  outline: 3px solid #fff0a8;
+  outline-offset: 5px;
+}
+
+/* MOBILE */
+
+@media (max-width: 600px) {
+  .sd-hud {
+    top: 12px;
+    left: 12px;
+    gap: 6px;
+  }
+
+  .sd-logo {
+    width: 145px;
+  }
+
+  .sd-clock {
+    gap: 7px;
+    padding: 7px 11px;
+  }
+
+  .sd-clock-time {
+    font-size: 16px;
+  }
+
+  .sd-clock-icon {
+    width: 17px;
+    height: 17px;
+  }
+
+  .sd-clock-period {
+    font-size: 10px;
+  }
+
+  .sd-navbar {
+    height: 80px;
+    padding: 8px;
+    gap: 3px;
+    border-radius: 24px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sd-nav-button {
+    height: 60px;
+    gap: 4px;
+    border-radius: 14px;
+  }
+
+  .sd-nav-label {
+    font-size: 11px;
+  }
+
+  .sd-icon-tile {
+    width: 33px;
+    height: 32px;
+    border-radius: 10px;
+  }
+
+  .sd-icon-tile svg {
+    width: 25px;
+    height: 25px;
+  }
+
+  .sd-town-button {
+    width: 68px;
+    height: 68px;
+    margin-top: -18px;
+    border-radius: 50%;
+    gap: 3px;
+  }
+
+  .sd-pokeball {
+    width: 33px;
+    height: 33px;
+  }
+
+  .sd-pokeball::after {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-nav-button {
+    transition: none;
+  }
+}
+
+
+/* Vertical version of the existing live navbar; original SVGs and actions retained. */
+.sd-navbar.sd-navbar-vertical {
+  left: max(14px, env(safe-area-inset-left, 0px));
+  right: auto;
+  top: 50%;
+  bottom: auto;
+  transform: translateY(-50%);
+  width: 112px;
+  height: auto;
+  max-height: calc(100dvh - 150px);
+  padding: 16px 8px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: repeat(2, 76px) 106px repeat(2, 76px);
+  gap: 8px;
+  border-radius: 36px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.sd-navbar-vertical .sd-nav-button { height: 76px; flex-shrink: 0; }
+.sd-navbar-vertical .sd-town-button { width: 88px; height: 88px; margin: 0; }
+.sd-navbar-vertical .sd-nav-label { font-size: 13px; }
+.sd-navbar-vertical .sd-nav-button:not(:disabled):hover { transform: translateX(2px); }
+.sd-navbar-vertical .sd-nav-button:active { transform: scale(.96); }
+.sd-navbar-vertical .sd-nav-button:focus-visible { outline-offset: -2px; }
+@media (max-width: 600px), (max-height: 650px) {
+  .sd-navbar.sd-navbar-vertical {
+    left: max(8px, env(safe-area-inset-left, 0px));
+    width: 82px;
+    padding: 12px 4px;
+    grid-template-rows: repeat(2, 62px) 84px repeat(2, 62px);
+    gap: 4px;
+    border-radius: 28px;
+  }
+  .sd-navbar-vertical .sd-nav-button { height: 62px; }
+  .sd-navbar-vertical .sd-town-button { width: 68px; height: 68px; margin: 0; }
+  .sd-navbar-vertical .sd-nav-label { font-size: 11px; }
+  .sd-navbar-vertical .sd-icon-tile { width: 33px; height: 32px; }
+  .sd-navbar-vertical .sd-icon-tile svg { width: 25px; height: 25px; }
+  .sd-navbar-vertical .sd-pokeball { width: 33px; height: 33px; }
+}
+
+.sd-navbar { font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; box-sizing: border-box; }
+.sd-navbar * { box-sizing: border-box; }
+.sd-navbar-vertical .sd-nav-button { border: 1px solid transparent; padding: 5px 2px; background: transparent; color: white; font-weight: 800; }
+.sd-navbar-vertical .sd-town-button { background: linear-gradient(160deg,#fff3b0,#ffd15a); border: 3px solid #fff0ae; color: #243c68; }
+.sd-navbar-vertical .sd-nav-button:disabled { opacity: .45; filter: grayscale(1); cursor: not-allowed; }
+.sd-navbar-vertical .sd-nav-button.is-active:not(.sd-town-button) { background: #ffdd7033; border-color: #ffe289b3; }
+.sd-icon-todos { background: linear-gradient(#a2edda,#54c5ac); }
+.arena-hud { left: auto; }
+.arena-picker { padding-left: 144px !important; }
+@media(max-width:600px) { .arena-picker { padding-left: 104px !important; } }
+
+
+/* Compact lollipop navigation. Specificity protects circles from page button styles. */
+.sd-navbar.sd-navbar-vertical {
+ top: max(16px, env(safe-area-inset-top, 0px));
+ left: max(12px, env(safe-area-inset-left, 0px));
+ bottom: auto;
+ transform: none;
+ width: 78px;
+ padding: 8px 4px 12px;
+ grid-template-rows: 72px repeat(4, 62px);
+ gap: 5px;
+ border-radius: 44px;
+ max-height: calc(100dvh - 100px);
+}
+.sd-navbar.sd-navbar-vertical .sd-nav-button {
+ width: 60px; height: 60px; min-height: 0;
+ justify-self: center; padding: 4px 0; gap: 3px;
+ border-radius: 50%;
+}
+.sd-navbar.sd-navbar-vertical .sd-town-button {
+ width: 70px; height: 70px; margin: 0;
+ border-radius: 50%; aspect-ratio: 1; flex-shrink: 0;
+}
+.sd-navbar.sd-navbar-vertical .sd-icon-tile {
+ width: 30px; height: 30px; border-radius: 50%;
+}
+.sd-navbar.sd-navbar-vertical .sd-icon-tile svg { width: 23px; height: 23px; }
+.sd-navbar.sd-navbar-vertical .sd-pokeball { width: 32px; height: 32px; }
+.sd-navbar.sd-navbar-vertical .sd-pokeball::after { width: 12px; height: 12px; }
+.sd-navbar.sd-navbar-vertical .sd-nav-label { font-size: 10px; line-height: 1.2; }
+.sd-navbar.sd-navbar-vertical .sd-nav-button[aria-current='page'] {
+ opacity: 1; filter: none; cursor: default; transform: none;
+ background: #ffdd7033; border-color: #ffe289b3;
+}
+.sd-navbar.sd-navbar-vertical .sd-nav-button.is-active::after { bottom: -3px; width: 12px; height: 3px; }
+.poke-lab-page .arena-picker, .arena-page .arena-picker { padding-left: 108px !important; }
+@media(max-width:600px) {
+ .sd-navbar.sd-navbar-vertical { top: max(10px, env(safe-area-inset-top, 0px)); left: 8px; }
+ .poke-lab-page .arena-picker, .arena-page .arena-picker { padding-left: 100px !important; }
+}
+</style>
