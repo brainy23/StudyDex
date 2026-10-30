@@ -6,7 +6,7 @@ const props = defineProps({
   scene: {
     type: String,
     default: 'town',
-    validator: value => ['town', 'room', 'lab', 'arena'].includes(value)
+    validator: value => ['town', 'room', 'lab', 'arena', 'boss'].includes(value)
   },
   live: { type: Boolean, default: true },
   previewHour: { type: Number, default: 12 },
@@ -30,6 +30,7 @@ const base = import.meta.env.BASE_URL
 const asset = `${base}town/`
 const images = {
   arena: `${base}poke-arena/poke-arena4.png`,
+  boss: `${base}surprise-boss/forest2.png`,
   room: `${base}trainer-home/trainer-home-v3.png`,
   landscape: `${base}trainer-home/window-landscape-clean.png`,
   sun: `${asset}bg_sun.png`,
@@ -157,8 +158,8 @@ const arenaSkyStyle = computed(() => ({ background: `linear-gradient(to bottom, 
 </script>
 
 <template>
-  <div class="town-background" :class="{ 'arena-background': scene === 'arena', 'room-background': scene === 'room', 'lab-background': scene === 'lab' }" aria-hidden="true">
-    <template v-if="scene === 'arena'">
+  <div class="town-background" :class="{ 'arena-background': scene === 'arena' || scene === 'boss', 'room-background': scene === 'room', 'lab-background': scene === 'lab' }" aria-hidden="true">
+    <template v-if="scene === 'arena' || scene === 'boss'">
       <!-- SKY -->
       <div
         class="layer sky"
@@ -213,14 +214,15 @@ const arenaSkyStyle = computed(() => ({ background: `linear-gradient(to bottom, 
       <!-- ARENA -->
       <img
         class="layer arena-image"
-        :src="images.arena"
+        :src="scene === 'boss' ? images.boss : images.arena"
         :style="arenaStyle"
-        alt="StudyDex quiz arena"
+        :alt="scene === 'boss' ? 'StudyDex boss forest' : 'StudyDex quiz arena'"
         draggable="false"
       />
 
       <!-- EVENING FLOODLIGHTS -->
       <div
+        v-if="scene === 'arena'"
         class="layer arena-light-effects"
         :class="{ 'is-on': arenaLightsOn }"
         aria-hidden="true"

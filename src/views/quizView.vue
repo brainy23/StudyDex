@@ -6,6 +6,9 @@ import { useTimeOfDay } from '@/composables/useTimeofDay'
 import { RouterLink } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
+
+
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
@@ -145,7 +148,6 @@ function enterTopic(item) {
 }
 function returnToSelection() { enteredArena.value = false; clearAttack() }
 watch(quizzesOpen, open => { if (!open) enteredArena.value = false })
-const spriteLoading = ref(false)
 const spriteError = ref('')
 const fighters = ref([])
 let spriteController
@@ -162,9 +164,14 @@ async function loadArenaFighters() {
   spriteController?.abort()
   const controller = new AbortController()
   spriteController = controller
-  spriteLoading.value = true
   spriteError.value = ''
   const selected = readArenaBuddy()
+  // The back-sprite component accepts a name or a numeric PokéAPI ID as text.
+  // Use the ID to avoid sending a trainer's custom nickname to PokéAPI.
+  fighters.value = [{
+    name: selected.name || 'Your buddy',
+    pokename: String(selected.id)
+  }]
   // Grounded, fully evolved mentors: Venusaur, Blastoise, Raichu,
   // Nidoqueen, Nidoking, Alakazam, Machamp, Meganium, Typhlosion,
   // Feraligatr, Sceptile, Blaziken and Swampert.
@@ -172,27 +179,23 @@ async function loadArenaFighters() {
     .filter(id => id !== selected.id)
   const enemyId = pool[Math.floor(Math.random() * pool.length)]
   try {
-    const data = await Promise.all([selected.id, enemyId].map(async id => {
-      const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}/`, { signal: controller.signal })
-      if (!response.ok) throw new Error(`Pokémon request failed: ${response.status}`)
-      return response.json()
-    }))
+    // Only the opponent's front sprite is fetched by the parent.
+    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${enemyId}/`, {
+      signal: controller.signal
+    })
+    if (!response.ok) throw new Error(`Pokémon request failed: ${response.status}`)
+    const pokemon = await response.json()
     if (controller.signal.aborted) return
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    fighters.value = data.map((pokemon, index) => {
-      const side = index === 0 ? 'back_default' : 'front_default'
-      const still = pokemon.sprites?.[side]
-      const animated = pokemon.sprites?.versions?.['generation-v']?.['black-white']?.animated?.[side]
-      return {
-        name: index === 0 ? selected.name || pokemon.name : pokemon.name,
-        image: (!reduceMotion && animated) || still,
-        still, failed: false, padding: 0,
-      }
+    const still = pokemon.sprites?.front_default
+    const animated = pokemon.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default
+    fighters.value.push({
+      name: pokemon.name,
+      image: (!reduceMotion && animated) || still,
+      still, failed: false, padding: 0
     })
   } catch (cause) {
-    if (cause.name !== 'AbortError') spriteError.value = 'Battle buddies could not load.'
-  } finally {
-    if (spriteController === controller) spriteLoading.value = false
+    if (cause.name !== 'AbortError') spriteError.value = 'The opponent could not load.'
   }
 }
 function arenaSpriteError(fighter) {
@@ -746,7 +749,13 @@ onUnmounted(clearAttack)
       </section>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
         <div class="fighter-shadow"></div>
-        <img v-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
+        <Pokemon_Backwards
+          v-if="index === 0"
+          :key="fighter.pokename"
+          class="player-back-sprite"
+          :pokename="fighter.pokename"
+        />
+        <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
         <span v-else class="fighter-unavailable">Sprite unavailable</span>
 
       </div>
@@ -940,7 +949,7 @@ input:focus-visible {
 .picker-shell h1 { margin: 16px 0 12px; color: white; font-size: clamp(28px, 4vw, 48px); font-weight: 800; text-shadow: 0 3px 18px #0007; }
 .picker-intro { margin-bottom: 28px; color: #fff6e3; font-size: 17px; }
 .bubble-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px; }
-.bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, background .18s, box-shadow .18s; }
+.bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s; background: .18s, box-shadow .18s; }
 .bubble-card strong { font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
 .bubble-card > span:last-child { font-size: 13px; color: #fff5df; }
 .bubble-symbol { font-size: 36px; color: #ffe699; text-shadow: 0 0 18px #ffe4a455; }
@@ -1028,7 +1037,7 @@ input:focus-visible {
 /* Recoil the wrapper so sprite foot-alignment remains intact. */
 .player-fighter.is-hit { animation: player-recoil .65s ease-out .22s both; }
 .opponent-fighter.is-hit { animation: opponent-recoil .65s ease-out .22s both; }
-.arena-fighter.is-hit > img { animation: damage-flash .65s ease-out .22s both; }
+.arena-fighter.is-hit > img, .arena-fighter.is-hit .player-back-sprite :deep(img) { animation: damage-flash .65s ease-out .22s both; }
 @keyframes player-recoil {
   0%,100% { transform: translateX(-50%); }
   20% { transform: translateX(-65%) rotate(-4deg); }
@@ -1048,7 +1057,7 @@ input:focus-visible {
   20% { opacity: .65; filter: brightness(.65) sepia(1) saturate(10000%) hue-rotate(320deg) drop-shadow(0 0 8px #ff2020); }
   55% { opacity: .85; filter: brightness(.85) sepia(1) saturate(10000%) hue-rotate(320deg) drop-shadow(0 0 4px #ff2020); }
 }
-@media(prefers-reduced-motion: reduce) { .arenafighter, .arena-fighter > img { animation: none !important; } }
+@media(prefers-reduced-motion: reduce) { .arena-fighter, .arena-fighter > img, .arena-fighter .player-back-sprite :deep(img) { animation: none !important; } }
 
 /* The footer is a separate grid row, never an overlay on the battle. */
 .arena-with-preview { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: #101d30; }
@@ -1089,5 +1098,29 @@ input:focus-visible {
 .arena-picker { top: 190px; }
 @media (max-width: 700px) {
   .arena-page:has(.arena-scene:not(.selection-blur)) { padding-top: 190px; }
+}
+/* Keep the shared back sprite anchored at the original player's floor position. */
+.player-back-sprite {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  color: white;
+}
+.player-back-sprite :deep(.pokemon-back-sprite) {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  object-position: center bottom;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 3px 1px #1b253044);
+}
+.player-back-sprite :deep(.sprite-status) {
+  position: static;
+  margin: 0;
+  padding: 6px;
+  font-size: 11px;
 }
 </style>
