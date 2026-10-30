@@ -1,4 +1,5 @@
 <script setup>
+import { FAST_CARD_MS, FAST_CARD_STREAK, BOSS_COOLDOWN_MS, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
@@ -501,13 +502,82 @@ const unsupportedCards = computed(() => {
   return data != null && !Array.isArray(data) &&
     !['cards', 'flashcards', 'items'].some((key) => Array.isArray(data[key]))
 })
+const bossNavigating = ref(false)
+let cardShownAt = performance.now()
+let fastStreak = 0
+let bossCooldownUntil = 0
+let restoredBoss = ''
+watch([currentCard, enteredLab], () => { cardShownAt = performance.now() })
+function resetRushOnVisibility() { cardShownAt = performance.now(); fastStreak = 0 }
+onMounted(() => document.addEventListener('visibilitychange', resetRushOnVisibility))
+onUnmounted(() => document.removeEventListener('visibilitychange', resetRushOnVisibility))
+async function startSurpriseBoss() {
+  fastStreak = 0
+  if (Date.now() < bossCooldownUntil || bossNavigating.value) return
+  const questions = makeQuestions(cards.value)
+  if (!questions.length) return // Image-only/one-answer decks cannot form a fair MCQ.
+  if (!router.hasRoute('surprise-boss')) {
+    ratingMessage.value = 'Boss battle route is not installed yet.'
+    return
+  }
+  pauseFocusTimer()
+  const encounter = {
+    id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
+    createdAt: Date.now(), owner: profile.value?.id, topic: topic.value?.id,
+    topicName: topic.value?.name, questions, status: 'pending',
+    index: 0, choice: null, score: 0, finished: false,
+    returnQuery: { ...route.query, mode: 'flashcards' },
+    snapshot: { focusSeconds: focusSeconds.value, queue: [...reviewQueue.value], completed: completedCards.value,
+      cardIds: cards.value.map(card => String(card.id)) },
+  }
+  if (!writeEncounter(encounter)) {
+    ratingMessage.value = 'Battle could not start because browser session storage is unavailable.'
+    return
+  }
+  bossNavigating.value = true
+  pauseFocusTimer()
+  try {
+    const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
+    if (failure) { encounter.status = 'cancelled'; writeEncounter(encounter); ratingMessage.value = 'Battle navigation was cancelled.' }
+  } catch { encounter.status = 'cancelled'; writeEncounter(encounter); ratingMessage.value = 'Could not open the boss battle.' }
+  finally { bossNavigating.value = false }
+}
+function restoreBossProgress() {
+  const encounter = readEncounter()
+  if (!encounter || encounter.id !== route.query.bossReturn || restoredBoss === encounter.id ||
+      encounter.owner !== profile.value?.id || String(encounter.topic) !== String(topic.value?.id) ||
+      encounter.status !== 'complete' || !cards.value.length) return
+  restoredBoss = encounter.id
+  const won = encounter.outcome === 'won' || (!encounter.outcome && encounter.score >= Math.ceil(encounter.questions.length * .7))
+  const sameCards = JSON.stringify(cards.value.map(card => String(card.id))) === JSON.stringify(encounter.snapshot.cardIds)
+  pauseFocusTimer()
+  if (won && sameCards) {
+    reviewQueue.value = encounter.snapshot.queue.filter(index => Number.isInteger(index) && index >= 0 && index < cards.value.length)
+    completedCards.value = encounter.snapshot.completed
+    focusSeconds.value = Math.max(0, Number(encounter.snapshot.focusSeconds) || 0)
+    timerFinished.value = focusSeconds.value === 0
+    ratingMessage.value = 'Boss defeated! Continue where you left off. Press Start to resume your timer.'
+  } else {
+    restartCards()
+    resetFocusTimer()
+    ratingMessage.value = won
+      ? 'This deck changed; starting a fresh review with a 25-minute timer.'
+      : 'Boss battle lost. Your deck and 25-minute study timer have been reset. Try again at a steadier pace.'
+  }
+  enteredLab.value = true
+  answerVisible.value = false
+  fastStreak = 0
+  cardShownAt = performance.now()
+  bossCooldownUntil = Date.now() + BOSS_COOLDOWN_MS
+}
 function revealCard() {
   if (currentCard.value) answerVisible.value = !answerVisible.value
 }
 // Ratings apply only to this visit: Again repeats soon, Hard later, Easy retires it.
-function rateCard(rating) {
+async function rateCard(rating) {
   if (mode.value !== 'flashcards' || !currentCard.value || !answerVisible.value ||
-      !['again', 'easy', 'hard'].includes(rating)) return
+      !['again', 'easy', 'hard'].includes(rating) || bossNavigating.value) return
+  const wasFast = performance.now() - cardShownAt < FAST_CARD_MS
   const next = [...reviewQueue.value]
   const index = next.shift()
   if (rating === 'easy') {
@@ -519,8 +589,13 @@ function rateCard(rating) {
   }
   reviewQueue.value = next
   answerVisible.value = false
+  cardShownAt = performance.now()
+  fastStreak = wasFast ? fastStreak + 1 : 0
+  if (fastStreak >= FAST_CARD_STREAK) await startSurpriseBoss()
 }
 function restartCards() {
+  cardShownAt = performance.now()
+  fastStreak = 0
   reviewQueue.value = cards.value.map((_, index) => index)
   completedCards.value = 0
   answerVisible.value = false
@@ -542,6 +617,7 @@ async function selectLabTopic(item) {
   } finally { pickerBusy.value = false }
 }
 watch([() => topic.value?.id, () => flashResource.value?.data], restartCards, { immediate: true, flush: 'sync' })
+watch([() => flashResource.value?.data, () => route.query.bossReturn], restoreBossProgress, { immediate: true, flush: 'post' })
 onUnmounted(() => { clearInterval(focusInterval) })
 onMounted(() => { clockInterval = window.setInterval(() => { now.value = new Date() }, 1000) })
 onUnmounted(() => window.clearInterval(clockInterval))
@@ -549,7 +625,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
 
 <template>
   <div class="arena-with-preview lab-with-preview">
-  <main class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
+  <main class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }" :style="{ '--lab-backdrop': `url(&quot;${labBackground}&quot;)` }">
     <header class="arena-hud">
       <RouterLink to="/home" class="home-link">
         ‹ Back to town
@@ -743,7 +819,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
 .lab-title span { color: #bbcee5; font-size: 13px; }
 .lab-state { padding: 50px 24px; max-width: 800px; margin: auto; text-align: center; }
 .lab-state a { color: #9de7ff; }
-.lab-stage { position: relative; width: 100%; max-width: 1672px; aspect-ratio: 1672 / 941; margin: auto; container-type: inline-size; overflow: hidden; border-radius: 16px; isolation: isolate; }
+.lab-stage { position: relative; width: 100%; max-width: none; aspect-ratio: 1672 / 941; margin: auto; container-type: inline-size; overflow: hidden; border-radius: 16px; isolation: isolate; }
 .lab-room { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; z-index: 1; pointer-events: none; }
 .lab-screen { z-index: 2; position: absolute; display: flex; flex-direction: column; color: #f2f8ff; overflow: auto; scrollbar-width: thin; scrollbar-color: #589ac5 transparent; padding: 1cqw; overflow-wrap: anywhere; }
 .prompt-screen { left: 7.8%; top: 21.3%; width: 19.5%; height: 15.8%; }
@@ -1131,7 +1207,7 @@ input:focus-visible {
 @media(max-width:600px) { .arena-hud button.home-link { padding: 8px 10px; } }
 
 .lab-with-preview > .poke-lab-page { position: relative; inset: auto; min-height: 0; height: 100%; padding: 0; overflow-y: auto; container-type: size; background: #101d30; }
-.lab-with-preview .lab-stage { width: min(100%, calc(100cqh * 1672 / 941)); margin: auto; }
+
 .lab-with-preview .poke-lab-page.is-selecting { overflow: hidden; }
 .lab-with-preview .lab-footer { padding: 0 16px; }
 .lab-with-preview .lab-state { margin-top: 90px; }
@@ -1139,4 +1215,98 @@ input:focus-visible {
  .lab-with-preview .poke-lab-page:not(.is-selecting) { padding-top: 75px; }
  .lab-with-preview .lab-stage { width: 100%; }
 }
+/* Responsive room layout: one uncapped scene, sized from the available
+   grid row above the time preview bar. All interactive overlays scale
+   together with the artwork so they stay aligned. */
+.lab-with-preview {
+  width: 100%;
+  height: 100dvh;
+  min-width: 0;
+  overflow: hidden;
+}
+.lab-with-preview > .poke-lab-page {
+  width: 100%;
+  min-width: 0;
+  isolation: isolate;
+}
+/* Extend the artwork into unused space without stretching the controls. */
+.lab-with-preview > .poke-lab-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: linear-gradient(#101d3066, #101d3066), var(--lab-backdrop);
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px) brightness(.65);
+  pointer-events: none;
+}
+.lab-with-preview .lab-stage { max-width: none; }
+
+/* Topic selection: artwork covers the full available area. */
+.lab-with-preview .poke-lab-page.is-selecting { overflow: hidden; }
+.lab-with-preview .poke-lab-page.is-selecting .lab-stage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100cqw, calc(100cqh * 1672 / 941));
+  height: auto;
+  aspect-ratio: 1672 / 941;
+  padding-top: 0;
+  margin: 0;
+  border-radius: 0;
+  transform: translate(-50%, -50%) scale(1.02);
+}
+@media (min-width: 1001px) {
+  /* Preserve the whole interactive room, even on ultrawide monitors. */
+  .lab-with-preview .poke-lab-page:not(.is-selecting) {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    padding: 0 0 32px;
+  }
+  .lab-with-preview .poke-lab-page:not(.is-selecting) .lab-stage {
+    position: relative;
+    width: min(100cqw, calc(100cqh * 1672 / 941));
+    height: auto;
+    aspect-ratio: 1672 / 941;
+    margin: 0;
+    padding: 0;
+    flex-shrink: 0;
+    border-radius: 0;
+  }
+  .lab-with-preview .poke-lab-page:not(.is-selecting) .lab-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    max-width: none;
+    min-height: 24px;
+    margin: 0;
+    padding: 4px 16px;
+    justify-content: flex-end;
+    box-sizing: border-box;
+  }
+}
+@media (max-width: 1000px) {
+  /* Retain readable, scrollable flashcard controls on smaller devices. */
+  .lab-with-preview .poke-lab-page:not(.is-selecting) {
+    display: block;
+    overflow-y: auto;
+    padding-top: 75px;
+  }
+  .lab-with-preview .poke-lab-page:not(.is-selecting) .lab-stage {
+    width: 100%;
+    aspect-ratio: auto;
+    margin: 0;
+  }
+  .lab-with-preview .poke-lab-page.is-selecting .lab-room {
+    height: 100%;
+    aspect-ratio: auto;
+  }
+}
+
+
 </style>
