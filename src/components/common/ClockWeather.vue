@@ -615,9 +615,51 @@ onUnmounted(() => {
       <span class="clock-time">{{ displayTime }}</span>
       <span class="clock-divider" aria-hidden="true"></span>
       <span class="clock-period">{{ displayPeriod }}</span>
-      <button ref="locationButton" type="button" class="location-settings"
-        title="Change weather location" aria-label="Change weather location"
-        @click="openLocationDialog">📍</button>
+    </div>
+
+    <!-- Location indicator below the clock -->
+    <div class="weather-location-row">
+      <div class="weather-location-badge" role="status">
+        <span class="location-badge-icon" aria-hidden="true">
+          {{
+            locationBusy
+              ? '🧭'
+              : savedLocation?.source === 'device'
+                ? '📍'
+                : '🏝️'
+          }}
+        </span>
+
+        <span>
+          {{
+            locationBusy
+              ? 'Finding your location…'
+              : savedLocation?.source === 'device'
+                ? 'Weather near you'
+                : savedLocation
+                  ? 'Singapore weather'
+                  : 'Choose your weather location'
+          }}
+        </span>
+
+        <span
+          v-if="savedLocation && !locationBusy"
+          class="location-badge-tag"
+        >
+          {{ savedLocation.source === 'device' ? 'Device' : 'Default' }}
+        </span>
+      </div>
+
+      <button
+        ref="locationButton"
+        type="button"
+        class="location-change-button"
+        aria-label="Change weather location"
+        aria-haspopup="dialog"
+        @click.stop="openLocationDialog"
+      >
+        Change <span aria-hidden="true">✎</span>
+      </button>
     </div>
     <p v-if="locationNotice" class="location-feedback" role="status">{{ locationNotice }}</p>
 
@@ -759,7 +801,52 @@ onUnmounted(() => {
 }
 
 .clock-weather-widget { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
-.location-settings { flex-shrink: 0; padding: 3px; border: 0; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; font-size: 19px; }
+
+.location-settings {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+
+  min-height: 40px;
+  margin-left: 6px;
+  padding: 8px 12px;
+
+  border-radius: 12px;
+  background: #ffde59;
+
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+
+  cursor: pointer;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.location-settings:hover {
+  background: #ffe990;
+  transform: translateY(-1px);
+}
+
+.location-settings:active {
+  transform: translateY(2px);
+}
+
+@media (max-width: 600px) {
+  .clock-weather {
+    flex-wrap: wrap;
+  }
+
+  .location-settings {
+    margin-left: 0;
+    padding: 7px 10px;
+    font-size: 11px;
+  }
+}
+
 .location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: 12px; }
 
 
@@ -983,6 +1070,96 @@ background-color 180ms ease,
   .location-dialog .location-action {
     transition: none;
   }
+}
+.weather-location-badge {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 7px;
+
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 6px 11px;
+
+  border: 1px solid #eadbb6;
+  border-radius: 999px;
+  background: #fff9e8;
+  color: #665536;
+  box-shadow: 0 3px 0 rgb(75 58 29 / 12%);
+
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.location-badge-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+}
+
+.location-badge-tag {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #e0efdc;
+  color: #456b40;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+@media (max-width: 600px) {
+  .weather-location-badge {
+    font-size: 10px;
+    padding: 5px 9px;
+  }
+}
+
+.weather-location-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+  margin-top: 8px;
+}
+
+.weather-location-row .weather-location-badge {
+  margin-top: 0;
+  align-self: auto;
+}
+
+.location-change-button {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  min-height: 34px;
+  padding: 6px 11px;
+
+  border: 1px solid #d6b73a;
+  border-radius: 999px;
+  background: #ffde59;
+  color: #5b4724;
+  box-shadow: 0 2px 0 rgb(75 58 29 / 16%);
+
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.location-change-button:hover {
+  background: #ffe990;
+  transform: translateY(-1px);
+}
+
+.location-change-button:active {
+  transform: translateY(1px);
 }
 
 </style>
