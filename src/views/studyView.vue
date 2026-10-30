@@ -5,13 +5,15 @@ import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
   getStudyCatalogue,
-  getTopicLesson,
   getTopicFlashcards,
   studyErrorMessage,
 } from '../services/studyService'
+import TownBackground from '@/components/common/TownBackground.vue'
+import ClockWeather from '@/components/common/ClockWeather.vue'
 import StudyImage from '../components/study/StudyImage.vue'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
 import '../assets/study.css'
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -22,7 +24,6 @@ const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
 const resources = reactive({})
-const progress = reactive({})
 let alive = true
 let generation = 0
 
@@ -43,34 +44,7 @@ const topic = computed(() =>
     ? availableTopics.value.find((item) => item.id === route.query.topic) || null
     : availableTopics.value[0] || null,
 )
-const arenaLocation = computed(() => ({
-  name: 'quiz',
-  query: {
-    ...(subject.value ? { subject: subject.value.id } : {}),
-    ...(topic.value ? { topic: topic.value.id } : {}),
-  },
-}))
-const quizUnlocked = computed(() => topicCompletion.isComplete(topic.value?.id))
 const currentResources = computed(() => resources[topic.value?.id])
-const readingProgress = computed(
-  () =>
-    progress[topic.value?.id] || {
-      read: 0,
-      total: currentResources.value?.lesson.data?.concepts?.length || 0,
-    },
-)
-const progressPercent = computed(() =>
-  readingProgress.value.total
-    ? Math.round((readingProgress.value.read / readingProgress.value.total) * 100)
-    : 0,
-)
-const activeResource = computed(() => {
-  const data = currentResources.value
-  if (!data) return null
-  return mode.value === 'learn' ? data.lesson : data.flashcards
-})
-const modeKey = computed(() => `${topic.value?.id}:${mode.value}`)
-
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -79,7 +53,6 @@ async function initialise() {
   topicCompletion.bindStudent(null, null)
   catalogue.value = { subjects: [], topics: [] }
   Object.keys(resources).forEach((id) => delete resources[id])
-  Object.keys(progress).forEach((id) => delete progress[id])
   try {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
@@ -102,10 +75,7 @@ async function loadResource(topicId, name) {
   target.loading = true
   target.error = null
   try {
-    const data = await {
-      lesson: getTopicLesson,
-      flashcards: getTopicFlashcards,
-    }[name](topicId)
+    const data = await getTopicFlashcards(topicId)
     if (alive && resources[topicId]?.[name] === target) target.data = data
   } catch (cause) {
     if (alive && resources[topicId]?.[name] === target) target.error = cause
@@ -117,52 +87,18 @@ async function loadResource(topicId, name) {
 function loadTopic(id) {
   if (!id || resources[id]) return
   resources[id] = Object.fromEntries(
-    ['lesson', 'flashcards'].map((name) => [
+    ['flashcards'].map((name) => [
       name,
       { loading: false, data: null, error: null },
     ]),
   )
-  // Load lesson and revision independently; formal assessments belong to Arena.
+  // Load the selected flashcard deck; formal assessments belong to Arena.
   for (const name of Object.keys(resources[id])) loadResource(id, name)
-}
-
-function setMode(nextMode) {
-  if (!['learn', 'flashcards'].includes(nextMode)) return
-  const query = { ...route.query, mode: nextMode }
-  delete query.battle
-  router.push({ name: 'study-decks', query })
-}
-
-function goToArena() {
-  if (quizUnlocked.value) router.push(arenaLocation.value)
-}
-
-function completeTopic(id) {
-  if (id === topic.value?.id) topicCompletion.markComplete(id)
-}
-
-function chooseSubject(id) {
-  const firstTopic = catalogue.value.topics.find((item) => item.subject_id === id)
-  router.push({
-    name: 'study-decks',
-    query: { subject: id, ...(firstTopic ? { topic: firstTopic.id } : {}), mode: 'flashcards' },
-  })
-}
-
-function chooseTopic(selected) {
-  router.push({
-    name: 'study-decks',
-    query: { subject: selected.subject_id, topic: selected.id, mode: 'flashcards' },
-  })
-}
-
-function updateProgress(value) {
-  if (topic.value) progress[topic.value.id] = value
 }
 
 function retryMode() {
   if (topic.value)
-    loadResource(topic.value.id, mode.value === 'learn' ? 'lesson' : 'flashcards')
+    loadResource(topic.value.id, 'flashcards')
 }
 
 watch(() => topic.value?.id, loadTopic)
@@ -194,7 +130,13 @@ const spriteError = ref('')
 const spriteIndex = ref(0)
 const spriteRetry = ref(0)
 const buddyApiKey = computed(() => '150')
-const buddyDisplayName = computed(() => apiPokemon.value?.name || 'Mewtwo')
+// PokemonBuddy owns presentation and evolution animations; the parent owns data.
+const pokemonBuddy = ref(null)
+const activePokemon = ref(null)
+function updateStudyPokemon({ pokemon, changes }) {
+  if (pokemon !== activePokemon.value) return
+  Object.assign(activePokemon.value, changes)
+}
 const spriteChoices = computed(() => {
   const sprites = apiPokemon.value?.sprites
   return [...new Set([
@@ -204,6 +146,22 @@ const spriteChoices = computed(() => {
   ].filter((url) => typeof url === 'string' && url.startsWith('https://')))]
 })
 const buddySprite = computed(() => spriteChoices.value[spriteIndex.value] || '')
+watch(apiPokemon, data => {
+  activePokemon.value = data ? {
+    id: data.id,
+    name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
+    xp: 0,
+    evolution_stage: 0,
+    isDefeated: false,
+    animated_img: buddySprite.value,
+    static_img: data.sprites.front_default || ''
+  } : null
+})
+// Preserve reduced-motion selection and retry the next image if one fails.
+watch(buddySprite, sprite => {
+  if (activePokemon.value) activePokemon.value.animated_img = sprite
+})
+
 function nextBuddySprite() {
   if (spriteIndex.value < spriteChoices.value.length - 1) spriteIndex.value++
   else { spriteIndex.value = spriteChoices.value.length; spriteError.value = 'The Pokémon image could not load. Try again.' }
@@ -245,8 +203,6 @@ watch([buddyApiKey, spriteRetry], async ([key], previous, onCleanup) => {
   }
 }, { immediate: true })
 
-// Geometry below matches public/poke-lab/poke-lab-interior.png (1672 × 941).
-const labBackground = `${import.meta.env.BASE_URL}poke-lab/poke-lab-interior.png`
 const backgroundFailed = ref(false)
 const enteredLab = ref(false)
 const pickerSubjectId = ref(null)
@@ -304,174 +260,6 @@ function resetFocusTimer() {
   focusSeconds.value = 25 * 60
   timerFinished.value = false
 }
-const now = ref(new Date())
-const live = ref(true)
-const previewHour = ref(12)
-const autoPreview = ref(false)
-let previewInterval
-function stopAutoPreview() {
-  clearInterval(previewInterval)
-  previewInterval = undefined
-  autoPreview.value = false
-}
-function useLiveTime() {
-  stopAutoPreview()
-  now.value = new Date()
-  live.value = true
-}
-function setPreview(value) {
-  const next = Number(value)
-  if (!Number.isFinite(next)) return
-  stopAutoPreview()
-  live.value = false
-  previewHour.value = ((next % 24) + 24) % 24
-}
-function toggleAutoPreview() {
-  if (autoPreview.value) { stopAutoPreview(); return }
-  previewHour.value = hour.value
-  live.value = false
-  autoPreview.value = true
-  const startedAt = performance.now()
-  const startHour = previewHour.value
-  previewInterval = setInterval(() => {
-    previewHour.value = (startHour + (performance.now() - startedAt) / 60000 * 24) % 24
-  }, 50)
-}
-onUnmounted(stopAutoPreview)
-
-let clockInterval
-const hour = computed(() => live.value ? now.value.getHours() + now.value.getMinutes() / 60 + now.value.getSeconds() / 3600 : previewHour.value)
-const displayTime = computed(() => {
-  const minutes = Math.floor(hour.value * 60)
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
-})
-const landscapeImage = `${import.meta.env.BASE_URL}trainer-home/window-landscape-clean.png`
-const landscapeFailed = ref(false)
-const landscapeStyle = computed(() => ({
-  filter: `brightness(${lighting.value.brightness}) saturate(${lighting.value.saturation})`,
-}))
-const skyImages = {
-  sun: `${import.meta.env.BASE_URL}town/bg_sun.png`,
-  moon: `${import.meta.env.BASE_URL}town/bg_moon.png`,
-  clouds: `${import.meta.env.BASE_URL}town/bg_clouds.png`,
-  stars: `${import.meta.env.BASE_URL}town/bg_stars.png`,
-}
-const skyImageFailed = reactive({ sun: false, moon: false, clouds: false, stars: false })
-// Same lighting keyframes and celestial paths as QuizView.vue.
-const frames = [
-  [0, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
-  [5.5, 'Night', '#081229', '#354564', 0.38, 0.7, 0.38, 0.8],
-  [8, 'Day', '#258be0', '#c7eeff', 1, 1.06, 1, 0],
-  [12, 'Day', '#1685df', '#c4efff', 1.04, 1.1, 1, 0],
-  [15.5, 'Afternoon', '#579bd5', '#ffe0ad', 1.02, 1.08, 0.95, 0],
-  [18.5, 'Sunset', '#67518e', '#ffad7b', 0.82, 1.05, 0.78, 0.03],
-  [19.25, 'Dusk', '#30345f', '#a77b9d', 0.58, 0.85, 0.58, 0.35],
-  [20.5, 'Evening', '#101f43', '#405477', 0.43, 0.75, 0.4, 0.75],
-  [22, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
-  [24, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
-].map(
-  ([
-    hour,
-    name,
-    top,
-    horizon,
-    brightness,
-    saturation,
-    cloud,
-    stars,
-  ]) => ({
-    hour,
-    name,
-    top,
-    horizon,
-    brightness,
-    saturation,
-    cloud,
-    stars,
-  }),
-)
-
-const lerp = (a, b, t) => a + (b - a) * t
-
-function mixColor(a, b, t) {
-  const channels = [1, 3, 5].map((position) => {
-    const start = parseInt(a.slice(position, position + 2), 16)
-    const end = parseInt(b.slice(position, position + 2), 16)
-
-    return Math.round(lerp(start, end, t))
-  })
-
-  return `rgb(${channels.join(',')})`
-}
-
-const lighting = computed(() => {
-  const h = hour.value
-
-  const index = frames.findIndex(
-    (frame, i) =>
-      i < frames.length - 1 &&
-      h >= frame.hour &&
-      h < frames[i + 1].hour,
-  )
-
-  const start = frames[Math.max(0, index)]
-  const end = frames[Math.max(0, index) + 1]
-
-  const progress = (h - start.hour) / (end.hour - start.hour)
-  const t = progress * progress * (3 - 2 * progress)
-
-  return {
-    name: t < 0.5 ? start.name : end.name,
-    top: mixColor(start.top, end.top, t),
-    horizon: mixColor(start.horizon, end.horizon, t),
-    brightness: lerp(start.brightness, end.brightness, t),
-    saturation: lerp(start.saturation, end.saturation, t),
-    cloud: lerp(start.cloud, end.cloud, t),
-    stars: lerp(start.stars, end.stars, t),
-  }
-})
-
-const skyStyle = computed(() => ({
-  background: `linear-gradient(
-    to bottom,
-    ${lighting.value.top} 0%,
-    ${lighting.value.horizon} 30%
-  )`,
-}))
-
-const cloudStyle = computed(() => ({
-  opacity: lighting.value.cloud,
-  filter: `brightness(${lighting.value.brightness})`,
-}))
-
-function celestialStyle(isMoon) {
-  const h = hour.value
-
-  const progress = isMoon
-    ? ((h - 19 + 24) % 24) / 11
-    : (h - 6) / 13
-
-  const visible = progress > 0 && progress < 1
-  const p = Math.max(0, Math.min(1, progress))
-
-  return {
-    left: `${12 + p * 76}%`,
-    top: `${25 - Math.sin(p * Math.PI) * 19}%`,
-    opacity: visible
-      ? Math.min(1, p * 10, (1 - p) * 10)
-      : 0,
-  }
-}
-
-const roomLighting = computed(() => ({
-  filter: `brightness(${Math.max(.78, lighting.value.brightness)}) saturate(${Math.max(.9, lighting.value.saturation)})`,
-}))
-// Deterministic fallback stars, used only if the existing town asset is absent.
-const skyStars = Array.from({ length: 65 }, (_, index) => ({
-  left: `${(index * 37.3 + 7) % 100}%`, top: `${(index * 19.7 + 3) % 65}%`,
-  width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`,
-}))
-
 // The uploaded page did not include StudyFlashcards.vue or studyService.
 // This adapter supports common card shapes; adjust here if your service differs.
 function cardRows(data) {
@@ -619,26 +407,17 @@ async function selectLabTopic(item) {
 watch([() => topic.value?.id, () => flashResource.value?.data], restartCards, { immediate: true, flush: 'sync' })
 watch([() => flashResource.value?.data, () => route.query.bossReturn], restoreBossProgress, { immediate: true, flush: 'post' })
 onUnmounted(() => { clearInterval(focusInterval) })
-onMounted(() => { clockInterval = window.setInterval(() => { now.value = new Date() }, 1000) })
-onUnmounted(() => window.clearInterval(clockInterval))
 </script>
 
 <template>
-  <div class="arena-with-preview lab-with-preview">
-  <main class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }" :style="{ '--lab-backdrop': `url(&quot;${labBackground}&quot;)` }">
-    <header class="arena-hud">
-      <RouterLink to="/home" class="home-link">
-        ‹ Back to town
-      </RouterLink>
-
+  <div class="study-page">
+  <main class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
+    <header class="study-header">
+      <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
       <button v-if="enteredLab" type="button" class="home-link change-topic" @click="returnToSelection">Topics</button>
-      <div class="arena-clock">
-        <strong>{{ displayTime }}</strong>
-        <span>{{ lighting.name }}</span>
-      </div>
+      <div class="study-clock"><ClockWeather :use-device-location="true" /></div>
     </header>
-
-
+    <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
     <div v-else-if="error" class="lab-state" role="alert">
       <p>{{ studyErrorMessage(error, 'Your study content') }}</p>
@@ -650,35 +429,8 @@ onUnmounted(() => window.clearInterval(clockInterval))
     </div>
 
     <template v-else>
-      <section class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="[skyStyle, timerBorderStyle]" aria-label="Poké Lab study room">
-        <div class="lab-sky" :style="skyStyle" aria-hidden="true">
-          <div class="lab-celestial lab-sun" :style="celestialStyle(false)">
-            <img v-if="!skyImageFailed.sun" :src="skyImages.sun" alt="" @error="skyImageFailed.sun = true" />
-            <span v-else class="sun-fallback"></span>
-          </div>
-          <div class="lab-celestial lab-moon" :style="celestialStyle(true)">
-            <img v-if="!skyImageFailed.moon" :src="skyImages.moon" alt="" @error="skyImageFailed.moon = true" />
-            <span v-else class="moon-fallback"></span>
-          </div>
-          <div class="lab-stars" :style="{ opacity: lighting.stars }">
-            <img v-if="!skyImageFailed.stars" :src="skyImages.stars" alt="" @error="skyImageFailed.stars = true" />
-            <div v-else class="fallback-stars"><i v-for="(star, index) in skyStars" :key="index" :style="star"></i></div>
-          </div>
-          <div class="lab-clouds" :style="cloudStyle">
-            <img v-if="!skyImageFailed.clouds" :src="skyImages.clouds" alt="" @error="skyImageFailed.clouds = true" />
-            <div v-else class="fallback-clouds"><i></i><i></i><i></i></div>
-          </div>
-          <img
-            v-if="!landscapeFailed"
-            class="lab-landscape"
-            :src="landscapeImage"
-            :style="landscapeStyle"
-            alt=""
-            draggable="false"
-            @error="landscapeFailed = true"
-          />
-        </div>
-        <img class="lab-room" :src="labBackground" :style="roomLighting" alt="" @error="backgroundFailed = true" />
+      <section class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
+        <TownBackground scene="lab" @image-error="backgroundFailed = true" />
 
         <!-- This coloured ring overlays the red trim baked into the room artwork. -->
         <div class="timer-frame" aria-hidden="true"></div>
@@ -731,8 +483,15 @@ onUnmounted(() => window.clearInterval(clockInterval))
         <!-- The sprite's bottom edge sits on the chamber's purple platform. -->
         <aside class="buddy-chamber" :class="{ 'has-pokemon': !!buddySprite }" aria-label="Your study buddy">
           <div v-if="buddySprite" class="buddy-contact-shadow" aria-hidden="true"></div>
-          <div class="buddy-sprite">
-            <img v-if="buddySprite" :key="buddySprite" :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }" :src="buddySprite" :alt="buddyDisplayName" @error="nextBuddySprite" />
+          <div class="buddy-sprite" @error.capture="nextBuddySprite">
+            <PokemonBuddy
+              v-if="activePokemon && buddySprite"
+              ref="pokemonBuddy"
+              class="lab-pokemon-buddy"
+              :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }"
+              :active-pokemon="activePokemon"
+              @update-pokemon="updateStudyPokemon"
+            />
             <span v-else class="chamber-status" role="status">{{ spriteLoading ? 'Loading…' : spriteError ? 'Try again below' : 'Loading companion…' }}</span>
           </div>
         </aside>
@@ -744,7 +503,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
             <button class="rate-easy" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('easy')">Easy</button>
             <button class="rate-hard" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('hard')">Hard</button>
           </div>
-          <p class="console-status">{{ mode === 'learn' ? 'Switch to Flashcards to review.' : currentCard ? answerVisible ? 'How well did you remember?' : 'Reveal the answer to rate this card.' : cards.length ? 'Round complete' : 'Choose a deck to begin' }}</p>
+          <p class="console-status">{{ currentCard ? answerVisible ? 'How well did you remember?' : 'Reveal the answer to rate this card.' : cards.length ? 'Round complete' : 'Choose a deck to begin' }}</p>
           <span v-if="cards.length && mode === 'flashcards'" class="console-status">{{ reviewedCount }} / {{ cards.length }} finished</span>
         </nav>
       </section>
@@ -753,7 +512,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
         <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
         <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
         <p v-if="!savedInBrowser" role="status">Progress can only be kept for this visit because browser storage is unavailable.</p>
-        <p v-if="landscapeFailed" role="status">Mountain background missing. Copy window-landscape-clean.png into public/trainer-home/.</p>
         <p v-if="backgroundFailed" role="alert">Room image missing. Put poke-lab-interior.png in public/poke-lab/.</p>
       </footer>
     </template>
@@ -792,21 +550,14 @@ onUnmounted(() => window.clearInterval(clockInterval))
         <p class="picker-footnote">Study at your own pace. Take a break after your focus session.</p>
       </div>
     </section>
-  </main>
-  <footer class="time-preview-bar" aria-label="Time preview controls">
-    <div class="time-bar-inner">
-      <strong class="time-bar-title">Time preview <span>{{ displayTime }}</span></strong>
-      <button type="button" :aria-pressed="live" @click="useLiveTime">Live</button>
-      <button v-for="preset in [{ label: '7am', hour: 7 }, { label: 'Day', hour: 12 }, { label: 'Sunset', hour: 18.5 }, { label: 'Night', hour: 21 }, { label: 'Midnight', hour: 0 }]" :key="preset.label" type="button" :aria-pressed="!live && !autoPreview && Math.abs(previewHour - preset.hour) < .001" @click="setPreview(preset.hour)">{{ preset.label }}</button>
-      <button type="button" :aria-pressed="autoPreview" @click="toggleAutoPreview">{{ autoPreview ? 'Pause cycle' : '▶ Cycle day' }}</button>
-      <label class="time-bar-slider"><span>Time</span><input type="range" min="0" max="1439" step="1" :value="Math.floor(hour * 60)" :aria-valuetext="displayTime" @input="setPreview(Number($event.target.value) / 60)" /></label>
-      <span class="time-bar-status">{{ live ? 'Live clock' : autoPreview ? '24 hours in 60 seconds' : 'Preview paused' }}</span>
     </div>
-  </footer>
+  </main>
   </div>
 </template>
 
 <style scoped>
+
+
 .poke-lab-page { min-height: 100dvh; background: #0c172b; color: #eef7ff; font-family: system-ui, sans-serif; padding: 12px; box-sizing: border-box; }
 .poke-lab-page *, .poke-lab-page *::before, .poke-lab-page *::after { box-sizing: border-box; }
 .poke-lab-page button, .poke-lab-page select { font: inherit; }
@@ -820,7 +571,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
 .lab-state { padding: 50px 24px; max-width: 800px; margin: auto; text-align: center; }
 .lab-state a { color: #9de7ff; }
 .lab-stage { position: relative; width: 100%; max-width: none; aspect-ratio: 1672 / 941; margin: auto; container-type: inline-size; overflow: hidden; border-radius: 16px; isolation: isolate; }
-.lab-room { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; z-index: 1; pointer-events: none; }
 .lab-screen { z-index: 2; position: absolute; display: flex; flex-direction: column; color: #f2f8ff; overflow: auto; scrollbar-width: thin; scrollbar-color: #589ac5 transparent; padding: 1cqw; overflow-wrap: anywhere; }
 .prompt-screen { left: 7.8%; top: 21.3%; width: 19.5%; height: 15.8%; }
 .answer-screen { left: 32.1%; top: 22%; width: 35.8%; height: 30.8%; padding: 1.3cqw; }
@@ -842,7 +592,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
 .buddy-chamber { z-index: 2; position: absolute; left: 74.6%; top: 41.3%; width: 15.7%; height: 29.8%; overflow: hidden; contain: paint; padding: .4cqw .5cqw 0; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; }
 .buddy-sprite { position: relative; z-index: 2; width: 92%; height: 92%; min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: flex-end; justify-content: center;  }
 .buddy-sprite :deep(img) { width: 100%; height: 100%; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; object-fit: contain; object-position: center bottom; image-rendering: pixelated; display: block; }
-.buddy-sprite img.is-artwork { image-rendering: auto; }
+.buddy-sprite .is-artwork :deep(img) { image-rendering: auto; }
 .buddy-sprite :deep(> *) { max-width: 100%; max-height: 100%; }
 .lab-console { z-index: 2; position: absolute; left: 33.2%; top: 82.1%; width: 33.6%; height: 12.2%; display: flex; flex-direction: column; justify-content: center; gap: .45cqw; }
 .console-modes, .console-actions, .console-status { display: flex; align-items: center; justify-content: center; gap: .6cqw; }
@@ -853,8 +603,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
 .console-actions > button { flex: 1; }
 .console-status { font-size: clamp(9px, .7cqw, 13px); color: #b9d5f5; }
 .console-status button { border: 0; background: transparent; padding: 0 .5cqw !important; font-size: inherit !important; text-decoration: underline; }
-.console-learn { text-align: center; font-size: clamp(12px, 1cqw, 18px); }
-.console-learn progress { display: block; width: 85%; height: 8px; margin: 8px auto; accent-color: #6bddff; }
 .lab-footer { max-width: 1672px; margin: 10px auto 0; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 20px; color: #adc5df; font-size: 12px; }
 .lab-footer p { flex-basis: 100%; margin: 0; }
 .lab-dialog { color: #eff8ff; background: #132742; border: 1px solid #6b9bc8; border-radius: 20px; padding: 24px; width: min(540px, calc(100vw - 24px)); max-height: 85dvh; overflow: auto; }
@@ -873,7 +621,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
   .lab-title { min-width: 50%; flex-direction: column; gap: 2px; }
   .lab-toolbar button { padding: 9px; font-size: 12px; min-height: 44px; }
   .lab-stage { aspect-ratio: auto; padding-top: 56.28%; background: #142b48 !important; }
-  .lab-room { height: auto; aspect-ratio: 1672 / 941; }
   .lab-screen, .lab-console { position: relative; top: auto; left: auto; width: auto; height: auto; margin: 12px; padding: 20px; background: #142e53; border: 2px solid #39bdff; border-radius: 14px; }
   .prompt-screen { border-color: #f06874; }
   .prompt-screen h1 { font-size: 20px; }
@@ -888,7 +635,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
   .lab-console { gap: 12px; }
   .console-actions, .console-modes, .console-status { gap: 8px; }
   .poke-lab-page .lab-console button { min-height: 44px; font-size: 13px !important; border-radius: 8px; padding: 8px !important; white-space: normal; }
-  .console-status, .console-learn { font-size: 13px; }
+  .console-status { font-size: 13px; }
   .console-actions button span { display: none; }
 }
 
@@ -915,33 +662,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
 }
 .chamber-status { align-self: center; color: #e0cfff; text-align: center; font-size: clamp(8px, .8cqw, 14px); }
 
-.lab-sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
-.lab-celestial { position: absolute; z-index: 1; width: 10%; transform: translate(-50%, -50%); transition: opacity 1.5s ease; }
-.lab-moon { width: 7%; }
-.lab-celestial img { width: 100%; height: auto; display: block; }
-.lab-stars, .lab-clouds { position: absolute; inset: 0; }
-.lab-stars { z-index: 2; }
-.lab-clouds { z-index: 3; }
-.lab-stars > img, .lab-clouds > img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: fill; }
-.lab-clouds > img, .fallback-clouds { left: -5%; width: 110%; animation: lab-cloud-drift 80s ease-in-out infinite alternate; }
-.lab-stars > img, .fallback-stars { animation: lab-twinkle 5s ease-in-out infinite alternate; }
-.fallback-stars, .fallback-clouds { position: absolute; inset: 0; }
-.fallback-stars i { position: absolute; background: #fff; border-radius: 50%; box-shadow: 0 0 4px #fff; }
-.sun-fallback, .moon-fallback { display: block; width: 100%; aspect-ratio: 1; border-radius: 50%; }
-.sun-fallback { background: radial-gradient(circle, #fff7b4 25%, #ffdb6e 70%); box-shadow: 0 0 35px #ffe79b88; }
-.moon-fallback { background: radial-gradient(circle at 35% 35%, #fffdeb, #c1d4eb); box-shadow: 0 0 20px #d3e7ff55; }
-.fallback-clouds i { position: absolute; width: 25%; height: 8%; background: #ffffffaa; border-radius: 50%; filter: blur(8px); }
-.fallback-clouds i:nth-child(1) { left: 4%; top: 17%; }
-.fallback-clouds i:nth-child(2) { left: 45%; top: 6%; width: 35%; }
-.fallback-clouds i:nth-child(3) { left: 80%; top: 32%; }
-@keyframes lab-cloud-drift { from { transform: translateX(-2%); } to { transform: translateX(2%); } }
-@keyframes lab-twinkle { from { opacity: .7; } to { opacity: 1; } }
-@media (max-width: 1000px) { .lab-sky { bottom: auto; height: 56.28cqw; } }
-@media (prefers-reduced-motion: reduce) {
-  .lab-clouds > img, .fallback-clouds, .lab-stars > img, .fallback-stars { animation: none; }
-  .lab-celestial { transition: none; }
-}
-
 .timer-frame {
   position: absolute;
   z-index: 2;
@@ -959,18 +679,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
   .timer-screen { border-width: 2px; border-color: var(--timer-border, #ff4057); box-shadow: 0 0 5px var(--timer-border, #ff4057); }
 }
 @media (prefers-reduced-motion: reduce) { .timer-frame { transition: none; } }
-.lab-landscape {
-  position: absolute;
-  z-index: 4;
-  left: 0;
-  bottom: 0;
-  width: 100%;
-  height: 85%;
-  max-width: none;
-  object-fit: fill;
-  pointer-events: none;
-}
-
 .lab-navigation {
   position: absolute;
   z-index: 2;
@@ -1059,7 +767,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
 .poke-lab-page .picker-shell h1 { margin: 16px 0 12px; color: white; font-size: clamp(28px, 4vw, 48px); font-weight: 800; text-shadow: 0 3px 18px #0007; }
 .poke-lab-page .picker-intro { margin-bottom: 28px; color: #fff6e3; font-size: 17px; }
 .poke-lab-page .bubble-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px; }
-.poke-lab-page .bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, background .18s, box-shadow .18s; }
+.poke-lab-page .bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, *background* .18s, box-shadow .18s; }
 .poke-lab-page .bubble-card strong { font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
 .poke-lab-page .bubble-card > span:last-child { font-size: 13px; color: #fff5df; }
 .poke-lab-page .bubble-symbol { font-size: 36px; color: #ffe699; text-shadow: 0 0 18px #ffe4a455; }
@@ -1085,21 +793,7 @@ onUnmounted(() => window.clearInterval(clockInterval))
 }
 @media (prefers-reduced-motion: reduce) { .poke-lab-page .bubble-card { transition: none; } }
 
-.arena-hud {
-  position: absolute;
-  top: max(16px, env(safe-area-inset-top));
-  left: 16px;
-  right: 16px;
-  z-index: 10;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  pointer-events: none;
-}
-
-.home-link,
-.arena-clock {
+.home-link {
   border: 1px solid rgb(255 255 255 / 40%);
   border-radius: 14px;
   background: rgb(16 30 52 / 80%);
@@ -1124,24 +818,6 @@ onUnmounted(() => window.clearInterval(clockInterval))
   color: #ffdc77;
 }
 
-.arena-clock {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 44px;
-  padding: 10px 14px;
-}
-
-.arena-clock strong {
-  font-size: 18px;
-  font-variant-numeric: tabular-nums;
-}
-
-.arena-clock span {
-  color: #e2eafa;
-  font-size: 12px;
-}
-
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
@@ -1150,163 +826,267 @@ input:focus-visible {
 }
 
 @media (max-width: 600px) {
-  .arena-hud {
-    top: 10px;
-    left: 10px;
-    right: 10px;
-  }
 
-  .home-link,
-  .arena-clock {
+  .home-link {
     padding: 8px 10px;
   }
-
-  .arena-clock {
-    gap: 6px;
-  }
-
-  .arena-clock strong {
-    font-size: 15px;
-  }
-
-  .arena-clock span {
-    font-size: 10px;
-  }
 }
 
-/* The footer is a separate grid row, never an overlay on the battle. */
-.arena-with-preview { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: #101d30; }
-.arena-with-preview > .arena-page { position: relative; inset: auto; width: 100%; height: 100%; min-height: 0; container-type: size; }
-.arena-with-preview .arena-scene { width: min(100%, calc(100cqh * 1672 / 941)); }
-.time-preview-bar { position: relative; min-width: 0; overflow-x: auto; border-top: 2px solid #b99a58; background: #14243a; color: #fff1cf; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); font-family: system-ui, sans-serif; }
-.time-bar-inner { display: flex; align-items: center; justify-content: center; gap: 8px; width: max-content; min-width: 100%; }
-.time-bar-title { display: flex; align-items: center; gap: 10px; margin-right: 8px; font-size: 12px; white-space: nowrap; }
-.time-bar-title span { color: #ffdf85; font-variant-numeric: tabular-nums; }
-.time-preview-bar button { min-height: 36px; padding: 7px 11px; border: 1px solid #718096; border-radius: 8px; background: #253951; color: #fff3d6; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
-.time-preview-bar button:hover { background: #3b526d; }
-.time-preview-bar button[aria-pressed='true'] { background: #ffdf85; border-color: #ffdf85; color: #233047; }
-.time-bar-slider { display: flex; align-items: center; gap: 8px; margin: 0 8px; font-size: 12px; }
-.time-bar-slider input { width: clamp(100px, 12vw, 200px); accent-color: #ffdf85; }
-.time-bar-status { font-size: 11px; color: #c6d4e7; white-space: nowrap; }
-.time-preview-bar button:focus-visible, .time-preview-bar input:focus-visible { outline: 2px solid #ffdf85; outline-offset: 2px; }
-@media (max-width: 700px) {
-  .arena-with-preview .arena-scene { width: 100%; }
-  .time-bar-inner { justify-content: flex-start; }
-  .arena-picker { padding-bottom: 24px; }
-  .battle-dock { margin-bottom: 24px; }
-}
-
-/* Shared Studydex shell: identical font, navigation and clock on both pages. */
-.arena-hud { position: fixed; font-family: system-ui, sans-serif; }
-.arena-hud .home-link { font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
-.arena-hud .change-topic { margin-inline: auto; }
-.arena-hud .arena-clock { margin-left: auto; }
-.arena-hud button.home-link { border: 1px solid rgb(255 255 255 / 40%); border-radius: 14px; background: rgb(16 30 52 / 80%); padding: 10px 14px; color: white; }
-.arena-hud button.home-link:hover { border-color: #ffdc77; color: #ffdc77; background: rgb(16 30 52 / 80%); }
-.arena-picker { font-family: system-ui, sans-serif; }
-@media(max-width:600px) { .arena-hud button.home-link { padding: 8px 10px; } }
-
-.lab-with-preview > .poke-lab-page { position: relative; inset: auto; min-height: 0; height: 100%; padding: 0; overflow-y: auto; container-type: size; background: #101d30; }
-
-.lab-with-preview .poke-lab-page.is-selecting { overflow: hidden; }
-.lab-with-preview .lab-footer { padding: 0 16px; }
-.lab-with-preview .lab-state { margin-top: 90px; }
-@media(max-width:1000px) {
- .lab-with-preview .poke-lab-page:not(.is-selecting) { padding-top: 75px; }
- .lab-with-preview .lab-stage { width: 100%; }
-}
-/* Responsive room layout: one uncapped scene, sized from the available
-   grid row above the time preview bar. All interactive overlays scale
-   together with the artwork so they stay aligned. */
-.lab-with-preview {
+/* Full-page study room */
+.study-page {
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100dvh;
-  min-width: 0;
   overflow: hidden;
 }
-.lab-with-preview > .poke-lab-page {
+
+.study-page > .poke-lab-page {
+  position: relative;
   width: 100%;
-  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   isolation: isolate;
 }
-/* Extend the artwork into unused space without stretching the controls. */
-.lab-with-preview > .poke-lab-page::before {
-  content: '';
+
+/* Floating navigation — no full-width background */
+.study-header {
   position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image: linear-gradient(#101d3066, #101d3066), var(--lab-backdrop);
-  background-size: cover;
-  background-position: center;
-  filter: blur(18px) brightness(.65);
+  top: max(16px, env(safe-area-inset-top));
+  left: 22px;
+  right: 22px;
+  z-index: 20;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+
+  /* Empty header space must not block the room controls. */
   pointer-events: none;
 }
-.lab-with-preview .lab-stage { max-width: none; }
 
-/* Topic selection: artwork covers the full available area. */
-.lab-with-preview .poke-lab-page.is-selecting { overflow: hidden; }
-.lab-with-preview .poke-lab-page.is-selecting .lab-stage {
+.study-header > .home-link,
+.study-header > .study-clock {
+  pointer-events: auto;
+}
+
+.study-header > .home-link {
+  justify-self: start;
+}
+
+/* Back to Town stays top left; Topics stays top right. */
+.study-header > .change-topic {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+}
+
+/* ClockWeather keeps its own component styling. */
+.study-clock {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  justify-self: start;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* Room occupies the entire page, including behind the clock. */
+.study-content {
+  position: absolute;
+  inset: 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  container-type: size;
+}
+
+/* Remove the blurred border/background introduced previously. */
+.study-content::before {
+  content: none;
+}
+
+/*
+ * Scale the artwork and its interactive overlays together.
+ * Cover the viewport without stretching the room image.
+ */
+.study-content .lab-stage {
   position: absolute;
   top: 50%;
   left: 50%;
+
   width: max(100cqw, calc(100cqh * 1672 / 941));
   height: auto;
   aspect-ratio: 1672 / 941;
-  padding-top: 0;
+  max-width: none;
+
   margin: 0;
+  padding: 0;
+  border: 0;
   border-radius: 0;
-  transform: translate(-50%, -50%) scale(1.02);
+  transform: translate(-50%, -50%);
 }
-@media (min-width: 1001px) {
-  /* Preserve the whole interactive room, even on ultrawide monitors. */
-  .lab-with-preview .poke-lab-page:not(.is-selecting) {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    overflow: hidden;
-    padding: 0 0 32px;
-  }
-  .lab-with-preview .poke-lab-page:not(.is-selecting) .lab-stage {
-    position: relative;
-    width: min(100cqw, calc(100cqh * 1672 / 941));
-    height: auto;
-    aspect-ratio: 1672 / 941;
-    margin: 0;
-    padding: 0;
-    flex-shrink: 0;
-    border-radius: 0;
-  }
-  .lab-with-preview .poke-lab-page:not(.is-selecting) .lab-footer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    max-width: none;
-    min-height: 24px;
-    margin: 0;
-    padding: 4px 16px;
-    justify-content: flex-end;
-    box-sizing: border-box;
-  }
+
+/* Topic selection remains above the room but below the header. */
+.study-content .arena-picker {
+  position: absolute;
+  inset: 220px 0 0;
+  overflow-y: auto;
+  padding-bottom: 24px;
 }
+
+/* Keep feedback readable without a full-width dark strip. */
+.study-content .lab-footer {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  left: 16px;
+  z-index: 5;
+
+  width: auto;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+
+  background: transparent;
+  color: #eef7ff;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 70%);
+}
+
+.study-content .lab-footer p {
+  margin: 0;
+}
+
+/* Ensure global text styles do not make flashcards dark blue. */
+.poke-lab-page .answer-copy,
+.poke-lab-page .screen-message,
+.poke-lab-page .screen-message h2 {
+  color: #eef7ff;
+}
+
+/* Small screens retain readable, scrollable study controls. */
 @media (max-width: 1000px) {
-  /* Retain readable, scrollable flashcard controls on smaller devices. */
-  .lab-with-preview .poke-lab-page:not(.is-selecting) {
-    display: block;
+  .study-header {
+    left: 12px;
+    right: 12px;
+  }
+
+  .poke-lab-page:not(.is-selecting) .study-content {
     overflow-y: auto;
-    padding-top: 75px;
+    container-type: inline-size;
   }
-  .lab-with-preview .poke-lab-page:not(.is-selecting) .lab-stage {
+
+  .poke-lab-page:not(.is-selecting) .lab-stage {
+    position: relative;
+    top: auto;
+    left: auto;
     width: 100%;
+    height: auto;
     aspect-ratio: auto;
-    margin: 0;
+
+    /* Reserve the artwork area above the stacked controls. */
+    padding-top: max(56.28%, 240px);
+    transform: none;
   }
-  .lab-with-preview .poke-lab-page.is-selecting .lab-room {
-    height: 100%;
-    aspect-ratio: auto;
+
+  .poke-lab-page:not(.is-selecting) .lab-footer {
+    position: relative;
+    inset: auto;
+    padding: 12px;
   }
 }
 
+/* Make StudyView flush with the browser viewport. */
+.study-page {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: #101d30;
+  box-sizing: border-box;
+}
 
+.study-page > .poke-lab-page {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-width: none;
+
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+
+  background-image: none;
+  box-shadow: none;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.study-content {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background-image: none;
+}
+
+/* Remove the extra decorative backdrop. */
+.study-page::before,
+.study-page::after,
+.study-page > .poke-lab-page::before,
+.study-page > .poke-lab-page::after,
+.study-content::before,
+.study-content::after {
+  content: none;
+  display: none;
+}
+
+/* Embed the shared buddy in the lab chamber without its standalone card layout. */
+.lab-pokemon-buddy {
+  width: 100%; height: 100%; padding: 0; gap: 0;
+  min-width: 0; min-height: 0; position: relative;
+}
+.lab-pokemon-buddy :deep(.buddy-image-container) {
+  width: 100%; height: 100%; min-height: 0; align-items: flex-end;
+}
+/* Keep status text accessible without covering the chamber's artwork. */
+.lab-pokemon-buddy :deep(h2),
+.lab-pokemon-buddy :deep(h3),
+.lab-pokemon-buddy :deep(.buddy-level),
+.lab-pokemon-buddy :deep(.buddy-status),
+.lab-pokemon-buddy :deep(.buddy-message),
+.lab-pokemon-buddy :deep(.buddy-error),
+.lab-pokemon-buddy :deep(.buddy-xp) {
+  position: absolute; width: 1px; height: 1px; padding: 0;
+  margin: -1px; overflow: hidden; clip-path: inset(50%);
+  white-space: nowrap; border: 0;
+}
 </style>

@@ -1,12 +1,12 @@
 <script setup>
-import { useTimeOfDay } from '@/composables/useTimeofDay';
-import { computed, toRef, watch } from 'vue'
+import { computed, reactive, ref, toRef, watch } from 'vue'
+import { useTimeOfDay } from '@/composables/useTimeofDay'
 
 const props = defineProps({
   scene: {
     type: String,
     default: 'town',
-    validator: value => ['town', 'room'].includes(value)
+    validator: value => ['town', 'room', 'lab', 'arena'].includes(value)
   },
   live: { type: Boolean, default: true },
   previewHour: { type: Number, default: 12 },
@@ -29,6 +29,7 @@ watch(sleepingByTime, sleeping => emit('sleep-change', sleeping), { immediate: t
 const base = import.meta.env.BASE_URL
 const asset = `${base}town/`
 const images = {
+  arena: `${base}poke-arena/poke-arena4.png`,
   room: `${base}trainer-home/trainer-home-v3.png`,
   landscape: `${base}trainer-home/window-landscape-clean.png`,
   sun: `${asset}bg_sun.png`,
@@ -108,11 +109,174 @@ function roomCelestialStyle(isMoon) {
   }
 }
 
+
+// Study room: retain its original assets, lighting strength and fallback effects.
+const labBackground = `${base}poke-lab/poke-lab-interior.png`
+const landscapeImage = images.landscape
+const landscapeFailed = ref(false)
+const skyImages = images
+const skyImageFailed = reactive({ sun: false, moon: false, clouds: false, stars: false })
+const labSkyStyle = computed(() => ({
+  background: `linear-gradient(to bottom, ${lighting.value.top} 0%, ${lighting.value.horizon} 30%)`
+}))
+const roomLighting = computed(() => ({
+  filter: `brightness(${Math.max(.78, lighting.value.brightness)}) saturate(${Math.max(.9, lighting.value.saturation)})`
+}))
+const skyStars = Array.from({ length: 65 }, (_, index) => ({
+  left: `${(index * 37.3 + 7) % 100}%`, top: `${(index * 19.7 + 3) % 65}%`,
+  width: `${index % 3 + 1}px`, height: `${index % 3 + 1}px`
+}))
+
+// Floodlights: 7pm until midnight.
+const arenaLightsOn = computed(() => hour.value >= 19)
+
+const arenaStyle = computed(() => {
+  const brightness = arenaLightsOn.value
+    ? Math.max(0.82, lighting.value.brightness)
+    : lighting.value.brightness
+
+  const saturation = arenaLightsOn.value
+    ? Math.max(0.95, lighting.value.saturation)
+    : lighting.value.saturation
+
+  return {
+    filter: `brightness(${brightness}) saturate(${saturation})`,
+  }
+})
+
+// The latest arena artwork has two visible outer floodlight banks.
+// Adjust these percentages if you change the background image.
+const floodlights = [
+  { id: 'left', left: 8.7, top: 16.8, angle: -24 },
+  { id: 'right', left: 91.3, top: 16.8, angle: 24 },
+]
+
+
+const arenaSkyStyle = computed(() => ({ background: `linear-gradient(to bottom, ${lighting.value.top} 0%, ${lighting.value.horizon} 30%)` }))
+
 </script>
 
 <template>
-  <div class="town-background" :class="{ 'room-background': scene === 'room' }" aria-hidden="true">
-    <template v-if="scene === 'room'">
+  <div class="town-background" :class="{ 'arena-background': scene === 'arena', 'room-background': scene === 'room', 'lab-background': scene === 'lab' }" aria-hidden="true">
+    <template v-if="scene === 'arena'">
+      <!-- SKY -->
+      <div
+        class="layer sky"
+        :style="arenaSkyStyle"
+        aria-hidden="true"
+      ></div>
+
+      <!-- SUN / MOON -->
+      <img
+        class="celestial sun"
+        :src="images.sun"
+        :style="celestialStyle(false)"
+        alt=""
+        draggable="false"
+      />
+
+      <img
+        class="celestial moon"
+        :src="images.moon"
+        :style="celestialStyle(true)"
+        alt=""
+        draggable="false"
+      />
+
+      <!-- STARS / CLOUDS -->
+      <div
+        class="layer stars-layer"
+        :style="{ opacity: lighting.stars }"
+        aria-hidden="true"
+      >
+        <img
+          class="layer stars"
+          :src="images.stars"
+          alt=""
+          draggable="false"
+        />
+      </div>
+
+      <div
+        class="layer clouds-layer"
+        :style="cloudStyle"
+        aria-hidden="true"
+      >
+        <img
+          class="layer clouds"
+          :src="images.clouds"
+          alt=""
+          draggable="false"
+        />
+      </div>
+
+      <!-- ARENA -->
+      <img
+        class="layer arena-image"
+        :src="images.arena"
+        :style="arenaStyle"
+        alt="StudyDex quiz arena"
+        draggable="false"
+      />
+
+      <!-- EVENING FLOODLIGHTS -->
+      <div
+        class="layer arena-light-effects"
+        :class="{ 'is-on': arenaLightsOn }"
+        aria-hidden="true"
+      >
+        <div
+          v-for="light in floodlights"
+          :key="light.id"
+          class="floodlight"
+          :style="{
+            left: `${light.left}%`,
+            top: `${light.top}%`,
+            '--beam-angle': `${light.angle}deg`,
+          }"
+        >
+          <div class="floodlight-beam"></div>
+          <div class="floodlight-halo"></div>
+          <div class="floodlight-bulbs"></div>
+        </div>
+
+        <div class="court-light-pool"></div>
+      </div>
+
+
+    </template>
+    <template v-else-if="scene === 'lab'">
+        <div class="lab-sky" :style="labSkyStyle" aria-hidden="true">
+          <div class="lab-celestial lab-sun" :style="celestialStyle(false)">
+            <img v-if="!skyImageFailed.sun" :src="skyImages.sun" alt="" @error="skyImageFailed.sun = true" />
+            <span v-else class="sun-fallback"></span>
+          </div>
+          <div class="lab-celestial lab-moon" :style="celestialStyle(true)">
+            <img v-if="!skyImageFailed.moon" :src="skyImages.moon" alt="" @error="skyImageFailed.moon = true" />
+            <span v-else class="moon-fallback"></span>
+          </div>
+          <div class="lab-stars" :style="{ opacity: lighting.stars }">
+            <img v-if="!skyImageFailed.stars" :src="skyImages.stars" alt="" @error="skyImageFailed.stars = true" />
+            <div v-else class="fallback-stars"><i v-for="(star, index) in skyStars" :key="index" :style="star"></i></div>
+          </div>
+          <div class="lab-clouds" :style="cloudStyle">
+            <img v-if="!skyImageFailed.clouds" :src="skyImages.clouds" alt="" @error="skyImageFailed.clouds = true" />
+            <div v-else class="fallback-clouds"><i></i><i></i><i></i></div>
+          </div>
+          <img
+            v-if="!landscapeFailed"
+            class="lab-landscape"
+            :src="landscapeImage"
+            :style="landscapeStyle"
+            alt=""
+            draggable="false"
+            @error="landscapeFailed = true"
+          />
+        </div>
+        <img class="lab-room" :src="labBackground" :style="roomLighting" alt="" @error="reportImageError" />
+
+    </template>
+    <template v-else-if="scene === 'room'">
       <div class="window-view" aria-hidden="true">
 
         <div
@@ -296,4 +460,185 @@ to { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .clouds, .stars, .fireflies, .clouds-image, .stars-image { animation: none; }
 }
+
+/* Lab artwork stays aligned with the study controls. */
+.town-background.lab-background { bottom: auto; height: auto; aspect-ratio: 1672 / 941; }
+.lab-room { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; z-index: 1; pointer-events: none; }
+.lab-sky { position: absolute; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; }
+.lab-celestial { position: absolute; z-index: 1; width: 10%; transform: translate(-50%, -50%); transition: opacity 1.5s ease; }
+.lab-moon { width: 7%; }
+.lab-celestial img { width: 100%; height: auto; display: block; }
+.lab-stars, .lab-clouds { position: absolute; inset: 0; }
+.lab-stars { z-index: 2; }
+.lab-clouds { z-index: 3; }
+.lab-stars > img, .lab-clouds > img { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; object-fit: fill; }
+.lab-clouds > img, .fallback-clouds { left: -5%; width: 110%; animation: lab-cloud-drift 80s ease-in-out infinite alternate; }
+.lab-stars > img, .fallback-stars { animation: lab-twinkle 5s ease-in-out infinite alternate; }
+.fallback-stars, .fallback-clouds { position: absolute; inset: 0; }
+.fallback-stars i { position: absolute; background: #fff; border-radius: 50%; box-shadow: 0 0 4px #fff; }
+.sun-fallback, .moon-fallback { display: block; width: 100%; aspect-ratio: 1; border-radius: 50%; }
+.sun-fallback { background: radial-gradient(circle, #fff7b4 25%, #ffdb6e 70%); box-shadow: 0 0 35px #ffe79b88; }
+.moon-fallback { background: radial-gradient(circle at 35% 35%, #fffdeb, #c1d4eb); box-shadow: 0 0 20px #d3e7ff55; }
+.fallback-clouds i { position: absolute; width: 25%; height: 8%; background: #ffffffaa; border-radius: 50%; filter: blur(8px); }
+.fallback-clouds i:nth-child(1) { left: 4%; top: 17%; }
+.fallback-clouds i:nth-child(2) { left: 45%; top: 6%; width: 35%; }
+.fallback-clouds i:nth-child(3) { left: 80%; top: 32%; }
+@keyframes lab-cloud-drift { from { transform: translateX(-2%); } to { transform: translateX(2%); } }
+@keyframes lab-twinkle { from { opacity: .7; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lab-clouds > img, .fallback-clouds, .lab-stars > img, .fallback-stars { animation: none; }
+  .lab-celestial { transition: none; }
+}
+
+.lab-landscape {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 85%;
+  max-width: none;
+  object-fit: fill;
+  pointer-events: none;
+}
+
+
+
+.arena-background .layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.arena-background img.layer {
+  display: block;
+  object-fit: fill;
+  user-select: none;
+}
+.arena-background .sky {
+  z-index: 0;
+}
+.arena-background .celestial {
+  position: absolute;
+  z-index: 1;
+  width: 10%;
+  height: auto;
+  max-width: none;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 1.5s ease;
+}
+.arena-background .moon {
+  width: 7%;
+}
+.arena-background .stars-layer {
+  z-index: 2;
+}
+.arena-background .clouds-layer {
+  z-index: 3;
+}
+.arena-background .clouds {
+  inset: auto;
+  top: 0;
+  left: -5%;
+  width: 110%;
+  height: 100%;
+  max-width: none;
+  animation: cloud-drift 80s ease-in-out infinite alternate;
+}
+.arena-background .stars {
+  animation: star-twinkle 5s ease-in-out infinite alternate;
+}
+.arena-background .arena-image {
+  z-index: 4;
+  transition: filter 1s ease;
+}
+.arena-background .arena-light-effects {
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+.arena-background .arena-light-effects.is-on {
+  opacity: 1;
+}
+.arena-background .floodlight {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.arena-background .floodlight-halo {
+  position: absolute;
+  width: 9cqw;
+  height: 6cqw;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgb(255 249 211 / 85%) 0%,
+    rgb(255 226 150 / 35%) 35%,
+    transparent 72%
+  );
+  mix-blend-mode: screen;
+}
+.arena-background .floodlight-bulbs {
+  position: absolute;
+  width: 3.8cqw;
+  height: 1.4cqw;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(
+      circle at 15% 50%,
+      #fffef0 0 14%,
+      transparent 23%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      #fffef0 0 14%,
+      transparent 23%
+    ),
+    radial-gradient(
+      circle at 85% 50%,
+      #fffef0 0 14%,
+      transparent 23%
+    );
+  filter: drop-shadow(0 0 7px #ffe5a1);
+}
+.arena-background .floodlight-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28cqw;
+  height: 43cqw;
+  transform-origin: 50% 0;
+  transform: translateX(-50%) rotate(var(--beam-angle));
+  clip-path: polygon(47% 0, 53% 0, 100% 100%, 0 100%);
+  background: linear-gradient(
+    to bottom,
+    rgb(255 245 203 / 24%),
+    rgb(255 239 183 / 8%) 65%,
+    transparent
+  );
+  mix-blend-mode: screen;
+}
+.arena-background .court-light-pool {
+  position: absolute;
+  left: 17%;
+  top: 65%;
+  width: 66%;
+  height: 27%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgb(255 239 184 / 25%),
+    rgb(255 239 184 / 10%) 45%,
+    transparent 72%
+  );
+  mix-blend-mode: screen;
+}
+
+
+@media (prefers-reduced-motion: reduce) { .arena-background .clouds, .arena-background .stars { animation: none; } .arena-background .celestial, .arena-background .arena-image, .arena-background .arena-light-effects { transition: none; } }
 </style>
