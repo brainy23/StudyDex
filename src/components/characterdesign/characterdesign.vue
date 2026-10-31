@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const base = import.meta.env.BASE_URL
 
-/* ---------------- Background (room + live window sky) ---------------- */
+/*Background (room + live window sky)  */
 
 const images = {
   room: `${base}trainer-home/trainer-home-v3.png`,
@@ -116,29 +116,28 @@ function celestialStyle(isMoon) {
   }
 }
 
-/* ---------------- Character choosing ---------------- */
+/*Character  */
 
-// image = picture in the list, idleImage = 4-frame idle sheet
+// image = picture in the list, head = profile badge picture, idleImage = 4-frame idle sheet
 const avatars = [
-  { id: 'female-classic', gender: 'female', image: `${base}avatars/girl_0.png`, idleImage: `${base}avatars/female-idle.png` },
-  { id: 'male-classic',   gender: 'male',   image: `${base}avatars/boy_0.png`,   idleImage: `${base}avatars/male-idle.png` },
-  { id: 'female-1', gender: 'female', image: `${base}avatars/girl_1.png`, idleImage: `${base}avatars/girl_1-idle.png` },
-  { id: 'male-1',   gender: 'male',   image: `${base}avatars/boy_1.png`, idleImage: `${base}avatars/boy_1-idle.png` },
-  { id: 'female-2', gender: 'female', image: `${base}avatars/girl_2.png`, idleImage: `${base}avatars/girl_2-idle.png` },
-  { id: 'male-2',   gender: 'male',   image: `${base}avatars/boy_2.png`, idleImage: `${base}avatars/boy_2-idle.png` },
-  { id: 'female-3', gender: 'female', image: `${base}avatars/girl_3.png`, idleImage: `${base}avatars/girl_3-idle.png` },
-  { id: 'male-3',   gender: 'male',   image: `${base}avatars/boy_3.png`, idleImage: `${base}avatars/boy_3-idle.png` },
-  { id: 'female-4', gender: 'female', image: `${base}avatars/girl_4.png`, idleImage: `${base}avatars/girl_4-idle.png` },
-  { id: 'male-4',   gender: 'male',   image: `${base}avatars/boy_4.png`, idleImage: `${base}avatars/boy_4-idle.png` },
+  { id: 'female-classic', gender: 'female', image: `${base}avatars/girl_0.png`, head: `${base}heads/girl_0-head.png`, idleImage: `${base}avatars/female-idle.png` },
+  { id: 'male-classic',   gender: 'male',   image: `${base}avatars/boy_0.png`,  head: `${base}heads/boy_0-head.png`, idleImage: `${base}avatars/male-idle.png` },
+  { id: 'female-1', gender: 'female', image: `${base}avatars/girl_1.png`, head: `${base}heads/girl_1-head.png`, idleImage: `${base}avatars/girl_1-idle.png` },
+  { id: 'male-1',   gender: 'male',   image: `${base}avatars/boy_1.png`,  head: `${base}heads/boy_1-head.png`, idleImage: `${base}avatars/boy_1-idle.png` },
+  { id: 'female-2', gender: 'female', image: `${base}avatars/girl_2.png`, head: `${base}heads/girl_2-head.png`, idleImage: `${base}avatars/girl_2-idle.png` },
+  { id: 'male-2',   gender: 'male',   image: `${base}avatars/boy_2.png`,  head: `${base}heads/boy_2-head.png`, idleImage: `${base}avatars/boy_2-idle.png` },
+  { id: 'female-3', gender: 'female', image: `${base}avatars/girl_3.png`, head: `${base}heads/girl_3-head.png`, idleImage: `${base}avatars/girl_3-idle.png` },
+  { id: 'male-3',   gender: 'male',   image: `${base}avatars/boy_3.png`,  head: `${base}heads/boy_3-head.png`, idleImage: `${base}avatars/boy_3-idle.png` },
+  { id: 'female-4', gender: 'female', image: `${base}avatars/girl_4.png`, head: `${base}heads/girl_4-head.png`, idleImage: `${base}avatars/girl_4-idle.png` },
+  { id: 'male-4',   gender: 'male',   image: `${base}avatars/boy_4.png`,  head: `${base}heads/boy_4-head.png`, idleImage: `${base}avatars/boy_4-idle.png` },
 ]
 
-const genders = ['Male', 'Female', 'Non-specified']
-
 const selectedId = ref(avatars[0].id)
-const playerName = ref('')
-const playerGender = ref('Male')
 
 const selected = computed(() => avatars.find(a => a.id === selectedId.value))
+
+// Shown in the profile badge. Change this to user's username.
+const username = ref('Trainer')
 
 // Load every idle sheet up front. If one can't load, show the still picture instead.
 const missingIdle = ref([])
@@ -155,15 +154,10 @@ onMounted(() => {
 })
 
 function start() {
-  const name = playerName.value.trim()
-  if (!name) return
-
   // Same key the trainer room reads from.
   try {
     localStorage.setItem('studydex-trainer-profile', JSON.stringify({
-      name,
-      playerGender: playerGender.value,
-      gender: selected.value.gender, // avatar's gender (the trainer room uses this)
+      gender: selected.value.gender,
       variantId: selected.value.id,
     }))
   } catch {
@@ -176,6 +170,14 @@ function start() {
 
 <template>
   <main class="trainer-page">
+    <!-- profile badge (top left) -->
+    <div class="profile-badge">
+      <div class="head-circle">
+        <img :src="selected.head" alt="" class="head" />
+      </div>
+      <span class="username">{{ username }}</span>
+    </div>
+
     <div class="trainer-scene">
 
       <!-- live sky in the window -->
@@ -240,23 +242,7 @@ function start() {
         </button>
       </div>
 
-      <label for="name">Your name</label>
-      <input id="name" v-model="playerName" maxlength="12" placeholder="Type your name" />
-
-      <p class="field-label">Your gender</p>
-      <div class="gender-options">
-        <button
-          v-for="gender in genders"
-          :key="gender"
-          type="button"
-          :class="['gender-btn', { active: gender === playerGender }]"
-          @click="playerGender = gender"
-        >
-          {{ gender }}
-        </button>
-      </div>
-
-      <button class="start-btn" type="button" :disabled="!playerName.trim()" @click="start">
+      <button class="start-btn" type="button" @click="start">
         Let's go!
       </button>
     </section>
@@ -269,7 +255,7 @@ function start() {
 
 .trainer-page { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #101925; }
 
-/* The room always covers the whole screen (like background-size: cover). */
+/* The room always covers the whole screen (like background-size: cover) */
 .trainer-scene {
   position: absolute;
   left: 50%;
@@ -282,7 +268,7 @@ function start() {
   background: #17243b;
 }
 
-/* ----- background ----- */
+/*background */
 .window-view { position: absolute; left: 32.5%; top: 16.5%; width: 30.5%; height: 33%; z-index: 0; isolation: isolate; overflow: hidden; pointer-events: none; }
 .outdoor-layer { position: absolute; inset: 0; width: 100%; height: 100%; }
 .sky-layer { z-index: 0; }
@@ -313,7 +299,7 @@ function start() {
   to { opacity: 1; }
 }
 
-/* ----- avatar on the carpet ----- */
+/* avatar on the carpet  */
 .trainer-figure {
   position: absolute;
   left: 51%;
@@ -332,7 +318,7 @@ function start() {
   object-position: bottom;
 }
 
-/* Four 512 × 768 crops from the 2048 × 768 idle strips. */
+/* Four 512 × 768 crops from the 2048 × 768 idle strips */
 .trainer-idle {
   width: 100%;
   aspect-ratio: 2 / 3;
@@ -353,7 +339,7 @@ function start() {
   .clouds-image, .stars-image, .trainer-idle { animation: none; }
 }
 
-/* ----- choosing panel ----- */
+/* choosing panel (match the login page) */
 .choose-panel {
   position: absolute;
   top: 50%;
@@ -365,32 +351,46 @@ function start() {
   overflow: auto;
   padding: 20px;
   border-radius: 12px;
-  background: #fffaf0;
-  border: 3px solid #1f3a93;
-  box-shadow: 0 5px 0 #1f3a93;
-  font-family: 'Nunito', sans-serif;
-  color: #17324d;
+  background: #072578;
+  border: 2px solid #ffd117;
+  box-shadow: 3px 3px 6px #232323;
+  font-family: 'Fredoka', sans-serif;
+  color: white;
 }
 
 h1 {
-  margin: 0 0 14px;
-  font: 700 22px 'Fredoka', sans-serif;
-  color: #1f3a93;
+  margin: 0 0 16px;
+  font: 600 24px 'Fredoka', sans-serif;
+  text-align: center;
+  color: white;
+  -webkit-text-stroke: 4px black;
+  paint-order: stroke fill;
 }
 
 .list {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 22px;
 }
 
 .pick {
   padding: 4px;
-  border: 3px solid #d6cdb8;
-  border-radius: 8px;
-  background: #a9dff7;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  box-shadow: 3px 3px 6px #232323;
   cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.pick:hover {
+  transform: scale(1.1);
+}
+
+.pick.active {
+  border-color: #ffd117;
+  background: #fff2b0;
 }
 
 .pick img {
@@ -400,68 +400,89 @@ h1 {
   object-fit: contain;
 }
 
-.pick.active {
-  border-color: #1f3a93;
-  background: #ffd000;
-}
-
-label,
-.field-label {
-  display: block;
-  margin: 0 0 6px;
-  font-weight: 800;
-}
-
-.gender-options {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 18px;
-}
-
-.gender-btn {
-  flex: 1;
-  padding: 8px 4px;
-  border: 3px solid #d6cdb8;
-  border-radius: 8px;
-  background: #fff;
-  color: #17324d;
-  font: 700 13px 'Nunito', sans-serif;
-  cursor: pointer;
-}
-
-.gender-btn.active {
-  border-color: #1f3a93;
-  background: #ffd000;
-}
-
-input {
-  width: 100%;
-  padding: 10px 12px;
-  margin-bottom: 16px;
-  border: 3px solid #1f3a93;
-  border-radius: 8px;
-  font: 700 16px 'Nunito', sans-serif;
+/* same as the login button */
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
 }
 
 .start-btn {
-  width: 100%;
-  padding: 12px;
+  display: block;
+  width: 205px;
+  height: 40px;
+  margin: 0 auto;
+  border: 2px solid #ffd117;
   border-radius: 12px;
-  background: #ffd000;
-  color: #2b2100;
-  border: 3px solid #1f3a93;
-  box-shadow: 0 5px 0 #1f3a93;
-  font: 700 18px 'Nunito', sans-serif;
+  background-color: #072578;
+  color: white;
+  box-shadow: 3px 3px 6px #232323;
+  font: 500 20px 'Fredoka', sans-serif;
   cursor: pointer;
 }
 
-.start-btn:active {
-  transform: translateY(4px);
-  box-shadow: 0 1px 0 #1f3a93;
+.start-btn:hover {
+  transform: scale(1.2);
+  border-color: transparent;
+  background:
+    linear-gradient(#072578, #072578) padding-box,
+    conic-gradient(from var(--angle), #b8860b, #ffd117, #fff2b0, #ffd117, #b8860b, #daa520, #b8860b) border-box;
+  animation: spin-border 3s linear infinite;
 }
 
-.start-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+@keyframes spin-border {
+  to { --angle: 360deg; }
+}
+
+/* ----- profile badge (top left) ----- */
+.profile-badge {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Fredoka', sans-serif;
+}
+
+.head-circle {
+  width: 104px;
+  height: 104px;
+  overflow: hidden;
+  border-radius: 50%;
+  border: 4px solid #ffd117;
+  outline: 4px solid #072578;
+  background: radial-gradient(circle at 50% 35%, #d4f1ff, #a9dff7 70%);
+  box-shadow: 3px 3px 8px #232323;
+}
+
+.head {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.username {
+  position: relative;
+  margin-top: -16px;
+  max-width: 140px;
+  padding: 3px 14px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: #072578;
+  border: 2px solid #ffd117;
+  border-radius: 12px;
+  box-shadow: 3px 3px 6px #232323;
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .profile-badge { top: 12px; left: 12px; }
+  .head-circle { width: 72px; height: 72px; border-width: 3px; outline-width: 3px; }
+  .username { margin-top: -12px; font-size: 13px; padding: 2px 10px; }
 }
 </style>
