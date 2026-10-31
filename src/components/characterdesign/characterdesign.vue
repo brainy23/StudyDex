@@ -132,8 +132,11 @@ const avatars = [
   { id: 'male-4',   gender: 'male',   image: `${base}avatars/boy_4.png`, idleImage: `${base}avatars/boy_4-idle.png` },
 ]
 
+const genders = ['Male', 'Female', 'Non-specified']
+
 const selectedId = ref(avatars[0].id)
 const playerName = ref('')
+const playerGender = ref('Male')
 
 const selected = computed(() => avatars.find(a => a.id === selectedId.value))
 
@@ -159,7 +162,8 @@ function start() {
   try {
     localStorage.setItem('studydex-trainer-profile', JSON.stringify({
       name,
-      gender: selected.value.gender,
+      playerGender: playerGender.value,
+      gender: selected.value.gender, // avatar's gender (the trainer room uses this)
       variantId: selected.value.id,
     }))
   } catch {
@@ -238,6 +242,19 @@ function start() {
 
       <label for="name">Your name</label>
       <input id="name" v-model="playerName" maxlength="12" placeholder="Type your name" />
+
+      <p class="field-label">Your gender</p>
+      <div class="gender-options">
+        <button
+          v-for="gender in genders"
+          :key="gender"
+          type="button"
+          :class="['gender-btn', { active: gender === playerGender }]"
+          @click="playerGender = gender"
+        >
+          {{ gender }}
+        </button>
+      </div>
 
       <button class="start-btn" type="button" :disabled="!playerName.trim()" @click="start">
         Let's go!
@@ -388,10 +405,33 @@ h1 {
   background: #ffd000;
 }
 
-label {
+label,
+.field-label {
   display: block;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
   font-weight: 800;
+}
+
+.gender-options {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.gender-btn {
+  flex: 1;
+  padding: 8px 4px;
+  border: 3px solid #d6cdb8;
+  border-radius: 8px;
+  background: #fff;
+  color: #17324d;
+  font: 700 13px 'Nunito', sans-serif;
+  cursor: pointer;
+}
+
+.gender-btn.active {
+  border-color: #1f3a93;
+  background: #ffd000;
 }
 
 input {
