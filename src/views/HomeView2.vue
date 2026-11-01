@@ -1141,6 +1141,10 @@ function deleteTodo(todo) {
   if (editingTodoId.value === todo.id) editingTodoId.value = null
 }
 
+async function playSound(action) {
+  const audio  = new Audio(`/sound/${action}.wav`);
+  await audio.play();
+}
 
 onMounted(() => {
   weatherPageActive = true
@@ -2235,7 +2239,7 @@ function isTestTimeSelected(value) {
       :class="{ 'quest-toggle-open': goalsOpen }"
       :aria-expanded="goalsOpen"
       aria-controls="daily-goals-panel"
-      @click="goalsOpen = !goalsOpen"
+      @click="goalsOpen = !goalsOpen; (goalsOpen?playSound('phoneOpenSound'):playSound('phoneCloseSound'))"
     >
       <svg
         class="quest-toggle-icon"
