@@ -5,6 +5,7 @@ import Landing from '../components/landing/landing.vue'
 import Landinginfo from '../components/landing-info/landing-info.vue'
 import Characterdesign from '../components/characterdesign/characterdesign.vue'
 import 'bootstrap/dist/css/bootstrap.min.css'
+import Tutorialguide from '../components/tutorialguide/tutorialguide.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -34,6 +35,11 @@ const router = createRouter({
       path: '/characterdesign',
       name: 'characterdesign',
       component: Characterdesign,
+    },
+    {
+      path: '/tutorialguide',
+      name: 'tutorialguide',
+      component: Tutorialguide,
     },
   ],
 })
