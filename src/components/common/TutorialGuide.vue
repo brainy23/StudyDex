@@ -105,14 +105,6 @@ function finish() {
 @media (prefers-reduced-motion: reduce) {
   .spotlight { transition: none !important; animation: none !important; }
 }
-@media (max-width: 600px) {
-  .scene { left: 12px; right: 12px; bottom: 12px; gap: 0; }
-  .teacher { display: none; }
-  .box { min-width: 0; padding: 16px; }
-  .box p { font-size: 16px; }
-  .buttons { flex-wrap: wrap; }
-  .buttons button { min-height: 44px; padding: 8px 12px; }
-}
 
 /* darken the screen when nothing is highlighted */
 .tutorial.dim {
@@ -210,4 +202,13 @@ button.skip {
 button:disabled {
   opacity: 0.4;
 }
+@media (max-width: 600px) {
+  .scene { left: 12px; right: 12px; bottom: 12px; gap: 0; }
+  .teacher { display: none; }
+  .box { min-width: 0; padding: 16px; }
+  .box p { font-size: 16px; }
+  .buttons { flex-wrap: wrap; }
+  .buttons button { min-height: 44px; padding: 8px 12px; }
+}
+
 </style>

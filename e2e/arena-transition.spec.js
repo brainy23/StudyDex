@@ -1,9 +1,10 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import process from 'node:process'
 import { test, expect } from '@playwright/test'
 import { labUrl, mockLab, timerKey } from './fixtures/lab'
 
-const evidenceRoot = fileURLToPath(
+const evidenceRoot = process.env.STUDYDEX_E2E_EVIDENCE_DIR || fileURLToPath(
   new URL('../docs/images/arena-transition/after/', import.meta.url),
 )
 const arenaUrl = /\/quiz\?subject=science&topic_id=water-topic$/

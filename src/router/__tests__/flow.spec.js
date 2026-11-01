@@ -88,6 +88,30 @@ function mockGeolocation(implementation) {
   return getCurrentPosition
 }
 
+it('keeps the tutorial protected even when the old development bypass flag is set', async () => {
+  vi.stubEnv('VITE_SKIP_AUTH', 'true')
+  try {
+    const router = await open('/tutorial')
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(wrapper.find('.tutorial').exists()).toBe(false)
+  } finally { vi.unstubAllEnvs() }
+})
+
+it.each([
+  ['Study', '/study-decks'], ['Quiz', '/quiz'], ['Bag', '/trainer'],
+])('connects the Town %s navigation button to %s', async (label, destination) => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date(2026, 10, 2, 12))
+  getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
+  const router = await open('/home')
+  const nav = wrapper.findAll('.sd-navbar .sd-nav-button').find(button => button.find('.sd-nav-label').text() === label)
+  expect(nav.attributes('disabled')).toBeUndefined()
+  await nav.trigger('click')
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  expect(router.currentRoute.value.path).toBe(destination)
+})
+
 async function returnToTown(router) {
   await router.push('/quiz')
   await flushPromises()

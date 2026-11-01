@@ -190,6 +190,7 @@
 }
 @media (max-width: 53rem) {
   .study-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .study-room-mode .study-utilities { grid-column: 1 / -1; }
   .study-header { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'title actions'; gap: 16px; }
   .study-header-context { text-align: right; }
   .study-utilities { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }

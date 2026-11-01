@@ -1,5 +1,6 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useReducedMotion } from 'motion-v'
 
 const props = defineProps({
   pokename: {
@@ -11,6 +12,9 @@ const props = defineProps({
 const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 
 const sprite = ref('')
+const stillSprite = ref('')
+const reducedMotion = useReducedMotion()
+const displayedSprite = computed(() => reducedMotion.value ? stillSprite.value : sprite.value)
 const loading = ref(false)
 const error = ref('')
 const isAnimated = ref(false)
@@ -44,6 +48,7 @@ async function fetchBackwardSprite(name, signal) {
 
   return {
     image,
+    still: pokemon.sprites?.back_default || '',
     animated: Boolean(animated)
   }
 }
@@ -57,6 +62,7 @@ watch(
     onCleanup(() => controller.abort())
 
     sprite.value = ''
+    stillSprite.value = ''
     error.value = ''
     isAnimated.value = false
     loading.value = false
@@ -76,6 +82,7 @@ watch(
       if (controller.signal.aborted) return
 
       sprite.value = result.image
+      stillSprite.value = result.still
       isAnimated.value = result.animated
     } catch (cause) {
       if (controller.signal.aborted) return
@@ -91,7 +98,13 @@ watch(
 )
 
 function handleImageError() {
+  if (displayedSprite.value !== stillSprite.value && stillSprite.value) {
+    sprite.value = stillSprite.value
+    isAnimated.value = false
+    return
+  }
   sprite.value = ''
+  stillSprite.value = ''
   error.value = 'The Pokémon image could not load.'
 }
 </script>
@@ -107,15 +120,16 @@ function handleImageError() {
     </span>
 
     <img
-      v-else-if="sprite"
-      :key="sprite"
-      :src="sprite"
+      v-else-if="displayedSprite"
+      :key="displayedSprite"
+      :src="displayedSprite"
       :alt="`${pokename}, rear view`"
       :title="isAnimated ? pokename : `${pokename} — static back sprite`"
       class="pokemon-back-sprite"
       draggable="false"
       @error="handleImageError"
     />
+    <span v-else class="sprite-status">Rear-view preview unavailable.</span>
   </div>
 </template>
 

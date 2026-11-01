@@ -125,15 +125,15 @@ const date = () => {
         Study Decks
       </RouterLink>
 
-      <RouterLink to="/progress" class="nav-btn">
+      <RouterLink to="/dashboard" class="nav-btn">
         My Progress
       </RouterLink>
 
-      <RouterLink to="/pokepacks" class="nav-btn">
+      <RouterLink to="/rewards" class="nav-btn">
         View Pokepacks
       </RouterLink>
 
-      <RouterLink to="/" class="nav-btn">
+      <RouterLink to="/home" class="nav-btn">
         Home
       </RouterLink>
     </div>

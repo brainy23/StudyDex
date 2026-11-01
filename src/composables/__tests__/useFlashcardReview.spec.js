@@ -65,10 +65,10 @@ function checkDeck(review, source = revisionCards) {
   expect(remembered.length).toBeLessThanOrEqual(source.length)
 }
 
-function rate(review, rating) {
+function rate(review, rating, source = revisionCards) {
   review.flipped.value = true
   review.rate(rating)
-  checkDeck(review)
+  checkDeck(review, source)
   expect(review.flipped.value).toBe(false)
 }
 
@@ -130,4 +130,37 @@ it('ignores ratings until revealed and ignores unknown ratings', () => {
   expect(review.reviews.value).toBe(0)
   expect(review.queue.value).toEqual(revisionCards)
   expect(review.remembered.value).toEqual([])
+})
+
+it('keeps Hard cards in the round after other cards without counting them as remembered', () => {
+  const review = useFlashcardReview()
+  review.start(cards)
+  rate(review, 'hard', cards)
+  expect(review.current.value.id).toBe('1')
+  expect(review.queue.value.map(card => card.id)).toEqual(['1', '2', '3', '0', '4'])
+  expect(review.remembered.value).toEqual([])
+})
+
+it('restores exact revision progress and the revealed side after optional practice', () => {
+  const first = useFlashcardReview()
+  first.start(cards)
+  rate(first, 'remembered', cards)
+  rate(first, 'practise', cards)
+  first.flipped.value = true
+  const saved = first.snapshot()
+  const returning = useFlashcardReview()
+  returning.start(cards)
+  expect(returning.restore(saved)).toBe(true)
+  expect(returning.snapshot()).toEqual(saved)
+  checkDeck(returning, cards)
+})
+
+it('rejects stale or duplicate-card snapshots without corrupting the current deck', () => {
+  const review = useFlashcardReview()
+  review.start(cards)
+  const original = review.snapshot()
+  expect(review.restore({ ...original, queue: ['0', '0', '2', '3', '4'] })).toBe(false)
+  expect(review.snapshot()).toEqual(original)
+  expect(review.restore({ ...original, cardIds: ['old-deck'] })).toBe(false)
+  expect(review.snapshot()).toEqual(original)
 })

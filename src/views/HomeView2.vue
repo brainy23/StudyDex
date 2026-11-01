@@ -1908,7 +1908,7 @@ watch(
   <nav class="sd-navbar" aria-label="Main navigation">
 
     <!-- STUDY -->
-    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
+    <button type="button" class="sd-nav-button" :disabled="buddySleeping" @click="router.push({ name: 'study-decks' })">
       <span class="sd-icon-tile sd-icon-study">
         <svg viewBox="0 0 32 32" aria-hidden="true">
           <path
@@ -1923,7 +1923,7 @@ watch(
     </button>
 
     <!-- QUIZ -->
-    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
+    <button type="button" class="sd-nav-button" :disabled="buddySleeping" @click="router.push({ name: 'quiz' })">
       <span class="sd-icon-tile sd-icon-quiz">
         <svg viewBox="0 0 32 32" aria-hidden="true">
           <path
@@ -1980,6 +1980,7 @@ watch(
       "
 
       :disabled="buddySleeping"
+      @click="router.push({ name: 'trainer' })"
     >
       <span class="sd-icon-tile sd-icon-bag">
         <svg viewBox="0 0 32 32" aria-hidden="true">

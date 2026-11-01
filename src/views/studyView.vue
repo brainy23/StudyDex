@@ -43,6 +43,7 @@ const resources = reactive({})
 const progress = reactive({})
 const practiceResume = ref(null)
 const practiceError = ref('')
+const practiceBusy = ref(false)
 let alive = true
 let generation = 0
 
@@ -188,7 +189,7 @@ function goToArena() {
 }
 
 async function startBossPractice(snapshot) {
-  if (!profile.value || !topic.value || !router.hasRoute('surprise-boss')) return
+  if (practiceBusy.value || arenaState.active || !profile.value || !topic.value || !router.hasRoute('surprise-boss')) return
   practiceError.value = ''
   const questions = makeQuestions((currentResources.value?.flashcards.data || []).map(card => ({
     front: card.front_text, back: card.back_text,
@@ -209,12 +210,13 @@ async function startBossPractice(snapshot) {
     return
   }
   timer.pause('Your timer is paused for optional boss practice. Resume when you return.')
+  practiceBusy.value = true
   try {
     const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
     if (failure) practiceError.value = 'Boss practice navigation was cancelled. Your deck is unchanged.'
   } catch {
     practiceError.value = 'Could not open boss practice. Your deck and paused timer are preserved.'
-  }
+  } finally { practiceBusy.value = false }
 }
 
 function restorePractice() {
@@ -330,7 +332,7 @@ onUnmounted(() => {
           <a href="#study-topics">Choose subject or topic</a>
         </div> -->
         <div class="study-header-actions">
-          <button class="study-button" :disabled="!topic || arenaState.active" @click="goToArena">Go to Poké Arena</button>
+          <button class="study-button" :disabled="!topic || arenaState.active || practiceBusy" @click="goToArena">Go to Poké Arena</button>
           <p v-if="arenaState.error" class="study-note" role="alert">{{ arenaState.error }}</p>
           <p v-if="practiceError" class="study-note" role="alert">{{ practiceError }}</p>
           <p v-if="topic" class="study-note">
@@ -429,11 +431,8 @@ onUnmounted(() => {
               :resource="activeResource"
               :review-concept-ids="reviewConceptIds"
               :show-overview="route.query.review === 'topic'"
-              :arena-busy="arenaState.active"
-              :buddy="buddy"
-              :topic-id="topic.id"
-              :practice-enabled="router.hasRoute('surprise-boss')"
-              :practice-resume="practiceResume"
+              :arena-busy="arenaState.active || practiceBusy"
+              v-bind="mode === 'flashcards' ? { buddy, topicId: topic.id, practiceEnabled: router.hasRoute('surprise-boss'), practiceResume } : {}"
               @progress="updateProgress"
               @complete="completeTopic"
               @mode="setMode"

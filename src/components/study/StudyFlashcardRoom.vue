@@ -55,8 +55,10 @@ const pokemon = computed(() => props.buddy?.pokemon?.sprite_url ? {
 .room-controls :deep(.study-ratings) { margin: 0; gap: 6px; justify-content: center; }
 .room-controls :deep(button) { padding: 8px; font-size: clamp(11px, 1cqw, 16px); }
 .room-timer :deep(.study-timer) { border: 0; background: transparent; padding: 0; box-shadow: none; color: white; }
+.room-timer { padding: .4cqw; }
 .room-timer :deep(h2) { font-size: 12px; margin-bottom: 4px; }
-.room-timer :deep(.study-timer-display) { font-size: clamp(24px, 3.2cqw, 48px); }
+.room-timer :deep(.study-timer-display) { font-size: clamp(24px, 2.8cqw, 40px); }
+.room-timer :deep(p) { margin-bottom: 2px; }
 .room-timer :deep(.study-button-row) { margin: 2px 0; gap: 4px; }
 .room-timer :deep(button) { padding: 5px; font-size: 11px; }
 @container (max-width: 1000px) {

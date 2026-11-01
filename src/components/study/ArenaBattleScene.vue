@@ -42,6 +42,5 @@ const opponentFailed = ref(false)
 .battle-content :deep(.study-option) { border-radius: 10px; }
 @container (min-width: 1050px) {
   .battle-art { min-height: 590px; }
-  .battle-content { margin-top: -17%; z-index: 1; }
 }
 </style>

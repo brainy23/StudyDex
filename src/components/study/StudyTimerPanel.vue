@@ -21,7 +21,7 @@ const {
 
 <template>
   <section class="study-panel study-timer" aria-labelledby="focus-timer-heading">
-    <h2 id="focus-timer-heading">Study Block Timer</h2>
+    <h2 id="focus-timer-heading" :class="{ 'visually-hidden': compact }">Study Block Timer</h2>
     <p class="study-eyebrow">
       {{ state.phase === 'focus' ? '25-minute focus' : '5-minute break' }}
     </p>
