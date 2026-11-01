@@ -99,6 +99,12 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         name: 'surprise-boss',
         component: () => import('../views/SurpriseBossView.vue'),
         meta: { requiresAuth: true },
+      },
+      {
+        path: '/tutorial',
+        name: 'tutorial',
+        component: HomeView,
+        meta: { requiresAuth: true, tutorial: true },
       }
     ],
   })
@@ -116,6 +122,7 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         },
       }
     }
+    if (import.meta.env.VITE_SKIP_AUTH === 'true') return true
     if (!to.meta.requiresAuth) return true
     try {
       const { data, error } = await getSupabase().auth.getSession()
