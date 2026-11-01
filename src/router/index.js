@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import TimerView from '../views/timerView.vue'
-import RewardsView from '../views/rewardsView.vue'
+import RewardsView from '../views/rewardsView2.vue'
 import QuizView from '@/views/quizView.vue'
 import StarterView from '../views/starterSelectionView.vue'
 
