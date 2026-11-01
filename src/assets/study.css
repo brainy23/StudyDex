@@ -52,6 +52,9 @@
 .study-mode-nav button[aria-pressed='true'] { background: #ffd841; border-color: #a98608; }
 .study-topic-label { margin-bottom: 12px; }
 .study-utilities { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.study-room-mode .main-study { grid-column: 1 / -1; grid-row: 2; }
+.study-room-mode .study-buddy { grid-column: 1; }
+.study-room-mode .study-utilities { grid-column: 2 / -1; }
 .study-utilities h2 { font-size: 21px; }
 .study-timer { text-align: center; }
 .study-timer-display { font-size: clamp(44px, 4vw, 60px); line-height: 1.2; font-variant-numeric: tabular-nums; font-weight: 650; }

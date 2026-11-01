@@ -100,6 +100,12 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         name: 'surprise-boss',
         component: () => import('../views/SurpriseBossView.vue'),
         meta: { requiresAuth: true },
+      },
+      {
+        path: '/tutorial',
+        name: 'tutorial',
+        component: HomeView,
+        meta: { requiresAuth: true, tutorial: true },
       }
     ],
   })

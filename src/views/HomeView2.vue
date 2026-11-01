@@ -8,7 +8,8 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
-
+import TutorialGuide from '../components/common/TutorialGuide.vue'
+import { useWeatherLocation } from '../composables/useWeatherLocation'
 
 // VUE TYPERR
 import VueTyper from 'vue3-typer'
@@ -18,8 +19,20 @@ import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
-
 const router = useRouter()
+
+
+// tutorial
+const tutorialRequested = ref(false)
+const { savedLocation: tutorialWeatherLocation } = useWeatherLocation()
+const showTutorial = computed(() => tutorialRequested.value && Boolean(tutorialWeatherLocation.value))
+watch(() => router.currentRoute.value.meta.tutorial, value => { tutorialRequested.value = value === true }, { immediate: true })
+
+function finishTutorial() {
+  tutorialRequested.value = false
+  router.replace({ name: 'home' })
+}
+
 
 const asset = '/town/'
 
@@ -995,8 +1008,9 @@ async function selectProfileAction(action) {
     router.push({ name: 'studentdashboard' })
   } else if (action === 'settings') {
     profileNotice.value = 'Settings will include sound and accessibility options.'
-  }
-}
+  } else if (action === 'tutorial') {
+    tutorialRequested.value = true
+}}
 
 // QUEST DEVICE TABS
 const questTab = ref('todos')
@@ -1316,6 +1330,9 @@ watch(
        ================================================= -->
   <div class="world-page">
 
+  <!-- tutorial -->
+   <TutorialGuide v-if="showTutorial" @done="finishTutorial"/>
+
     <!-- STUDYDEX LOGO AND CLOCK -->
   <header class="sd-hud">
     <img
@@ -1431,6 +1448,11 @@ watch(
 
         <button type="button" @click="selectProfileAction('progress')">
           <span>My Progress</span>
+          <span aria-hidden="true">›</span>
+        </button>
+
+        <button type="button" @click="selectProfileAction('tutorial')">
+          <span>Replay Tutorial</span>
           <span aria-hidden="true">›</span>
         </button>
 
