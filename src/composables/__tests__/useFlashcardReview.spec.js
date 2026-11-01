@@ -126,7 +126,7 @@ it('ignores ratings until revealed and ignores unknown ratings', () => {
   review.start(revisionCards)
   for (const rating of ['practise', 'remembered']) review.rate(rating)
   review.flipped.value = true
-  for (const rating of ['unknown', 'again', 'hard', 'easy']) review.rate(rating)
+  for (const rating of ['unknown', 'again', 'easy']) review.rate(rating)
   expect(review.reviews.value).toBe(0)
   expect(review.queue.value).toEqual(revisionCards)
   expect(review.remembered.value).toEqual([])

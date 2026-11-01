@@ -95,6 +95,12 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         component: QuizView,
         meta: { requiresAuth: true },
       },
+      {
+        path: '/surprise-boss',
+        name: 'surprise-boss',
+        component: () => import('../views/SurpriseBossView.vue'),
+        meta: { requiresAuth: true },
+      }
     ],
   })
 

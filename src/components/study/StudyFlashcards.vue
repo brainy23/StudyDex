@@ -3,23 +3,35 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useFlashcardReview } from '../../composables/useFlashcardReview'
 import { studyErrorMessage } from '../../services/studyService'
 import StudyImage from './StudyImage.vue'
+import StudyFlashcardRoom from './StudyFlashcardRoom.vue'
+import StudyTimerPanel from './StudyTimerPanel.vue'
 
 const props = defineProps({
   resource: { type: Object, required: true },
   arenaBusy: { type: Boolean, default: false },
+  buddy: { type: Object, default: null },
+  topicId: { type: String, default: null },
+  practiceResume: { type: Object, default: null },
+  practiceEnabled: { type: Boolean, default: false },
 })
-defineEmits(['retry', 'mode', 'arena', 'topics'])
+defineEmits(['retry', 'mode', 'arena', 'topics', 'practice'])
 const content = ref(null)
-const { cards, queue, remembered, reviews, flipped, current, complete, start, rate } =
+const { cards, queue, remembered, reviews, flipped, current, complete, start, rate, snapshot, restore } =
   useFlashcardReview()
+let restoredPractice = null
+function resumePractice() {
+  const resume = props.practiceResume
+  if (resume && resume.id !== restoredPractice && restore(resume.snapshot)) restoredPractice = resume.id
+}
 const cardNumber = computed(() => cards.value.findIndex((card) => card.id === current.value?.id) + 1)
 watch(
   () => props.resource.data,
   (source) => {
-    if (source) start(source)
+    if (source) { start(source); resumePractice() }
   },
   { immediate: true },
 )
+watch(() => props.practiceResume, resumePractice)
 
 async function focusCard() {
   await nextTick()
@@ -40,6 +52,16 @@ function restartDeck() {
 <template>
   <div ref="content" class="study-flashcards">
     <h2>Flashcard Revision</h2>
+    <StudyFlashcardRoom :buddy="buddy">
+    <template #timer><StudyTimerPanel v-if="topicId" :topic-id="topicId" compact /></template>
+    <template #progress>
+      <template v-if="current && !resource.loading && !resource.error">
+        <p class="study-card-position">Card {{ cardNumber }} of {{ cards.length }}</p>
+        <p class="study-review-progress">{{ remembered.length }} / {{ cards.length }} remembered · {{ queue.length }} still to review</p>
+        <progress :value="remembered.length" :max="cards.length" aria-label="Cards remembered" />
+      </template>
+    </template>
+    <template #default>
     <p v-if="resource.loading" class="study-loading" role="status">Loading flashcards…</p>
     <div v-else-if="resource.error" class="study-message" role="alert">
       <p>{{ studyErrorMessage(resource.error, 'Flashcards') }}</p>
@@ -62,11 +84,6 @@ function restartDeck() {
       <button class="study-button study-button-secondary" @click="restartDeck">Restart Deck</button>
     </div>
     <template v-else-if="current">
-      <p class="study-card-position">Card {{ cardNumber }} of {{ cards.length }}</p>
-      <p class="study-review-progress">
-        {{ remembered.length }} / {{ cards.length }} remembered · {{ queue.length }} still to review
-      </p>
-      <progress :value="remembered.length" :max="cards.length" aria-label="Cards remembered" />
       <button
         type="button"
         class="study-flip-card"
@@ -92,6 +109,9 @@ function restartDeck() {
           </span>
         </span>
       </button>
+    </template>
+    </template>
+    <template #controls>
       <div v-if="flipped" class="study-button-row study-ratings">
         <button class="study-button study-remembered" @click="reviewCard('remembered')">
           I Remembered
@@ -99,11 +119,17 @@ function restartDeck() {
         <button class="study-button study-button-secondary" @click="reviewCard('practise')">
           Practise Again
         </button>
+        <button class="study-button study-button-secondary" @click="reviewCard('hard')">Hard</button>
       </div>
+    </template>
+    <template #practice>
       <p class="study-note">
-        Reveal the answer, then choose I Remembered or Practise Again.
+        Reveal the answer, then choose I Remembered, Practise Again, or Hard to revisit it later.
       </p>
       <p class="study-note">Revision progress is kept for this visit only.</p>
+      <button v-if="practiceEnabled && cards.length > 1 && !resource.loading && !resource.error" class="study-button study-button-secondary" :disabled="arenaBusy" @click="$emit('practice', snapshot())">Optional Boss Practice</button>
+      <p v-if="practiceEnabled" class="study-note">Practice uses this deck's flashcard answers. Your deck and paused timer are preserved, with no XP or saved assessment score.</p>
     </template>
+    </StudyFlashcardRoom>
   </div>
 </template>

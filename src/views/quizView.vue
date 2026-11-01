@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import BackToHome from '../components/common/BackToHome.vue'
 import ArenaAssessment from '../components/study/StudyQuiz.vue'
+import ArenaBattleScene from '../components/study/ArenaBattleScene.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudyCatalogue, getStudyQuestions, studyErrorMessage } from '../services/studyService'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
@@ -170,6 +171,7 @@ onUnmounted(() => {
         <RouterLink to="/account" class="study-button">Open Account Settings</RouterLink>
       </div>
       <div v-else class="arena-layout">
+        <ArenaBattleScene :boss="purpose === 'boss_battle'" :title="displayTitle(topic?.name || 'Choose a topic')">
         <section class="study-panel main-study" aria-label="Assessment content">
           <p v-if="topic" class="study-eyebrow">{{ displayTitle(subject?.name) }} · {{ displayTitle(topic.name) }}</p>
           <KeepAlive>
@@ -188,6 +190,7 @@ onUnmounted(() => {
             <p v-else>Choose an available {{ displayTitle(subject?.name) }} topic for {{ displayTitle(profile.school_level?.name || 'your school level') }}.</p>
           </div>
         </section>
+        </ArenaBattleScene>
 
         <aside id="arena-topics" class="study-panel study-topic-browser" aria-labelledby="arena-topics-heading">
           <h2 id="arena-topics-heading">Assessment topics</h2>
@@ -234,7 +237,8 @@ onUnmounted(() => {
 
 .arena-header { margin-bottom: 24px; }
 .arena-links { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
-.arena-layout { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 20px; align-items: start; }
+.arena-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+.arena-layout .main-study { background: transparent; border: 0; box-shadow: none; padding: 0; }
 .arena-topic-status { display: block; margin-top: 4px; }
 @media (max-width: 53rem) {
   .arena-layout { grid-template-columns: minmax(0, 1fr); }

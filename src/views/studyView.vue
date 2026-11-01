@@ -20,6 +20,7 @@ import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { useArenaTransition } from '../composables/useArenaTransition'
 import { displayTitle } from '../utils/displayText'
 import { arenaLocation, requestedConceptIds, requestedTopicId } from '../utils/studyNavigation'
+import { readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import '../assets/study.css'
 
 const route = useRoute()
@@ -40,6 +41,8 @@ const buddyLoading = ref(false)
 const topicSelection = ref(null)
 const resources = reactive({})
 const progress = reactive({})
+const practiceResume = ref(null)
+const practiceError = ref('')
 let alive = true
 let generation = 0
 
@@ -184,6 +187,47 @@ function goToArena() {
   })
 }
 
+async function startBossPractice(snapshot) {
+  if (!profile.value || !topic.value || !router.hasRoute('surprise-boss')) return
+  practiceError.value = ''
+  const questions = makeQuestions((currentResources.value?.flashcards.data || []).map(card => ({
+    front: card.front_text, back: card.back_text,
+  })))
+  if (!questions.length) {
+    practiceError.value = 'This deck needs at least two different text answers for boss practice.'
+    return
+  }
+  const encounter = {
+    id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
+    createdAt: Date.now(), owner: profile.value.id, topic: topic.value.id,
+    topicName: topic.value.name, questions, status: 'pending',
+    index: 0, choice: null, score: 0, finished: false,
+    returnQuery: { ...route.query, mode: 'flashcards' }, snapshot,
+  }
+  if (!writeEncounter(encounter)) {
+    practiceError.value = 'Boss practice needs browser session storage to preserve your deck.'
+    return
+  }
+  timer.pause('Your timer is paused for optional boss practice. Resume when you return.')
+  try {
+    const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
+    if (failure) practiceError.value = 'Boss practice navigation was cancelled. Your deck is unchanged.'
+  } catch {
+    practiceError.value = 'Could not open boss practice. Your deck and paused timer are preserved.'
+  }
+}
+
+function restorePractice() {
+  practiceResume.value = null
+  const encounter = readEncounter()
+  if (!encounter || !['pending', 'complete'].includes(encounter.status) ||
+      encounter.owner !== profile.value?.id || encounter.topic !== topic.value?.id ||
+      !currentResources.value?.flashcards.data) return
+  practiceResume.value = { id: encounter.id, snapshot: encounter.snapshot }
+  encounter.status = 'returned'
+  writeEncounter(encounter)
+}
+
 async function reviseAnotherTopic() {
   await router.push({
     name: 'study-decks',
@@ -255,6 +299,7 @@ function retryMode() {
 }
 
 watch(() => topic.value?.id, loadTopic)
+watch(() => [profile.value?.id, topic.value?.id, currentResources.value?.flashcards.data], restorePractice)
 watch(() => [selectingTopic.value, catalogue.value.topics], ([selecting]) => {
   if (selecting) catalogue.value.topics.forEach((item) => loadTopic(item.id))
 })
@@ -269,7 +314,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <main class="study-page">
+  <main class="study-page" :class="{ 'study-room-mode': mode === 'flashcards' }">
     <div class="study-layout study-screen">
       <header class="study-header study-panel">
         <div class="study-header-title">
@@ -287,6 +332,7 @@ onUnmounted(() => {
         <div class="study-header-actions">
           <button class="study-button" :disabled="!topic || arenaState.active" @click="goToArena">Go to Poké Arena</button>
           <p v-if="arenaState.error" class="study-note" role="alert">{{ arenaState.error }}</p>
+          <p v-if="practiceError" class="study-note" role="alert">{{ practiceError }}</p>
           <p v-if="topic" class="study-note">
             Choose when you are ready to explore this topic's quiz.
           </p>
@@ -384,12 +430,17 @@ onUnmounted(() => {
               :review-concept-ids="reviewConceptIds"
               :show-overview="route.query.review === 'topic'"
               :arena-busy="arenaState.active"
+              :buddy="buddy"
+              :topic-id="topic.id"
+              :practice-enabled="router.hasRoute('surprise-boss')"
+              :practice-resume="practiceResume"
               @progress="updateProgress"
               @complete="completeTopic"
               @mode="setMode"
               @retry="retryMode"
               @arena="goToArena"
               @topics="reviseAnotherTopic"
+              @practice="startBossPractice"
             />
           </KeepAlive>
           <div v-if="!selectingTopic && (!topic || !activeResource)" class="study-empty">
@@ -417,7 +468,7 @@ onUnmounted(() => {
         </section>
 
         <aside class="study-utilities" aria-label="Study tools">
-          <StudyTimerPanel :topic-id="topic?.id || null" />
+          <StudyTimerPanel v-if="mode !== 'flashcards' || !topic" :topic-id="topic?.id || null" />
           <section
             id="study-topics"
             class="study-panel study-topic-browser"

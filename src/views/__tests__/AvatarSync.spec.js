@@ -45,7 +45,7 @@ async function open(path = '/trainer') {
   ] })
   await router.push(path)
   await router.isReady()
-  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router], stubs: { ClockWeather: true } } })
   await flushPromises()
   return router
 }

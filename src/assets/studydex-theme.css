@@ -1,0 +1,4 @@
+:root { --studydex-font: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
+body { font-family: var(--studydex-font); }
+/* Button and navbar rules remain owned by each view. */
+.poke-lab-page, .arena-page, .trainer-page { font-family: var(--studydex-font); }

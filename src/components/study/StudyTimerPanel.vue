@@ -1,7 +1,10 @@
 <script setup>
 import { useTimer } from '../timer/useTimer'
 
-defineProps({ topicId: { type: String, default: null } })
+defineProps({
+  topicId: { type: String, default: null },
+  compact: { type: Boolean, default: false },
+})
 const {
   state,
   display,
@@ -46,17 +49,17 @@ const {
         End Session
       </button>
     </div>
-    <p v-if="state.notice" class="study-note" role="status">{{ state.notice }}</p>
-    <p class="study-focus-count">
+    <p v-if="state.notice && !compact" class="study-note" role="status">{{ state.notice }}</p>
+    <p v-if="!compact" class="study-focus-count">
       {{ dailyCompleted }} focus {{ dailyCompleted === 1 ? 'block' : 'blocks' }} completed today
     </p>
-    <progress
+    <progress v-if="!compact"
       :value="Math.min(dailyCompleted, DAILY_LIMIT)"
       :max="DAILY_LIMIT"
       aria-label="Daily focus goal"
     />
-    <p class="study-note">Daily goal: {{ DAILY_LIMIT }} blocks · Singapore time</p>
-    <p class="study-note">
+    <p v-if="!compact" class="study-note">Daily goal: {{ DAILY_LIMIT }} blocks · Singapore time</p>
+    <p v-if="!compact" class="study-note">
       {{
         recoveryAvailable
           ? 'Saved on this browser.'

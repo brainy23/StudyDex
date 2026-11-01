@@ -20,7 +20,7 @@ it('hides recall controls until revealed and keeps remembered cards when Practis
   })
   expect(wrapper.find('.study-ratings').exists()).toBe(false)
   await wrapper.get('.study-flip-card').trigger('click')
-  expect(wrapper.get('.study-ratings').findAll('button').map((item) => item.text())).toEqual(['I Remembered', 'Practise Again'])
+  expect(wrapper.get('.study-ratings').findAll('button').map((item) => item.text())).toEqual(['I Remembered', 'Practise Again', 'Hard'])
   await button(wrapper, 'I Remembered').trigger('click')
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 2 remembered')
   expect(wrapper.get('.study-card-front').text()).toContain('Question B')

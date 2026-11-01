@@ -18,13 +18,38 @@ export function useFlashcardReview() {
   }
 
   function rate(rating) {
-    if (!current.value || !flipped.value || !['practise', 'remembered'].includes(rating)) return
+    if (!current.value || !flipped.value || !['practise', 'remembered', 'hard'].includes(rating)) return
     const card = queue.value.shift()
     if (rating === 'remembered') remembered.value.push(card.id)
-    else queue.value.splice(Math.min(1, queue.value.length), 0, card)
+    else queue.value.splice(Math.min(rating === 'hard' ? 3 : 1, queue.value.length), 0, card)
     reviews.value++
     flipped.value = false
   }
 
-  return { cards, queue, remembered, reviews, flipped, current, complete, start, rate }
+  function snapshot() {
+    return {
+      cardIds: cards.value.map(card => card.id),
+      queue: queue.value.map(card => card.id),
+      remembered: [...remembered.value],
+      reviews: reviews.value,
+      flipped: flipped.value,
+    }
+  }
+
+  function restore(saved) {
+    if (!saved || JSON.stringify(saved.cardIds) !== JSON.stringify(cards.value.map(card => card.id))) return false
+    if (!Array.isArray(saved.queue) || !Array.isArray(saved.remembered)) return false
+    const ids = [...saved.queue, ...saved.remembered]
+    if (ids.length !== cards.value.length || new Set(ids).size !== ids.length ||
+        !cards.value.every(card => ids.includes(card.id)) ||
+        !Number.isSafeInteger(saved.reviews) || saved.reviews < saved.remembered.length) return false
+    const byId = new Map(cards.value.map(card => [card.id, card]))
+    queue.value = saved.queue.map(id => byId.get(id))
+    remembered.value = [...saved.remembered]
+    reviews.value = saved.reviews
+    flipped.value = Boolean(saved.flipped)
+    return true
+  }
+
+  return { cards, queue, remembered, reviews, flipped, current, complete, start, rate, snapshot, restore }
 }
