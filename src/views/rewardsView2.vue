@@ -47,7 +47,7 @@ const packMessage = computed(() =>
 const owned = ref(new Set([4, 25]))
 
 // Only base forms can be pulled: every Pokemon in #1-151 that does not evolve
-// from another Pokemon in #1-151 (legendaries left out). Delete IDs to trim the pool.
+// from another Pokemon in #1-151. Delete IDs to trim the pool.
 const BASE_FORMS = [
     1, 4, 7, 10, 13, 16, 19, 21, 23, 25, 27, 29, 32, 35, 37, 39, 41, 43, 46, 48,
     50, 52, 54, 56, 58, 60, 63, 66, 69, 72, 74, 77, 79, 81, 83, 84, 86, 88, 90, 92,
@@ -508,7 +508,7 @@ function backToPacks() {
 <style scoped>
     main{
         min-height: 100vh;
-        background-image: url('/backgrounds/rewards_bg.png');
+        background-image:  linear-gradient(rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.2)),url('/backgrounds/rewards_bg.png');
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
@@ -518,6 +518,7 @@ function backToPacks() {
         touch-action: none;
         font-family: Verdana, Geneva, Tahoma, sans-serif;
     }
+
 
     main.browsing{ touch-action: auto; }
     main:not(.browsing){ overflow: hidden; }
@@ -584,7 +585,7 @@ function backToPacks() {
 
     /* ---------- the pack artwork ---------- */
     .pack-art{
-        --pw: 200px;
+        --pw: 240px;
         display: block;
         position: relative;
         width: var(--pw);
@@ -603,7 +604,9 @@ function backToPacks() {
         background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.75) 50%, transparent 62%) 130% 0 / 250% 100% no-repeat;
         animation: sweep 3.4s ease-in-out infinite;
     }
-    .opened .shine-sweep{ opacity: 0; }
+    /* .opened .shine-sweep{ opacity: 0; } */
+    .opened .shine-sweep, .stage-ready .shine-sweep{ display: none; }
+
 
     /* ---------- opening scene ---------- */
     .packopen{
@@ -630,7 +633,7 @@ function backToPacks() {
         --s: 1;
         display: grid;
         position: relative;
-        width: 200px;
+        width: 240px;
         align-self: center;
         user-select: none;
         -webkit-user-select: none;
@@ -638,7 +641,7 @@ function backToPacks() {
         transform: perspective(900px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) scale(var(--s));
         transition: transform 0.9s cubic-bezier(0.2, 0.9, 0.25, 1.1);
     }
-    .stage-zoom, .stage-ready, .stage-tear, .stage-rise, .stage-flip, .stage-revealed{ --s: 1.8; }
+    .stage-zoom, .stage-ready, .stage-tear, .stage-rise, .stage-flip, .stage-revealed{ --s: 1.65; }
     .stage-ready, .stage-tear, .stage-rise{ transition: transform 0.1s ease-out; }
     .stage-flip, .stage-revealed{ transition: transform 0.6s cubic-bezier(0.2, 0.9, 0.25, 1); }
     .stage-ready{ cursor: grab; }
@@ -648,7 +651,10 @@ function backToPacks() {
     .pack-wrap > .pack-art{
         grid-area: 1 / 1;
         justify-self: center;
-        transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.6s ease 0.1s;
+        /* transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.6s ease 0.1s; */
+    }
+    .pack-wrap.opened > .pack-art{
+    transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.3, 1), opacity 0.6s ease 0.1s;
     }
     .pack-body{
         z-index: 2;
@@ -705,7 +711,7 @@ function backToPacks() {
         left: 50%;
         top: -3px;
         transform: translateX(-50%);
-        width: 150px;
+        width: 75%;
         height: var(--tear);
         box-sizing: border-box;
         border-bottom: 3px dashed rgba(255, 255, 255, 0.95);
@@ -749,21 +755,18 @@ function backToPacks() {
     }
 
     /* glowing rip that follows your drag, in the Pokemon's type colours */
-    .rip-glow{
+    /* .rip-glow{
         position: absolute;
-        /* left: var(--glow-l, 0%);
-        top: var(--tear); */
-        left: 22px;
-        top: 27px;
-        /* width: calc(var(--tp, 0) * 100%); */
-        width:151px;
+        left: 11%;
+        top: calc(var(--tear) - 1px);
+        width: 75.5%;
         height: 0;
         z-index: 5;
         border-top: 3px solid #fff;
         box-shadow: 0 0 14px 4px rgb(var(--c1)), 0 0 30px 8px rgb(var(--c2) / 0.7);
         opacity: min(calc(var(--tp, 0) * 40), 0.65);
         pointer-events: none;
-    }
+    } */
     .rip-head{
         position: absolute;
         left: var(--head, 0%);
@@ -815,10 +818,10 @@ function backToPacks() {
     .opened .rc{ opacity: 1; }
     .stage-tear .rc, .stage-rise .rc{ transform: translateY(-45%); }
     .stage-rise .rc{ animation: wobble 0.25s ease-in-out infinite alternate; }
-    .stage-flip .rc{ transform: translateY(-6%) scale(1.25); }
+    .stage-flip .rc{ transform: scale(1.1); }
     .stage-revealed .rc{
         opacity: 0;
-        transform: translateY(-6%) scale(1.6);
+        transform: scale(1.1);
         transition: transform 0.9s ease-out, opacity 0.6s ease 0.1s;
     }
 
@@ -924,6 +927,8 @@ function backToPacks() {
     .stage-revealed .big{
         opacity: 0.8;
         transform: scale(1.2);
+        animation: big-fade 2.5s 1.5s ease-out forwards;
+
     }
 
     .rays{
@@ -947,7 +952,7 @@ function backToPacks() {
         left: 50%;
         top: 60%;
         translate: -50% -50%;
-        scale: 2.8;
+        scale: 3;
         z-index: 4;
         pointer-events: none;
         animation: pop 0.6s 0.25s cubic-bezier(0.2, 1.5, 0.4, 1) both;
@@ -1086,6 +1091,7 @@ function backToPacks() {
         text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
         pointer-events: none;
         animation: pulse 1s ease-in-out infinite;
+        text-align: center;
     }
 
     .reveal-info{
@@ -1103,8 +1109,9 @@ function backToPacks() {
         font-weight: bold;
         letter-spacing: 0.3em;
         text-transform: uppercase;
-        color: #fff;
-        background: linear-gradient(90deg, rgb(var(--c1)), rgb(var(--c2)));
+        color: rgb(100, 45, 0);
+        background-color: rgb(255, 215, 37);
+        box-shadow: 0 4px 0 rgb(200, 160, 0);
         border-radius: 999px;
         padding: 4px 22px 4px 26px;
         box-shadow: 0 0 22px rgb(var(--c1) / 0.8);
@@ -1433,6 +1440,11 @@ function backToPacks() {
         0%, 100%{ translate: 0 0; }
         50%{ translate: 0 -10px; }
     }
+
+    @keyframes big-fade{
+    from{ opacity: 0.8; }
+    to{ opacity: 0; }
+}
 
     /* ---------- small screens and reduced motion ---------- */
     @media (max-height: 760px){
