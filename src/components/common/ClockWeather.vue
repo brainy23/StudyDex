@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
-import { useTimeOfDay } from '@/composables/useTimeofDay'
+import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import {
   DEFAULT_WEATHER_LOCATION,
   useWeatherLocation
@@ -39,7 +39,8 @@ const assetBase = import.meta.env.BASE_URL
 // TIME AND LIGHTING
 // =====================================================
 
-// Same device-time lighting configuration used by TownBackground.
+// The composable supplies the live clock and the accessible time-of-day label.
+// Keep this import path matched to the actual composable filename, including case.
 const { currentTime, lighting } = useTimeOfDay()
 
 const displayTime = computed(() =>
@@ -61,18 +62,18 @@ const locationButton = ref(null)
 
 const locationLabel = computed(() => {
   if (locationBusy.value) {
-    return 'Finding your location…'
+    return 'Finding location…'
   }
 
   if (savedLocation.value?.source === 'device') {
-    return 'Device location'
+    return 'Current location'
   }
 
   if (savedLocation.value) {
     return 'Singapore (default)'
   }
 
-  return 'Choose weather location'
+  return 'Choose location'
 })
 
 // =====================================================
@@ -613,52 +614,43 @@ onUnmounted(() => {
       <img v-if="weatherImage" :src="weatherImage" class="weather-icon" alt="" draggable="false" />
       <span v-else class="weather-placeholder" aria-hidden="true">{{ loading ? '…' : '—' }}</span>
       <span class="clock-time">{{ displayTime }}</span>
-      <span class="clock-divider" aria-hidden="true"></span>
-      <span class="clock-period">{{ displayPeriod }}</span>
     </div>
 
-    <!-- Location indicator below the clock -->
-    <div class="weather-location-row">
-      <div class="weather-location-badge" role="status">
-        <span class="location-badge-icon" aria-hidden="true">
-          {{
-            locationBusy
-              ? '🧭'
-              : savedLocation?.source === 'device'
-                ? '📍'
-                : '🏝️'
-          }}
+    <!-- One badge, aligned with the clock, with its edit control inside. -->
+    <div class="weather-location-badge">
+      <span class="location-badge-status" role="status">
+        <span class="location-badge-icon" aria-hidden="true">{{ locationBusy ? '🧭' : '📍' }}</span>
+        <span class="location-badge-label">
+          {{ locationLabel }}
         </span>
-
-        <span>
-          {{
-            locationBusy
-              ? 'Finding your location…'
-              : savedLocation?.source === 'device'
-                ? 'Weather near you'
-                : savedLocation
-                  ? 'Singapore weather'
-                  : 'Choose your weather location'
-          }}
-        </span>
-
-        <span
-          v-if="savedLocation && !locationBusy"
-          class="location-badge-tag"
-        >
-          {{ savedLocation.source === 'device' ? 'Device' : 'Default' }}
-        </span>
-      </div>
-
+      </span>
       <button
         ref="locationButton"
         type="button"
         class="location-change-button"
+        title="Change location"
         aria-label="Change weather location"
         aria-haspopup="dialog"
         @click.stop="openLocationDialog"
       >
-        Change <span aria-hidden="true">✎</span>
+
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          aria-hidden="true"
+        >
+          <path d="M3.2 20.8 5 15.2 16.7 3.5a1.8 1.8 0 0 1 2.5 0l1.3 1.3a1.8 1.8 0 0 1 0 2.5L8.8 19Z" />
+          <path d="m5 15.2 3.8 3.8" />
+          <path d="m15.7 4.5 3.8 3.8" />
+          <path d="m3.2 20.8 3.5-1.1-2.4-2.4Z" fill="currentColor" stroke="none" />
+        </svg>
+
       </button>
     </div>
     <p v-if="locationNotice" class="location-feedback" role="status">{{ locationNotice }}</p>
@@ -762,21 +754,9 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-.clock-divider {
-  flex-shrink: 0;
-  width: 1px;
-  height: 24px;
-  background: rgb(255 255 255 / 40%);
-}
-
-.clock-period {
-  color: #eef6ff;
-  font-size: 16px;
-  font-weight: 700;
-}
-
 @media (max-width: 600px) {
   .clock-weather {
+    flex-wrap: wrap;
     gap: 8px;
     padding: 9px 13px;
   }
@@ -791,64 +771,9 @@ onUnmounted(() => {
     font-size: 19px;
   }
 
-  .clock-period {
-    font-size: 12px;
-  }
-
-  .clock-divider {
-    height: 20px;
-  }
-}
-
-.clock-weather-widget { display: inline-flex; flex-direction: column; align-items: flex-start; max-width: 100%; }
-
-.location-settings {
-  pointer-events: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  flex-shrink: 0;
-
-  min-height: 40px;
-  margin-left: 6px;
-  padding: 8px 12px;
-
-  border-radius: 12px;
-  background: #ffde59;
-
-  font-family: inherit;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
-
-  cursor: pointer;
-  transition: background-color 150ms ease, transform 150ms ease;
-}
-
-.location-settings:hover {
-  background: #ffe990;
-  transform: translateY(-1px);
-}
-
-.location-settings:active {
-  transform: translateY(2px);
-}
-
-@media (max-width: 600px) {
-  .clock-weather {
-    flex-wrap: wrap;
-  }
-
-  .location-settings {
-    margin-left: 0;
-    padding: 7px 10px;
-    font-size: 11px;
-  }
 }
 
 .location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: 12px; }
-
 
 /* =========================================
    STUDYDEX LOCATION MODAL
@@ -971,7 +896,7 @@ onUnmounted(() => {
 
   transition:
     transform 180ms ease,
-background-color 180ms ease,
+    background-color 180ms ease,
     box-shadow 180ms ease;
 }
 
@@ -1071,95 +996,69 @@ background-color 180ms ease,
     transition: none;
   }
 }
+/* Both pills share the same left edge, regardless of their widths. */
+.clock-weather-widget {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+  padding: 0;
+}
+.clock-weather-widget > .clock-weather {
+  align-self: flex-start;
+  margin: 0;
+  box-sizing: border-box;
+}
 .weather-location-badge {
   display: inline-flex;
   align-items: center;
   align-self: flex-start;
-  gap: 7px;
-
+  gap: 8px;
   max-width: 100%;
-  margin-top: 8px;
-  padding: 6px 11px;
-
+  box-sizing: border-box;
+  margin: 8px 0 0;
+  padding: 4px 5px 4px 11px;
   border: 1px solid #eadbb6;
   border-radius: 999px;
   background: #fff9e8;
   color: #665536;
   box-shadow: 0 3px 0 rgb(75 58 29 / 12%);
-
   font-family: inherit;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.4;
 }
-
-.location-badge-icon {
-  flex-shrink: 0;
-  font-size: 15px;
-}
-
-.location-badge-tag {
-  flex-shrink: 0;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: #e0efdc;
-  color: #456b40;
-  font-size: 9px;
-  font-weight: 800;
-}
-
-@media (max-width: 600px) {
-  .weather-location-badge {
-    font-size: 10px;
-    padding: 5px 9px;
-  }
-}
-
-.weather-location-row {
-  display: flex;
+.location-badge-status {
+  display: inline-flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  max-width: 100%;
-  margin-top: 8px;
+  gap: 6px;
+  min-width: 0;
 }
-
-.weather-location-row .weather-location-badge {
-  margin-top: 0;
-  align-self: auto;
-}
-
+.location-badge-icon { flex-shrink: 0; font-size: 15px; }
+.location-badge-label { overflow-wrap: anywhere; }
 .location-change-button {
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-
-  min-height: 34px;
-  padding: 6px 11px;
-
-  border: 1px solid #d6b73a;
-  border-radius: 999px;
-  background: #ffde59;
-  color: #5b4724;
-  box-shadow: 0 2px 0 rgb(75 58 29 / 16%);
-
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #745b2b;
+  box-shadow: none;
   font-family: inherit;
-  font-size: 11px;
-  font-weight: 800;
+  line-height: 1;
   cursor: pointer;
-
-  transition: background-color 150ms ease, transform 150ms ease;
+  transition: background-color 150ms ease;
 }
-
-.location-change-button:hover {
-  background: #ffe990;
-  transform: translateY(-1px);
+.location-change-button:hover { background: #ffedb5; }
+.location-change-button:active { background: #ffe28b; }
+@media (max-width: 600px) {
+  .weather-location-badge { font-size: 10px; padding-left: 9px; }
 }
-
-.location-change-button:active {
-  transform: translateY(1px);
-}
-
 </style>
