@@ -51,13 +51,6 @@ const route = useRoute()
       >
         Manage Quizzes
       </RouterLink>
-      <RouterLink
-        to="/admin-quiz"
-        class="nav-item"
-        :class="{ active: route.path === '/admin-rewards' }"
-      >
-        Manage Rewards
-      </RouterLink>
 
       <!-- Logout Button -->
       <button type="button" class="nav-item logout-btn">
