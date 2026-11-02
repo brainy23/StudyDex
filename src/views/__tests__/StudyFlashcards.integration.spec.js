@@ -59,9 +59,9 @@ async function open() {
       { path: '/quiz', name: 'quiz', component: { template: '<div>Arena</div>' } },
     ],
   })
-  await router.push({ name: 'study-decks', query: { mode: 'flashcards' } })
+  await router.push({ name: 'study-decks', query: { mode: 'flashcards', topic_id: 'topic-1' } })
   await router.isReady()
-  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router], stubs: { ClockWeather: true } } })
   await flushPromises()
 }
 
@@ -83,9 +83,10 @@ it('uses the verified profile level in actual supabase-js requests and reviews a
   ])
   for (const card of revisionCards) {
     expect(wrapper.get('.study-card-front .study-card-text').text()).toBe(card.front_text)
-    expect(wrapper.get('.study-card-back .study-card-text').text()).toBe(card.back_text)
+    expect(wrapper.find('.study-card-back').exists()).toBe(false)
     await wrapper.get('.study-flip-card').trigger('click')
-    await button('I Remembered').trigger('click')
+    expect(wrapper.get('.study-card-back .study-card-text').text()).toBe(card.back_text)
+    await button('Easy').trigger('click')
   }
   expect(wrapper.get('.study-completion').text()).toContain('15 unique cards remembered · 15 total review attempts')
   await button('Restart Deck').trigger('click')

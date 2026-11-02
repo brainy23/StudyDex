@@ -35,7 +35,7 @@ watch(() => props.practiceResume, resumePractice)
 
 async function focusCard() {
   await nextTick()
-  content.value?.querySelector('.study-flip-card, .study-completion h3')?.focus()
+  content.value?.querySelector('.study-flip-card, .study-completion h2, .study-completion h3')?.focus()
 }
 
 function reviewCard(choice) {
@@ -47,10 +47,13 @@ function restartDeck() {
   start(cards.value)
   focusCard()
 }
+
+function flipCard() { flipped.value = !flipped.value }
 </script>
 
 <template>
-  <div ref="content" class="study-flashcards">
+  <div ref="content" :class="$slots.room ? 'study-review-controller' : 'study-flashcards'">
+    <slot name="room" :review="{ cards, queue, remembered, reviews, flipped, current, complete, cardNumber }" :rate="reviewCard" :flip="flipCard" :restart="restartDeck" :snapshot="snapshot">
     <h2>Flashcard Revision</h2>
     <StudyFlashcardRoom :buddy="buddy">
     <template #timer><StudyTimerPanel v-if="topicId" :topic-id="topicId" compact /></template>
@@ -131,5 +134,6 @@ function restartDeck() {
       <p v-if="practiceEnabled" class="study-note">Practice uses this deck's flashcard answers. Your deck and paused timer are preserved, with no XP or saved assessment score.</p>
     </template>
     </StudyFlashcardRoom>
+    </slot>
   </div>
 </template>

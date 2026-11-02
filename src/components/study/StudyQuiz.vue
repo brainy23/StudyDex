@@ -23,10 +23,20 @@ function reviewQuestions() {
   reviewing.value = false
   index.value = 0
 }
+
+function select(optionId) { if (current.value?.options.some(option => option.id === optionId)) answers[current.value.id] = optionId }
+function previous() { if (index.value > 0) index.value-- }
+function next() {
+  if (!answers[current.value?.id]) return
+  if (index.value < questions.value.length - 1) index.value++
+  else if (allChosen.value) reviewing.value = true
+}
+function preview() { previewing.value = true }
 </script>
 
 <template>
   <div class="study-quiz">
+    <slot name="battle" :assessment="{ questions, current, index, answers, reviewing, previewing, title, allChosen }" :select="select" :previous="previous" :next="next" :preview="preview" :review="reviewQuestions">
     <div class="study-button-row study-quiz-types" aria-label="Question set">
       <button
         class="study-button study-button-secondary"
@@ -128,5 +138,6 @@ function reviewQuestions() {
         </div>
       </template>
     </template>
+    </slot>
   </div>
 </template>

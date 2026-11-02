@@ -465,7 +465,7 @@ it.each(['/quiz', '/study-decks', '/trainer', '/account', '/dashboard', '/reward
     const router = await open(path)
     await vi.dynamicImportSettled()
     await flushPromises()
-    const home = wrapper.get('a.back-to-home')
+    const home = wrapper.get('a[href="/home"]')
     expect(home.attributes('href')).toBe('/home')
     await home.trigger('click')
     await flushPromises()
@@ -479,7 +479,7 @@ it('pauses the running study timer when returning to Town with the shared link',
   const router = await open('/study-decks')
   await wrapper.findAll('button').find((button) => button.text() === 'Start Study Session').trigger('click')
   expect(useTimer().state.status).toBe('running')
-  await wrapper.get('a.back-to-home').trigger('click')
+  await wrapper.get('a[href="/home"]').trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/home')
   expect(useTimer().state.status).toBe('paused')
@@ -487,7 +487,7 @@ it('pauses the running study timer when returning to Town with the shared link',
 
 it('keeps Town behind login when a signed-out visitor follows the shared link', async () => {
   const router = await open('/rewards')
-  await wrapper.get('a.back-to-home').trigger('click')
+  await wrapper.get('a[href="/home"]').trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.name).toBe('login')
   expect(wrapper.find('.world-page').exists()).toBe(false)

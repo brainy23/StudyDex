@@ -33,6 +33,7 @@ vi.mock('../../services/studyService', async () => ({
 let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 25, name: 'pikachu', sprites: { front_default: '' } }) }))
   localStorage.clear()
   useTimer().endSession()
   getCurrentProfile.mockResolvedValue(structuredClone(studentProfile))
@@ -49,9 +50,10 @@ afterEach(() => {
   useTimer().endSession()
   wrapper?.unmount()
   vi.useRealTimers()
+  vi.unstubAllGlobals()
 })
 
-async function open(query = {}) {
+async function open(query = { topic_id: 'topic-1' }) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -61,13 +63,27 @@ async function open(query = {}) {
       { path: '/account', component: { template: '<div>Account</div>' } },
     ],
   })
-  await router.push({ name: 'study-decks', query })
+  await router.push({ name: 'study-decks', query: 'topic_id' in query || 'topic' in query ? query : { topic_id: 'topic-1', ...query } })
   await router.isReady()
-  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router], stubs: { ClockWeather: true } } })
   await flushPromises()
   return router
 }
 const button = (text) => wrapper.findAll('button').find((item) => item.text() === text)
+async function chooseSubject(name) {
+  if (button('Topics')) await button('Topics').trigger('click')
+  const back = wrapper.find('.picker-back')
+  if (back.exists()) await back.trigger('click')
+  const subject = wrapper.findAll('.arena-picker .bubble-card').find(item => item.get('strong').text() === name)
+  await subject.trigger('click')
+  await flushPromises()
+}
+async function chooseTopic(name) {
+  const topic = wrapper.findAll('.arena-picker .topic-grid .bubble-card').find(item => item.get('strong').text() === name)
+  await topic.trigger('click')
+  await flushPromises()
+}
+
 
 it('uses the registered level automatically, shows ordered goals, and never asks for a level', async () => {
   await open()
@@ -76,13 +92,10 @@ it('uses the registered level automatically, shows ordered goals, and never asks
   expect(wrapper.findAll('.study-goals li').map((item) => item.text())).toEqual(
     studyLesson.goals.map((goal) => goal.goal_text),
   )
-  expect(wrapper.findAll('select')).toHaveLength(1)
-  expect(
-    wrapper
-      .get('#study-subject')
-      .findAll('option')
-      .map((option) => option.text()),
-  ).toEqual(['Mathematics', 'Science'])
+  expect(wrapper.findAll('select')).toHaveLength(0)
+  await button('Topics').trigger('click')
+  await wrapper.get('.picker-back').trigger('click')
+  expect(wrapper.findAll('.arena-picker .bubble-card strong').map(item => item.text())).toEqual(['Mathematics', 'Science'])
   expect(useTimer().state.status).toBe('idle')
 })
 
@@ -108,6 +121,7 @@ it('uses a different registered level and handles a level with no published topi
   getStudyCatalogue.mockResolvedValue({ ...studyCatalogue, topics: [] })
   await open()
   expect(getStudyCatalogue).toHaveBeenCalledWith('level-4')
+  await chooseSubject('Mathematics')
   expect(wrapper.text()).toContain('There are no available Mathematics topics for Primary 4 yet')
   expect(getTopicLesson).not.toHaveBeenCalled()
 })
@@ -185,7 +199,7 @@ it('keeps only Learn and Flashcards in Lab and retains learning progress between
 
 it('switches subjects without substituting sample content and rejects unavailable topic URLs', async () => {
   const router = await open()
-  await wrapper.get('#study-subject').setValue('science')
+  await chooseSubject('Science')
   await flushPromises()
   expect(wrapper.text()).toContain('There are no available Science topics for Primary 3 yet')
   await router.push({ name: 'study-decks', query: { topic: 'other-level-topic' } })
@@ -240,7 +254,7 @@ it('reads real selected buddy stats without blocking content when the buddy is u
     pokemon: { name: 'Pikachu', sprite_url: '/assets/quiz_buddy.png' },
   })
   await open()
-  expect(wrapper.get('.study-buddy').text()).toContain('Level 5 · 72 XP')
+  expect(wrapper.get('.lab-footer').text()).toContain('Level 5 · 72 XP')
   expect(getSelectedStudyBuddy).toHaveBeenCalledWith('student-ash')
   expect(wrapper.find('.study-overview').exists()).toBe(true)
 })
@@ -253,12 +267,12 @@ it('starts on demand, keeps the timer through mode/topic changes, and pauses on 
   await flushPromises()
   expect(useTimer().state.status).toBe('running')
   expect(useTimer().state.deadlineAt).toBe(deadline)
-  await wrapper.get('#study-subject').setValue('science')
+  await chooseSubject('Science')
   await flushPromises()
   expect(useTimer().state.deadlineAt).toBe(deadline)
   await router.push('/home')
   expect(useTimer().state.status).toBe('paused')
-  await router.push('/study-decks')
+  await router.push('/study-decks?topic_id=topic-1')
   await flushPromises()
   expect(button('Resume')).toBeDefined()
   await button('Resume').trigger('click')
@@ -275,20 +289,21 @@ it('retains a 15-card revision when switching modes, topics and an empty subject
   )
   const router = await open({ mode: 'flashcards' })
   await wrapper.get('.study-flip-card').trigger('click')
-  await button('I Remembered').trigger('click')
+  await button('Easy').trigger('click')
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
   await button('Learn').trigger('click')
   await flushPromises()
   await button('Flashcards').trigger('click')
   await flushPromises()
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
-  await button('Second Fixture Topic').trigger('click')
+  await button('Topics').trigger('click')
+  await chooseTopic('Second Fixture Topic')
   await flushPromises()
   await button('Flashcards').trigger('click')
   await flushPromises()
   expect(wrapper.get('.study-card-front').text()).toContain('Second topic fixture')
   expect(getTopicFlashcards).toHaveBeenCalledWith('topic-2')
-  await wrapper.get('#study-subject').setValue('science')
+  await chooseSubject('Science')
   await flushPromises()
   expect(wrapper.text()).toContain('There are no available Science topics')
   await router.push({ name: 'study-decks', query: { topic: 'topic-1', mode: 'flashcards' } })
@@ -310,7 +325,7 @@ it('keeps the running timer deadline and buddy stats unchanged while rating card
   vi.setSystemTime(new Date(Date.now() + 10000))
   timer.sync()
   expect(timer.display.value).toBe('24:50')
-  for (const rating of ['Practise Again', 'I Remembered']) {
+  for (const rating of ['Again', 'Easy']) {
     await wrapper.get('.study-flip-card').trigger('click')
     await button(rating).trigger('click')
     expect(timer.state.deadlineAt).toBe(deadline)
@@ -322,7 +337,7 @@ it('keeps the running timer deadline and buddy stats unchanged while rating card
   await flushPromises()
   expect(timer.state.deadlineAt).toBe(deadline)
   expect(timer.display.value).toBe('24:50')
-  expect(wrapper.get('.study-buddy').text()).toContain('Level 5 · 72 XP')
+  expect(wrapper.get('.lab-footer').text()).toContain('Level 5 · 72 XP')
   expect(getSelectedStudyBuddy).toHaveBeenCalledTimes(1)
   expect(timer.state).not.toHaveProperty('xp')
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
@@ -372,7 +387,7 @@ it('starts a fresh revision after the study page is destroyed and loaded again',
   getTopicFlashcards.mockResolvedValue(structuredClone(revisionCards))
   await open({ mode: 'flashcards' })
   await wrapper.get('.study-flip-card').trigger('click')
-  await button('I Remembered').trigger('click')
+  await button('Easy').trigger('click')
   expect(wrapper.get('.study-review-progress').text()).toContain('1 / 15 remembered')
   wrapper.unmount()
   await open({ mode: 'flashcards' })
@@ -384,7 +399,7 @@ it('starts a fresh revision after the study page is destroyed and loaded again',
 async function completeDeck() {
   while (wrapper.find('.study-flip-card').exists()) {
     await wrapper.get('.study-flip-card').trigger('click')
-    await button('I Remembered').trigger('click')
+    await button('Easy').trigger('click')
   }
 }
 
@@ -421,8 +436,8 @@ it('returns to topic selection with the saved level and opens another populated 
   expect(router.currentRoute.value.query).toEqual({ view: 'topics', mode: 'flashcards', from_topic_id: 'topic-1' })
   expect(wrapper.find('.study-topic-selection').exists()).toBe(true)
   expect(getStudyCatalogue.mock.calls).toEqual([['level-3']])
-  const other = wrapper.get('.study-topic-selection').findAll('button').find((item) => item.text().startsWith('Another Topic'))
-  await other.trigger('click')
+  await chooseSubject('Science')
+  await chooseTopic('Another Topic')
   await flushPromises()
   expect(router.currentRoute.value.query).toEqual({ subject: 'science', topic_id: 'other-topic', mode: 'flashcards' })
   expect(wrapper.get('.study-review-progress').text()).toContain('0 / 1 remembered')

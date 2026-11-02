@@ -1,5 +1,5 @@
 <script setup>
-import { computed, reactive, ref, toRef, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 
 const props = defineProps({
@@ -10,15 +10,24 @@ const props = defineProps({
   },
   live: { type: Boolean, default: true },
   previewHour: { type: Number, default: 12 },
+  paused: { type: Boolean, default: false },
   rainActive: { type: Boolean, default: false },
   // Optional compatibility with existing town pages.
   buddySleeping: { type: Boolean, default: null }
 })
 
 const emit = defineEmits(['sleep-change', 'image-error'])
+const pausedHour = ref(12)
+watch(() => props.paused, paused => {
+  if (!paused) return
+  const now = new Date()
+  pausedHour.value = props.live
+    ? now.getHours() + now.getMinutes() / 60 + now.getSeconds() / 3600
+    : props.previewHour
+}, { immediate: true })
 const { hour, lighting } = useTimeOfDay({
-  live: toRef(props, 'live'),
-  previewHour: toRef(props, 'previewHour')
+  live: computed(() => props.live && !props.paused),
+  previewHour: computed(() => props.paused ? pausedHour.value : props.previewHour)
 })
 
 // One time source for the background and the HomeView sleeping signal.
@@ -158,7 +167,7 @@ const arenaSkyStyle = computed(() => ({ background: `linear-gradient(to bottom, 
 </script>
 
 <template>
-  <div class="town-background" :class="{ 'arena-background': scene === 'arena' || scene === 'boss', 'room-background': scene === 'room', 'lab-background': scene === 'lab' }" aria-hidden="true">
+  <div class="town-background" :class="{ 'arena-background': scene === 'arena' || scene === 'boss', 'room-background': scene === 'room', 'lab-background': scene === 'lab', 'is-paused': paused }" aria-hidden="true">
     <template v-if="scene === 'arena' || scene === 'boss'">
       <!-- SKY -->
       <div
@@ -395,6 +404,7 @@ const arenaSkyStyle = computed(() => ({ background: `linear-gradient(to bottom, 
 
 <style scoped>
 .town-background { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.town-background.is-paused * { animation-play-state: paused !important; transition: none !important; }
 .layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 img.layer { object-fit: fill; }
 .building-lights { filter: saturate(0.65); }

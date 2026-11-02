@@ -65,7 +65,7 @@ async function prepareEntry(page, entry) {
     await page.getByRole('button', { name: 'Flashcards', exact: true }).click()
     for (let index = 0; index < 15; index++) {
       await page.locator('.study-flip-card').click()
-      await page.getByRole('button', { name: 'I Remembered', exact: true }).click()
+      await page.getByRole('button', { name: 'Easy', exact: true }).click()
     }
     await expect(page.locator('.study-completion')).toContainText('Flashcards Completed!')
   }
@@ -80,7 +80,7 @@ async function normalJourney(page, { label, width, height, entry = 'header' }) {
   await prepareEntry(page, entry)
   await mkdir(`${evidenceRoot}/${label}`, { recursive: true })
   await recordFrames(page)
-  const container = entry === 'header' ? '.study-header' : '.study-completion'
+  const container = entry === 'header' ? '.lab-navigation' : '.study-completion'
   await page
     .locator(container)
     .getByRole('button', { name: 'Go to Poké Arena', exact: true })
@@ -108,8 +108,8 @@ async function normalJourney(page, { label, width, height, entry = 'header' }) {
   await page.screenshot({ path: `${evidenceRoot}/${label}/03-reveal.png` })
   await expect(dialog).toHaveCount(0)
   await expect(page.locator('h1')).toBeFocused()
-  await expect(page.locator('h1')).toBeInViewport()
-  await expect(page.locator('.study-quiz h2')).toHaveText('Topic Quiz')
+  await expect(page.locator('.quiz-content')).toBeInViewport()
+  await expect(page.locator('.study-quiz > h2')).toHaveText('Topic Quiz')
   await expect(page.getByRole('button', { name: 'Start Quiz', exact: true })).toBeDisabled()
   await page.screenshot({ path: `${evidenceRoot}/${label}/04-arena.png` })
   const timing = await saveTiming(page, label)
@@ -185,7 +185,7 @@ for (const phase of ['anticipation', 'battle', 'reveal']) {
     const fixture = await mockLab(page)
     await page.goto(labUrl)
     await page
-      .locator('.study-header')
+      .locator('.lab-navigation')
       .getByRole('button', { name: 'Go to Poké Arena', exact: true })
       .click()
     await expect(page.locator('.arena-transition')).toHaveAttribute('data-phase', phase)
@@ -195,7 +195,7 @@ for (const phase of ['anticipation', 'battle', 'reveal']) {
     await expect(page.locator('.arena-transition')).toHaveCount(0)
     const skipToClosedMs = Date.now() - skippedAt
     expect(skipToClosedMs).toBeLessThan(700)
-    await expect(page.locator('.study-quiz h2')).toHaveText('Topic Quiz')
+    await expect(page.locator('.study-quiz > h2')).toHaveText('Topic Quiz')
     expect(fixture.requests.filter((request) => request.table === 'questions')).toHaveLength(1)
     expect(fixture.errors).toEqual([])
     await mkdir(`${evidenceRoot}/skip-${phase}`, { recursive: true })
@@ -216,7 +216,7 @@ test('reduced motion bypasses every animated stage without rendering an overlay'
   await recordFrames(page)
   const startedAt = Date.now()
   await page
-    .locator('.study-header')
+    .locator('.lab-navigation')
     .getByRole('button', { name: 'Go to Poké Arena', exact: true })
     .click()
   await expect(page).toHaveURL(arenaUrl)
@@ -235,7 +235,7 @@ test('enabling reduced motion during playback immediately bypasses the remaining
   await mockLab(page)
   await page.goto(labUrl)
   await page
-    .locator('.study-header')
+    .locator('.lab-navigation')
     .getByRole('button', { name: 'Go to Poké Arena', exact: true })
     .click()
   await expect(page.locator('.arena-transition')).toHaveAttribute('data-phase', 'battle')

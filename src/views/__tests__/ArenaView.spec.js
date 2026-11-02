@@ -25,6 +25,7 @@ const quizQuestions = bossQuestions.map((question, index) => ({
 let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 25, name: 'pikachu', sprites: { front_default: '' } }) }))
   localStorage.clear()
   const completion = useTopicCompletion()
   completion.bindStudent(studentProfile.id, studentProfile.school_level_id)
@@ -35,9 +36,9 @@ beforeEach(() => {
     structuredClone(purpose === 'boss_battle' ? bossQuestions : quizQuestions),
   )
 })
-afterEach(() => wrapper?.unmount())
+afterEach(() => { wrapper?.unmount(); vi.unstubAllGlobals() })
 
-async function open(query = {}, preview = true) {
+async function open(query = { topic_id: 'topic-1' }, preview = true) {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [
@@ -47,14 +48,28 @@ async function open(query = {}, preview = true) {
       { path: '/account', component: { template: '<div>Account Settings</div>' } },
     ],
   })
-  await router.push({ name: 'quiz', query })
+  await router.push({ name: 'quiz', query: 'topic_id' in query || 'topic' in query ? query : { topic_id: 'topic-1', ...query } })
   await router.isReady()
-  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router] } })
+  wrapper = mount({ template: '<RouterView />' }, { global: { plugins: [router], stubs: { ClockWeather: true, Pokemon_Backwards: true } } })
   await flushPromises()
   if (preview) await previewQuestions()
   return router
 }
 const button = (text) => wrapper.findAll('button').find((item) => item.text() === text)
+async function chooseSubject(name) {
+  if (button('Topics')) await button('Topics').trigger('click')
+  const back = wrapper.find('.picker-back')
+  if (back.exists()) await back.trigger('click')
+  const subject = wrapper.findAll('.arena-picker .bubble-card').find(item => item.get('strong').text() === name)
+  await subject.trigger('click')
+  await flushPromises()
+}
+async function chooseTopic(name) {
+  const topic = wrapper.findAll('.arena-picker .topic-grid .bubble-card').find(item => item.get('strong').text() === name)
+  await topic.trigger('click')
+  await flushPromises()
+}
+
 async function previewQuestions() {
   const preview = button('Preview Questions')
   if (preview) await preview.trigger('click')
@@ -67,8 +82,8 @@ it('opens an unlocked quiz using the saved school level, without fetching learni
   expect(getTopicLesson).not.toHaveBeenCalled()
   expect(getTopicFlashcards).not.toHaveBeenCalled()
   expect(wrapper.get('h1').text()).toBe('Poké Arena')
-  expect(wrapper.get('.study-level').text()).toBe('Primary 3')
-  expect(wrapper.findAll('select')).toHaveLength(1)
+  expect(wrapper.get('.arena-reading-progress').text()).toContain('Primary 3')
+  expect(wrapper.findAll('select')).toHaveLength(0)
   expect(wrapper.get('.study-question legend').text()).toBe(quizQuestions[0].question_text)
   expect(wrapper.find('.study-timer').exists()).toBe(false)
   expect(wrapper.find('.study-flashcards').exists()).toBe(false)
@@ -162,13 +177,15 @@ it('loads another topic, preserves the assessment type, and retains choices when
   }])
   const router = await open({ battle: 'boss' })
   await wrapper.find('input[type="radio"]').setValue()
-  await wrapper.get('#arena-subject').setValue('science')
+  await chooseSubject('Science')
   await flushPromises()
+  await chooseTopic('Fixture Science Topic')
   expect(router.currentRoute.value.query).toEqual({ subject: 'science', topic_id: 'science-topic', battle: 'boss' })
   await previewQuestions()
   expect(wrapper.get('.study-question legend').text()).toBe('science-topic boss_battle question')
   expect(getStudyQuestions).toHaveBeenCalledWith('science-topic', 'boss_battle')
-  await wrapper.get('#arena-subject').setValue('maths')
+  await chooseSubject('Mathematics')
+  await chooseTopic('Test Topic')
   await flushPromises()
   expect(wrapper.find('input[type="radio"]').element.checked).toBe(true)
 })
@@ -239,7 +256,7 @@ it('rejects a topic outside the available level catalogue', async () => {
 it('handles a subject without topics and preserves choices when returning', async () => {
   const router = await open()
   await wrapper.find('input[type="radio"]').setValue()
-  await wrapper.get('#arena-subject').setValue('science')
+  await chooseSubject('Science')
   await flushPromises()
   expect(wrapper.text()).toContain('No assessment topics are available')
   expect(wrapper.find('.study-question').exists()).toBe(false)
@@ -274,7 +291,7 @@ it('respects canonical topic_id over legacy topic and does not auto-start a quiz
   })
   const router = await open({ topic_id: 'science-topic', topic: 'topic-1' }, false)
   expect(getStudyQuestions.mock.calls).toEqual([['science-topic', 'quiz']])
-  expect(wrapper.get('.main-study > .study-eyebrow').text()).toBe('Science · Living Things')
+  expect(wrapper.get('.main-study .study-eyebrow').text()).toBe('Science · Living Things')
   expect(wrapper.get('.study-quiz h2').text()).toBe('Topic Quiz')
   expect(wrapper.find('.study-question').exists()).toBe(false)
   expect(button('Start Quiz').attributes('disabled')).toBeDefined()

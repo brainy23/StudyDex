@@ -32,7 +32,7 @@ for (const finish of [false, true]) {
     await expect(page.getByRole('timer')).not.toHaveText('25:00')
     for (let index = 0; index < 3; index++) {
       await page.locator('.study-flip-card').click()
-      await page.getByRole('button', { name: 'I Remembered', exact: true }).click()
+      await page.getByRole('button', { name: 'Easy', exact: true }).click()
     }
     await expect(page).toHaveURL(/\/study-decks\?/)
     const position = await page.locator('.study-card-position').innerText()
@@ -42,7 +42,6 @@ for (const finish of [false, true]) {
     await expect(page).toHaveURL(/\/surprise-boss\?encounter=/)
     const paused = await page.evaluate(key => JSON.parse(localStorage.getItem(key)), timerKey)
     expect(paused.status).toBe('paused')
-    await page.getByRole('button', { name: 'Not Now', exact: true }).click()
     await returnFromPractice(page, finish)
     await expect(page.locator('.study-flip-card')).toBeVisible()
     await expect(page.locator('.study-card-position')).toHaveText(position)
@@ -58,7 +57,7 @@ for (const finish of [false, true]) {
 }
 
 test('tutorial waits for location choice, supports keyboard dismissal, and can be replayed', async ({ page }) => {
-  const { errors } = await mockLab(page)
+  const { errors } = await mockLab(page, { autoDismissWeather: false })
   await mockExternal(page)
   await page.goto('/tutorial')
   await expect(page.getByRole('dialog', { name: 'Choose weather location' })).toBeVisible()
@@ -95,7 +94,7 @@ for (const width of [320, 1440]) {
     await expect(page).toHaveURL(/\/quiz\?subject=science&topic_id=water-topic$/)
     await expect(page.locator('.arena-transition')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Start Quiz', exact: true })).toBeDisabled()
-    await expect(page.locator('.arena-battle-scene')).toBeVisible()
+    await expect(page.locator('.arena-scene')).toBeVisible()
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
     await page.screenshot({ path: testInfo.outputPath('arena.png'), fullPage: true })
     expect(requests.some(request => request.table === 'questions' && request.query.question_purpose === 'eq.quiz')).toBe(true)

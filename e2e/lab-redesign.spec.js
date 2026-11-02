@@ -117,7 +117,7 @@ test('roadmaps, lesson hierarchy, keyboard navigation and water comparison work 
 const arenaEntries = [
   {
     name: 'header',
-    container: '.study-header',
+    container: '.lab-navigation',
     minimumMs: 1800,
     prepare: async () => {},
     skip: async () => {},
@@ -143,10 +143,10 @@ const arenaEntries = [
     prepare: async (page) => {
       await page.getByRole('button', { name: 'Flashcards', exact: true }).click()
       await page.locator('.study-flip-card').click()
-      await page.getByRole('button', { name: 'Practise Again', exact: true }).click()
+      await page.getByRole('button', { name: 'Again', exact: true }).click()
       for (let index = 0; index < 15; index++) {
         await page.locator('.study-flip-card').click()
-        await page.getByRole('button', { name: 'I Remembered', exact: true }).click()
+        await page.getByRole('button', { name: 'Easy', exact: true }).click()
       }
       await expect(page.locator('.study-completion')).toContainText(
         '15 unique cards remembered · 16 total review attempts',
@@ -155,7 +155,7 @@ const arenaEntries = [
       await expect(page.locator('.study-review-progress')).toContainText('0 / 15 remembered')
       for (let index = 0; index < 15; index++) {
         await page.locator('.study-flip-card').click()
-        await page.getByRole('button', { name: 'I Remembered', exact: true }).click()
+        await page.getByRole('button', { name: 'Easy', exact: true }).click()
       }
     },
     skip: async (page, testInfo) => {
@@ -193,8 +193,8 @@ for (const entry of arenaEntries) {
     await expect(page.locator('h1')).toHaveText('Poké Arena')
     await expect(page.locator('h1')).toBeFocused()
     await page.screenshot({ path: testInfo.outputPath('arena-arrival.png') })
-    await expect(page.locator('h1')).toBeInViewport()
-    await expect(page.locator('.study-quiz h2')).toHaveText('Topic Quiz')
+    await expect(page.locator('.quiz-content')).toBeInViewport()
+    await expect(page.locator('.study-quiz > h2')).toHaveText('Topic Quiz')
     await expect(page.getByRole('button', { name: 'Start Quiz', exact: true })).toBeDisabled()
     await expect(page.locator('.study-question')).toHaveCount(0)
     expect(
@@ -266,7 +266,7 @@ test('reduced motion keeps controls functional and makes the Arena handoff immed
   await expect(page.locator('.study-concept h2')).toBeFocused()
   const startedAt = Date.now()
   await page
-    .locator('.study-header')
+    .locator('.lab-navigation')
     .getByRole('button', { name: 'Go to Poké Arena', exact: true })
     .click()
   await expect(page).toHaveURL(/\/quiz\?/)
@@ -278,7 +278,7 @@ test('loading remains visible and a failed Buddy never blocks the lesson', async
   const fixture = await mockLab(page, { deferConcepts: true, buddyFailure: true })
   await page.goto(labUrl)
   await expect(page.locator('.study-learn [role="status"]')).toHaveText('Loading your lesson…')
-  await expect(page.locator('.study-buddy [role="alert"]')).toContainText(
+  await expect(page.locator('.lab-footer [role="alert"]')).toContainText(
     'Buddy temporarily unavailable',
   )
   fixture.releaseConcepts()
@@ -292,6 +292,6 @@ test('direct Arena entry and refresh do not play the battle transition', async (
   await expect(page.locator('h1')).toHaveText('Poké Arena')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.reload()
-  await expect(page.locator('.study-quiz h2')).toHaveText('Topic Quiz')
+  await expect(page.locator('.study-quiz > h2')).toHaveText('Topic Quiz')
   await expect(page.getByRole('dialog')).toHaveCount(0)
 })

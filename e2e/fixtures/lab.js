@@ -46,7 +46,10 @@ export const goals = [
 export const labUrl = '/study-decks?subject=science&topic_id=water-topic'
 export const timerKey = `studydex:focus:v1:${studentProfile.id}`
 
-export async function mockLab(page, { deferConcepts = false, buddyFailure = false } = {}) {
+export async function mockLab(page, { deferConcepts = false, buddyFailure = false, autoDismissWeather = true, questionBank = [] } = {}) {
+  if (autoDismissWeather) await page.addLocatorHandler(page.getByRole('dialog', { name: 'Choose weather location' }), async dialog => {
+    await dialog.getByRole('button', { name: 'Not Now', exact: true }).click()
+  })
   const user = {
     id: studentProfile.id,
     aud: 'authenticated',
@@ -112,7 +115,8 @@ export async function mockLab(page, { deferConcepts = false, buddyFailure = fals
       topic_concepts: concepts,
       flashcards: revisionCards.map((card) => ({ ...card, topic_id: topic.id })),
       user_pokemon: null,
-      questions: [],
+      questions: questionBank.filter(question => `eq.${question.question_purpose}` === url.searchParams.get('question_purpose')),
+      question_options: questionBank.flatMap(question => question.options || []),
     }
     return route.fulfill({ json: tables[table] ?? [], headers })
   })
