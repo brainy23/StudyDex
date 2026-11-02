@@ -227,6 +227,39 @@ const ratingMessage = ref('')
 const focusSeconds = ref(25 * 60)
 const timerRunning = ref(false)
 const timerFinished = ref(false)
+// Visual completion progress only. Server XP must be awarded by your XP service.
+const SESSION_REWARD_LIMIT = 4
+const completedFocusSessions = ref(0)
+const sessionProgressKey = computed(() => profile.value?.id
+  ? `studydex-focus-completions-v1:${profile.value.id}`
+  : null)
+function readSessionCount(key) {
+  try {
+    const count = Number(localStorage.getItem(key))
+    return Number.isFinite(count) ? Math.max(0, Math.min(SESSION_REWARD_LIMIT, Math.floor(count))) : 0
+  } catch { return 0 }
+}
+watch(sessionProgressKey, (key) => {
+  completedFocusSessions.value = key ? readSessionCount(key) : 0
+}, { immediate: true })
+function recordFocusCompletion() {
+  const key = sessionProgressKey.value
+  if (!key) return
+  completedFocusSessions.value = Math.min(SESSION_REWARD_LIMIT,
+    Math.max(completedFocusSessions.value, readSessionCount(key)) + 1)
+  try { localStorage.setItem(key, String(completedFocusSessions.value)) } catch {
+    // Keep progress for this visit if browser storage is unavailable.
+  }
+}
+function syncFocusCompletions(event) {
+  if (event.key === sessionProgressKey.value || event.key === null) {
+    completedFocusSessions.value = sessionProgressKey.value ? readSessionCount(sessionProgressKey.value) : 0
+  }
+}
+onMounted(() => window.addEventListener('storage', syncFocusCompletions))
+onUnmounted(() => window.removeEventListener('storage', syncFocusCompletions))
+
+
 // Paused/idle/completed is always red, even when fewer than two minutes remain.
 const timerBorderColor = computed(() => !timerRunning.value ? '#ff4057' : focusSeconds.value <= 120 ? '#ffd43b' : '#34e782')
 const timerBorderStyle = computed(() => ({ '--timer-border': timerBorderColor.value }))
@@ -240,6 +273,7 @@ function tickFocusTimer() {
     timerRunning.value = false
     timerFinished.value = true
     clearInterval(focusInterval)
+    recordFocusCompletion()
   }
 }
 function pauseFocusTimer() {
@@ -432,22 +466,24 @@ onUnmounted(() => { clearInterval(focusInterval) })
       <section class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
         <TownBackground scene="lab" @image-error="backgroundFailed = true" />
 
-        <!-- This coloured ring overlays the red trim baked into the room artwork. -->
+        <!-- This coloured ring follows the lower-left monitor in the new room artwork. -->
         <div class="timer-frame" aria-hidden="true"></div>
         <!-- Timer screen: paused red, running green, final two minutes yellow. -->
         <section class="lab-screen prompt-screen timer-screen" aria-label="25-minute focus timer">
-          <p class="screen-eyebrow">25-minute focus</p>
+          <div class="focus-session-progress" role="img"
+            :aria-label="`${completedFocusSessions} of ${SESSION_REWARD_LIMIT} study sessions completed`">
+            <span v-for="session in SESSION_REWARD_LIMIT" :key="session"
+              class="focus-session-dot" :class="{ 'is-complete': session <= completedFocusSessions }"
+              aria-hidden="true"></span>
+          </div>
+          <span class="focus-session-count" role="status">{{ completedFocusSessions }} / {{ SESSION_REWARD_LIMIT }} sessions</span>
           <strong class="focus-digits" role="timer" aria-label="Time remaining">{{ focusTime }}</strong>
           <div class="focus-actions">
-            <button @click="timerRunning ? pauseFocusTimer() : startFocusTimer()">{{ timerRunning ? 'Pause' : focusSeconds === 1500 ? 'Start' : focusSeconds === 0 ? 'Start again' : 'Resume' }}</button>
-            <button @click="resetFocusTimer">Reset</button>
+            <button @click="timerRunning ? pauseFocusTimer() : startFocusTimer()">{{ timerRunning ? 'Pause' : 'Start' }}</button>
           </div>
           <span v-if="timerFinished" class="focus-finished" role="status">Session complete — take a break!</span>
         </section>
 
-        <nav class="lab-navigation" aria-label="Room navigation">
-          <button type="button" @click="returnToSelection">Topics</button>
-        </nav>
 
         <!-- Blue screen: question and answer on the same display. -->
         <section class="lab-screen answer-screen" aria-label="Flashcard answer and learning content" tabindex="0" @keydown="handleCardKey">
@@ -767,7 +803,7 @@ onUnmounted(() => { clearInterval(focusInterval) })
 .poke-lab-page .picker-shell h1 { margin: 16px 0 12px; color: white; font-size: clamp(28px, 4vw, 48px); font-weight: 800; text-shadow: 0 3px 18px #0007; }
 .poke-lab-page .picker-intro { margin-bottom: 28px; color: #fff6e3; font-size: 17px; }
 .poke-lab-page .bubble-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px; }
-.poke-lab-page .bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, *background* .18s, box-shadow .18s; }
+.poke-lab-page .bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, background .18s, box-shadow .18s; }
 .poke-lab-page .bubble-card strong { font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
 .poke-lab-page .bubble-card > span:last-child { font-size: 13px; color: #fff5df; }
 .poke-lab-page .bubble-symbol { font-size: 36px; color: #ffe699; text-shadow: 0 0 18px #ffe4a455; }
@@ -1088,5 +1124,34 @@ input:focus-visible {
   position: absolute; width: 1px; height: 1px; padding: 0;
   margin: -1px; overflow: hidden; clip-path: inset(50%);
   white-space: nowrap; border: 0;
+}
+
+/* Coordinates measured against the supplied 1672 x 941 room image. */
+@media (min-width: 1001px) {
+  .study-content .lab-stage { width: 100%; height: 100%; aspect-ratio: auto; }
+  .study-content .lab-stage .timer-screen {
+    left: 8.9%; top: 43.95%; width: 15.5%; height: 14.3%;
+    padding: .45cqw .3cqw; box-sizing: border-box; gap: .2cqw;
+    justify-content: center; align-items: center;
+  }
+  .study-content .lab-stage .timer-frame {
+    left: 8.55%; top: 43.5%; width: 16.2%; height: 15.25%; box-sizing: border-box;
+  }
+  .study-content .lab-stage .answer-screen { left: 32.1%; top: 22%; width: 35.8%; height: 30.8%; box-sizing: border-box; }
+  .study-content .lab-stage .lab-console { left: 33.2%; top: 82.1%; width: 33.6%; height: 12.2%; }
+  .timer-screen .focus-digits { font-size: clamp(24px, 2.7cqw, 48px); }
+}
+.study-content .lab-stage .buddy-chamber {
+  left: 74.5%; top: 39.7%; width: 15%; height: 30.8%;
+  padding: 0; box-sizing: border-box;
+}
+.buddy-sprite { width: 96%; height: 94%; }
+.focus-session-progress { display: flex; justify-content: center; gap: clamp(7px, .8cqw, 14px); }
+.focus-session-dot { width: clamp(8px, .8cqw, 14px); aspect-ratio: 1; border-radius: 50%; border: 2px solid #718aa5; background: #102039; box-sizing: border-box; }
+.focus-session-dot.is-complete { border-color: #fff0ac; background: #ffcf52; box-shadow: 0 0 8px #ffc83db3; }
+.focus-session-count { color: #adcbe5; font-size: clamp(9px, .65cqw, 12px); line-height: 1.2; }
+@media (max-width: 1000px) {
+  .study-content .lab-stage .timer-frame { display: none; }
+  .study-content .lab-stage .buddy-chamber { top: 22.34cqw; height: 17.33cqw; }
 }
 </style>
