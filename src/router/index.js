@@ -5,7 +5,12 @@ import AdminUsers from '@/views/admin/AdminUsers.vue'
 import AdminEducation from '@/views/admin/AdminEducation.vue'
 import AdminQuiz from '@/views/admin/AdminQuiz.vue'
 import AdminAddQuiz from '@/views/admin/AdminAddQuiz.vue'
+
 import AdminQuizDetails from '@/views/admin/AdminQuizDetails.vue'
+
+import AdminAddDeck from '@/views/admin/AdminAddDeck.vue'
+import AdminEducationDetails from '@/views/admin/AdminEducationDetails.vue'
+
 
 
 const router = createRouter({
@@ -38,7 +43,7 @@ const router = createRouter({
       name: 'adminQuiz',
       component: AdminQuiz
     },
-     {
+    {
       path: '/admin-addquiz',
       name: 'adminAddQuiz',
       component: AdminAddQuiz
@@ -46,6 +51,16 @@ const router = createRouter({
       path: '/admin-quiz/:id',
       name: 'adminQuizDetails',
       component: AdminQuizDetails
+
+    },
+    {
+      path: '/admin-adddeck',
+      name: 'adminAddDeck',
+      component: AdminAddDeck
+    },{
+      path: '/admin-education/:id',
+      name: 'adminEducationDetails',
+      component: AdminEducationDetails
     }
 
   ],

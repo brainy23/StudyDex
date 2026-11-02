@@ -1,43 +1,66 @@
-
 <script setup>
 import '@/assets/admincommon.css'
 import AdminNav from '@/components/common/adminNav.vue';
-import { ref, onMounted, computed, reactive, watch } from 'vue';
+import { ref, computed } from 'vue';
 
 // DB team please get rid of sampleData and use Supabase data THANKS
 const sampleData = ref([
   {
-   'id':1,
-   'deck_name': "plus or minus?",
-   'subjects': 'Mathematics',
-   'difficulty': 3,
-   'school_level_id': 1,
-   'pages': 50,
-   'question_purpose': 'quick_check',
-   'question_type': 'T/F'   // ******** T/F means true or false
+    id: 1,
+    concept_title: 'Photosynthesis',
+    topic_name: 'Plant Systems',
+    subjects: 'Science',
+    school_level_id: 5,
+    difficulty: 3,
+    pages: 2,
+    flashcards: [
+      {
+        front_text: 'What is photosynthesis?',
+        back_text: 'The process plants use to make food from sunlight, water and carbon dioxide.',
+      },
+      {
+        front_text: 'What do plants need for photosynthesis?',
+        back_text: 'Sunlight, water and carbon dioxide.',
+      },
+    ],
   },
   {
-   'id':2,
-   'deck_name': "multiply",
-   'subjects': 'Mathematics',
-   'difficulty': 1,
-   'school_level_id': 3,
-   'pages': 33,
-   'question_purpose': 'quick_check',
-   'question_type': 'T/F'
+    id: 2,
+    concept_title: 'Multiplication Basics',
+    topic_name: 'Whole Numbers',
+    subjects: 'Mathematics',
+    school_level_id: 3,
+    difficulty: 2,
+    pages: 2,
+    flashcards: [
+      {
+        front_text: 'What is multiplication?',
+        back_text: 'A quick way of adding the same number many times.',
+      },
+      {
+        front_text: 'What is 6 x 7?',
+        back_text: '42',
+      },
+    ],
   },
   {
-   'id':3,
-   'deck_name': "human",
-   'subjects': 'Science',
-   'difficulty': 3,
-   'school_level_id': 2,
-   'pages': 89,
-   'question_purpose': 'quick_check',
-   'question_type': 'T/F'
+    id: 3,
+    concept_title: 'The Human Skeleton',
+    topic_name: 'Human Body',
+    subjects: 'Science',
+    school_level_id: 2,
+    difficulty: 1,
+    pages: 1,
+    flashcards: [
+      {
+        front_text: 'What are the main functions of the skeleton?',
+        back_text: 'It supports the body, protects organs and allows movement.',
+      },
+    ],
   },
-  
 ]);
+
+/* ---------------- search + sort ---------------- */
 
 const searchQuery = ref('')
 
@@ -45,8 +68,8 @@ const filteredData = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
   if (!query) return sampleData.value;
 
-  return sampleData.value.filter(user =>
-    user.deck_name.toLowerCase().includes(query)
+  return sampleData.value.filter(deck =>
+    (deck.concept_title ?? '').toLowerCase().includes(query)
   )
 })
 
@@ -67,15 +90,16 @@ const displayedDecks = computed(() => {
   if (!sortKey.value) return list
 
   list.sort((a, b) => {
-    let result
-    if (sortKey.value === 'school_level_id') {
-      result = a.school_level_id - b.school_level_id;
-    } else if (sortKey.value === 'pages'){
-      result = a.pages - b.pages;
-    } else if (sortKey.value === 'deck_name'){
-      result = (a.deck_name ?? '').localeCompare(b.deck_name ?? '')
+    let result = 0
+    if (sortKey.value === 'pages') {
+      result = (a.pages ?? 0) - (b.pages ?? 0)
     } else if (sortKey.value === 'difficulty'){
-      result = a.difficulty - b.difficulty
+      result = (a.difficulty ?? 0) - (b.difficulty ?? 0)
+    } else if (sortKey.value === 'school_level_id'){
+      result = (a.school_level_id ?? 0) - (b.school_level_id ?? 0)
+    } else if (['concept_title', 'topic_name', 'subjects', 'school_level_id'].includes(sortKey.value)) {
+      // numeric: true makes "Primary 2" sort before "Primary 10"
+      result = (a[sortKey.value] ?? '').localeCompare(b[sortKey.value] ?? '', undefined, { numeric: true })
     }
     return sortOrder.value === 'asc' ? result : -result
   })
@@ -87,127 +111,29 @@ function arrow(key) {
   return sortOrder.value === 'asc' ? '↑' : '↓';
 }
 
-const showPanel = ref(false)
-const errorMsg = ref('')
+  // flashcards
 
-// options: label shown to user, value stored in the data
-const subjectOptions = ['Mathematics', 'Science']
-const difficultyOptions = ['1', '2', '3']
-const levelOptions = [1, 2, 3, 4, 5, 6].map(n => ({ label: `P${n}`, value: n }))
-const typeOptions = [
-  { label: 'True or False', value: 'T/F' },
-  { label: 'MCQ', value: 'MCQ' },
-]
-const purposeOptions = [
-  { label: 'Quick Check', value: 'quick_check' },
-  { label: 'Quiz', value: 'quiz' },
-  { label: 'Boss Battle', value: 'boss_battle' },
-]
 
-const emptyForm = () => ({
-  deck_name: '',
-  subjects: '',
-  difficulty: '',
-  school_level_id: '',
-  question_type: '',
-  question_purpose: '',
-})
-const form = reactive(emptyForm())
+/* ---------------- view deck panel ---------------- */
 
-function openPanel() {
-  Object.assign(form, emptyForm())
-  questions.value = [];
-  errorMsg.value = ''
-  showPanel.value = true
+const showViewPanel = ref(false)
+const selectedDeck = ref(null)
+
+function openViewPanel(deck) {
+  selectedDeck.value = deck
+  showViewPanel.value = true
 }
 
-function closePanel() {
-  showPanel.value = false
+function closeViewPanel() {
+  showViewPanel.value = false
+  selectedDeck.value = null
 }
 
-function publish() {
-  // 1. existing check for the six main fields
-  const missing = Object.values(form)
-    .filter(val => val === '' || val === null || (typeof val === 'string' && !val.trim()))
-  if (missing.length > 0) {
-    errorMsg.value = 'Please fill in all fields.'
-    return
-  }
+/* ---------------- remove deck ---------------- */
 
-  // 2. check the questions
-  const isMCQ = form.question_type === 'MCQ'
-
-  if (questions.value.length === 0) {
-    errorMsg.value = 'Add at least one question.'
-    return
-  }
-
-  for (let i = 0; i < questions.value.length; i++) {
-    const q = questions.value[i]
-    if (!q.text.trim()) {
-      errorMsg.value = `Question ${i + 1} is missing its question text.`
-      return
-    }
-    if (isMCQ) {
-      if (q.options.some(o => !o.trim())) {
-        errorMsg.value = `Question ${i + 1} needs all four options filled in.`
-        return
-      }
-      if (q.correct === '') {
-        errorMsg.value = `Select the correct option for question ${i + 1}.`
-        return
-      }
-    } else if (q.answer === '') {
-      errorMsg.value = `Select True or False for question ${i + 1}.`
-      return
-    }
-  }
-
-  // 3. build and add the deck
-  const list = sampleData.value ?? []
-  const nextId = list.reduce((max, d) => Math.max(max, d.id), 0) + 1
-
-  sampleData.value = [...list, {
-    id: nextId,
-    deck_name: form.deck_name.trim(),
-    subjects: form.subjects,
-    difficulty: form.difficulty,
-    school_level_id: form.school_level_id,
-    question_purpose: form.question_purpose,
-    question_type: form.question_type,
-
-    pages: questions.value.length,
-    questions: questions.value.map(q => q.text.trim()),
-    question_options: questions.value.map(q => isMCQ ? q.options.map(o => o.trim()) : []),
-    question_answers: questions.value.map(q => isMCQ ? q.options[q.correct].trim() : q.answer),
-    correct_option: questions.value.map(q => isMCQ ? q.correct : null),
-  }]
-
-  errorMsg.value = ''
-  closePanel()
+function removeDeck(id) {
+  sampleData.value = sampleData.value.filter(d => d.id !== id)
 }
-
-const questions = ref([])
-
-function newQuestion() {
-  if (form.question_type === 'MCQ') {
-    return { text: '', options: ['', '', '', ''], correct: '' }
-  }
-  return { text: '', answer: '' }   // T/F
-}
-
-function addQuestion() {
-  questions.value.push(newQuestion())
-}
-
-function removeQuestion(index) {
-  questions.value.splice(index, 1)
-}
-
-// when the user picks / changes the question type, start fresh with one question
-watch(() => form.question_type, (type) => {
-  questions.value = type ? [newQuestion()] : []
-})
 
 </script>
 
@@ -224,7 +150,7 @@ watch(() => form.question_type, (type) => {
           <h1 style="font-weight: 800; font-size: 30px;">StudyDeck Overview</h1>
           <p style="font-size: 14px; color: #7D8095;">View and manage StudyDecks</p>
         </div>
-        <button class="add-quiz-button" @click="openPanel()">+ Add Deck</button>
+        <router-link class="add-quiz-button" to="/admin-adddeck">+ Add Deck</router-link>
       </div>
         <div class="overview-panel">
 
@@ -251,9 +177,9 @@ watch(() => form.question_type, (type) => {
                 <div class="col-2">
                   <button
                     class="sort-button"
-                    @click="toggleSort('deck_name')"
+                    @click="toggleSort('concept_title')"
                   >
-                    Deck Name {{ arrow('deck_name') }}
+                    Deck Name {{ arrow('concept_title') }}
                   </button>
                 </div>
 
@@ -287,9 +213,9 @@ watch(() => form.question_type, (type) => {
                 </div>
 
                 <!-- NEW COLUMN -->
-                <div class="col-1">Question Type</div>
+                <!-- <div class="col-1">Question Type</div>
 
-                <div class="col-1">Question Purpose</div>
+                <div class="col-1">Question Purpose</div> -->
 
                 <div class="col-2">Actions</div>
 
@@ -308,11 +234,11 @@ watch(() => form.question_type, (type) => {
                 <div class="col-2">
                   <div class="user-profile">
                     <div class="user-avatar">
-                      {{ deck.deck_name.charAt(0).toUpperCase() }}
+                      {{ deck.concept_title.charAt(0).toUpperCase() }}
                     </div>
 
                     <span class="username">
-                      {{ deck.deck_name }}
+                      {{ deck.concept_title }}
                     </span>
                   </div>
                 </div>
@@ -341,27 +267,23 @@ watch(() => form.question_type, (type) => {
                   {{ deck.pages }}
                 </div>
 
-                <div class="col-1">{{ deck.question_type }}</div>
+                <!-- <div class="col-1">{{ deck.question_type }}</div> -->
 
                 <!-- ACCOUNT STATUS -->
-                <div class="col-1">
+                <!-- <div class="col-1">
                   <span
                     class="account-status"
                     :class="deck.banned ? 'status-banned' : 'status-active'"
                   >
                     {{ deck.question_purpose }}
                   </span>
-                </div>
+                </div> -->
 
                 <!-- ACTION BUTTONS -->
                 <div class="col-2">
                   <div class="action-buttons">
+                    <router-link class="view-btn" :to="`/admin-education/${deck.id}`">View</router-link>
 
-                    <button
-                      class="view-btn"
-                    >
-                      ⏿ View
-                    </button>
                     <button
                       class="action-btn unban-btn"
                       :disabled="!deck.banned"
@@ -407,90 +329,54 @@ watch(() => form.question_type, (type) => {
 
           </div>
           <!-- overlay + panel -->
-          <div v-if="showPanel" class="overlay" @click.self="closePanel">
+          <div v-if="showViewPanel && selectedDeck" class="overlay" @click.self="closeViewPanel">
             <div class="panel">
-              <h3>New Quiz Deck</h3>
+              <h3>{{ selectedDeck.concept_title }}</h3>
 
-              <label>Deck Name
-                <input type="text" v-model="form.deck_name" placeholder="Enter deck name" />
-              </label>
+              <div class="detail-grid">
+                <span class="detail-label">Topic</span>
+                <span>{{ selectedDeck.topic_name }}</span>
 
-              <label>Subject
-                <select v-model="form.subjects">
-                  <option disabled value="">Select subject</option>
-                  <option v-for="s in subjectOptions" :key="s" :value="s">{{ s }}</option>
-                </select>
-              </label>
+                <span class="detail-label">Subject</span>
+                <span>{{ selectedDeck.subjects }}</span>
 
-              <label>Difficulty
-                <select v-model="form.difficulty">
-                  <option disabled value="">Select difficulty</option>
-                  <option v-for="d in difficultyOptions" :key="d" :value="d">{{ d }}</option>
-                </select>
-              </label>
+                <span class="detail-label">Level</span>
+                <span>{{ selectedDeck.school_level_id }}</span>
 
-              <label>Level
-                <select v-model="form.school_level_id">
-                  <option disabled value="">Select level</option>
-                  <option v-for="l in levelOptions" :key="l.value" :value="l.value">{{ l.label }}</option>
-                </select>
-              </label>
-
-              <label>Question Type
-                <select v-model="form.question_type">
-                  <option disabled value="">Select type</option>
-                  <option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</option>
-                </select>
-              </label>
-
-              <label>Question Purpose
-                <select v-model="form.question_purpose">
-                  <option disabled value="">Select purpose</option>
-                  <option v-for="p in purposeOptions" :key="p.value" :value="p.value">{{ p.label }}</option>
-                </select>
-              </label>
-
-              <!-- questions: only appears once a question type is chosen -->
-              <div v-if="form.question_type" class="questions">
-                <div v-for="(q, qi) in questions" :key="qi" class="question-card">
-                  <div class="question-header">
-                    <strong>Question {{ qi + 1 }}</strong>
-                    <button type="button" class="remove-button" @click="removeQuestion(qi)">✕</button>
-                  </div>
-
-                  <input type="text" v-model="q.text" placeholder="Enter question" />
-
-                  <!-- True or False -->
-                  <div v-if="form.question_type === 'T/F'" class="tf-answer">
-                    <label class="inline">
-                      <input type="radio" :name="'answer-' + qi" :value="true" v-model="q.answer" /> True
-                    </label>
-                    <label class="inline">
-                      <input type="radio" :name="'answer-' + qi" :value="false" v-model="q.answer" /> False
-                    </label>
-                  </div>
-
-                  <!-- MCQ -->
-                  <div v-else class="mcq-options">
-                    <label v-for="(opt, oi) in q.options" :key="oi" class="inline">
-                      <input type="radio" :name="'correct-' + qi" :value="oi" v-model="q.correct" />
-                      <input type="text" v-model="q.options[oi]" :placeholder="'Option ' + (oi + 1)" />
-                    </label>
-                    <small>Select the radio button next to the correct option.</small>
-                  </div>
-                </div>
-
-                <button type="button" class="add-question-button" @click="addQuestion">+ Add question</button>
+                <span class="detail-label">Pages</span>
+                <span>{{ selectedDeck.pages }}</span>
               </div>
 
-              <p v-if="errorMsg" class="error">{{ errorMsg }}</p>
+              <h4>Flashcards</h4>
+
+              <p v-if="!selectedDeck.flashcards?.length" class="muted">
+                This deck has no flashcards yet.
+              </p>
+
+              <div
+                v-for="(card, ci) in selectedDeck.flashcards ?? []"
+                :key="ci"
+                class="question-card"
+              >
+                <strong>Flashcard {{ ci + 1 }}</strong>
+
+                <div class="card-side">
+                  <span class="detail-label">Front</span>
+                  <p>{{ card.front_text }}</p>
+                </div>
+
+                <div class="card-side back">
+                  <span class="detail-label">Back</span>
+                  <p>{{ card.back_text }}</p>
+                </div>
+              </div>
 
               <div class="actions">
-                <button class="cancel-button" @click="closePanel">Cancel</button>
-                <button class="publish-button" @click="publish">Publish</button>
+                <button class="cancel-button" @click="closeViewPanel">Close</button>
               </div>
             </div>
           </div>
+          <!-- end -->
     </main>
 
   </div>
@@ -505,6 +391,11 @@ watch(() => form.question_type, (type) => {
 }
 
 .add-quiz-button {
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  color: black;
+
   border: 0;
   border-radius: 20px;
   background-color: #fad336;
@@ -865,33 +756,13 @@ watch(() => form.question_type, (type) => {
   color: #000;
   border-radius: 12px;
   padding: 20px;
-  width: 360px;
+  width: 600px;
   max-width: 90vw;
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-height: 90vh;
   overflow-y: auto;
-}
-
-.panel label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-weight: 600;
-}
-
-.panel input,
-.panel select {
-  padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  font-size: 1rem;
-}
-
-.error {
-  color: #c0392b;
-  margin: 0;
 }
 
 .actions {
@@ -903,12 +774,6 @@ watch(() => form.question_type, (type) => {
 .cancel-button{
   border: 1px solid grey;
   background-color: #dbdbdb;
-  border-radius: 8px;
-  padding: 10px;
-}
-.publish-button{
-  border: 1px solid #be9e00;
-  background-color: #ffd21f;
   border-radius: 8px;
   padding: 10px;
 }
@@ -941,24 +806,44 @@ watch(() => form.question_type, (type) => {
   gap: 6px;
 }
 
-.panel label.inline {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  font-weight: normal;
+.card-side {
+  background: #f2f2f2;
+  border-radius: 6px;
+  padding: 8px 10px;
 }
 
-.panel label.inline input[type="text"] {
-  flex: 1;
+.card-side.back {
+  background: #e8f0fe;
 }
 
-.remove-button, .add-question-button{
-  border: 0;
+.card-side p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+}
+
+.detail-label {
+  font-weight: 600;
+  color: #555;
+}
+
+.muted {
+  color: #777;
+  margin: 0;
+}
+
+.question-card {
+  border: 1px solid #ddd;
   border-radius: 8px;
-}
-
-.remove-button{
-  border: 1px solid grey;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 </style>
