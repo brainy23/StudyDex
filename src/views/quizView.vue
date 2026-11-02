@@ -1,14 +1,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import TownBackground from '@/components/common/TownBackground.vue'
-import ClockWeather from '@/components/common/ClockWeather.vue'
-import { useTimeOfDay } from '@/composables/useTimeofDay'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { scienceTopics, demoBank } from '../data/scienceQuizData'
+const route = useRoute()
+const router = useRouter()
+import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
-import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
-
-
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
@@ -36,8 +34,23 @@ async function initialise() {
     if (alive && request === generation) loading.value = false
   }
 }
-onMounted(initialise)
+onMounted(() => {
+  if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'quiz' } })
+  else initialise()
+})
 onUnmounted(() => { alive = false; generation++ })
+const base = import.meta.env.BASE_URL
+
+const images = {
+  arena: `${base}poke-arena/poke-arena4.png`,
+  sun: `${base}town/bg_sun.png`,
+  moon: `${base}town/bg_moon.png`,
+  clouds: `${base}town/bg_clouds.png`,
+  stars: `${base}town/bg_stars.png`,
+}
+
+
+const currentTime = ref(new Date())
 // Preview bar has its own layout row below the arena.
 const live = ref(true)
 const previewHour = ref(12)
@@ -50,6 +63,7 @@ function stopAutoPreview() {
 }
 function useLiveTime() {
   stopAutoPreview()
+  currentTime.value = new Date()
   live.value = true
 }
 function setPreview(value) {
@@ -72,82 +86,185 @@ function toggleAutoPreview() {
 }
 onUnmounted(stopAutoPreview)
 
-// Preview time drives arena access and the shared background.
-const { hour, lighting } = useTimeOfDay({ live, previewHour })
-const rainActive = ref(false)
-const quizzesOpen = computed(() => hour.value >= 7)
-const displayTime = computed(() => {
-  const minutes = Math.floor(hour.value * 60)
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
+let clockInterval
+
+const hour = computed(() => {
+  if (!live.value) return previewHour.value
+  const time = currentTime.value
+
+  return (
+    time.getHours() +
+    time.getMinutes() / 60 +
+    time.getSeconds() / 3600
+  )
 })
-// Keep the original sky colour in the margins around the proportional artwork.
+
+// Opening hours: 7am until midnight. 
+const quizzesOpen = computed(() => hour.value >= 7)
+
+// Floodlights: 7pm until midnight.
+const arenaLightsOn = computed(() => hour.value >= 19)
+
+// Same lighting presets as HomeView2.
+// hour, name, sky top, horizon, brightness, saturation, clouds, stars
+const frames = [
+  [0, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
+  [5.5, 'Night', '#081229', '#354564', 0.38, 0.7, 0.38, 0.8],
+  [8, 'Day', '#258be0', '#c7eeff', 1, 1.06, 1, 0],
+  [12, 'Day', '#1685df', '#c4efff', 1.04, 1.1, 1, 0],
+  [15.5, 'Afternoon', '#579bd5', '#ffe0ad', 1.02, 1.08, 0.95, 0],
+  [18.5, 'Sunset', '#67518e', '#ffad7b', 0.82, 1.05, 0.78, 0.03],
+  [19.25, 'Dusk', '#30345f', '#a77b9d', 0.58, 0.85, 0.58, 0.35],
+  [20.5, 'Evening', '#101f43', '#405477', 0.43, 0.75, 0.4, 0.75],
+  [22, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
+  [24, 'Night', '#03091c', '#142744', 0.5, 0.8, 0.3, 1],
+].map(
+  ([
+    hour,
+    name,
+    top,
+    horizon,
+    brightness,
+    saturation,
+    cloud,
+    stars,
+  ]) => ({
+    hour,
+    name,
+    top,
+    horizon,
+    brightness,
+    saturation,
+    cloud,
+    stars,
+  }),
+)
+
+const lerp = (a, b, t) => a + (b - a) * t
+
+function mixColor(a, b, t) {
+  const channels = [1, 3, 5].map((position) => {
+    const start = parseInt(a.slice(position, position + 2), 16)
+    const end = parseInt(b.slice(position, position + 2), 16)
+
+    return Math.round(lerp(start, end, t))
+  })
+
+  return `rgb(${channels.join(',')})`
+}
+
+const lighting = computed(() => {
+  const h = hour.value
+
+  const index = frames.findIndex(
+    (frame, i) =>
+      i < frames.length - 1 &&
+      h >= frame.hour &&
+      h < frames[i + 1].hour,
+  )
+
+  const start = frames[Math.max(0, index)]
+  const end = frames[Math.max(0, index) + 1]
+
+  const progress = (h - start.hour) / (end.hour - start.hour)
+  const t = progress * progress * (3 - 2 * progress)
+
+  return {
+    name: t < 0.5 ? start.name : end.name,
+    top: mixColor(start.top, end.top, t),
+    horizon: mixColor(start.horizon, end.horizon, t),
+    brightness: lerp(start.brightness, end.brightness, t),
+    saturation: lerp(start.saturation, end.saturation, t),
+    cloud: lerp(start.cloud, end.cloud, t),
+    stars: lerp(start.stars, end.stars, t),
+  }
+})
+
 const skyStyle = computed(() => ({
-  background: `linear-gradient(to bottom, ${lighting.value.top} 0%, ${lighting.value.horizon} 30%)`
+  background: `linear-gradient(
+    to bottom,
+    ${lighting.value.top} 0%,
+    ${lighting.value.horizon} 30%
+  )`,
 }))
 
-const enteredArena = ref(false)
-const pickerSubjectId = ref(null)
-const pickerBusy = ref(false)
-const pickerError = ref('')
-// MOE Primary Science Syllabus 2023: topic overview, printed page 20.
-// These are topic labels, not generated questions or database IDs.
-const scienceCourse = ref('standard')
-const scienceTopics = [
-  { key: 'p3-living', level: 3, theme: 'Diversity', name: 'Living and Non-Living Things', official: 'Diversity of living and non-living things (General characteristics and classification)', aliases: ['Diversity of living and non-living things', 'General characteristics and classification'] },
-  { key: 'p3-materials', level: 3, theme: 'Diversity', name: 'Materials', official: 'Diversity of materials', aliases: ['Diversity of materials'] },
-  { key: 'p3-life-cycles', level: 3, theme: 'Cycles', name: 'Life Cycles', official: 'Cycles in plants and animals (Life cycles)', aliases: ['Life cycles of plants and animals'] },
-  { key: 'p3-magnets', level: 3, theme: 'Interactions', name: 'Magnets', official: 'Interaction of forces (Magnets)', aliases: ['Magnetism'] },
-  { key: 'p4-plants', level: 4, theme: 'Systems', name: 'Plant Parts and Functions', official: 'Plant system (Plant parts and functions)', aliases: [] },
-  { key: 'p4-digestion', level: 4, theme: 'Systems', name: 'Digestive System', official: 'Human system (Digestive system)', aliases: ['Human digestive system', 'Digestion'] },
-  { key: 'p4-matter', level: 4, theme: 'Cycles', name: 'Matter', official: 'Cycles in matter and water (Matter)', aliases: [] },
-  { key: 'p4-light', level: 4, theme: 'Energy', name: 'Light', official: 'Energy forms and uses (Light)', aliases: [] },
-  { key: 'p4-heat', level: 4, theme: 'Energy', name: 'Heat', official: 'Energy forms and uses (Heat)', aliases: [] },
-  { key: 'p5-reproduction', level: 5, theme: 'Cycles', name: 'Reproduction in Plants and Animals', official: 'Cycles in plants and animals (Reproduction)', aliases: ['Reproduction'] },
-  { key: 'p5-water', level: 5, theme: 'Cycles', name: 'Water', official: 'Cycles in matter and water (Water)', aliases: ['Water cycle'] },
-  { key: 'p5-plants', level: 5, theme: 'Systems', name: 'Plant Respiratory and Circulatory Systems', official: 'Plant system (Respiratory and circulatory systems)', aliases: ['Plant transport system', 'Plant transport systems'] },
-  { key: 'p5-human', level: 5, theme: 'Systems', name: 'Human Respiratory and Circulatory Systems', official: 'Human system (Respiratory and circulatory systems)', aliases: [] },
-  { key: 'p5-electricity', level: 5, theme: 'Systems', name: 'Electrical System', official: 'Electrical system', aliases: ['Electrical systems', 'Electricity'] },
-  { key: 'p6-photosynthesis', level: 6, theme: 'Energy', name: 'Photosynthesis', official: 'Energy forms and uses (Photosynthesis)', aliases: [] },
-  { key: 'p6-energy', level: 6, theme: 'Energy', name: 'Energy Conversion', official: 'Energy conversion', aliases: [], standardOnly: true },
-  { key: 'p6-forces', level: 6, theme: 'Interactions', name: 'Forces', official: 'Interaction of forces (Frictional force, gravitational force, elastic spring force)', aliases: ['Interaction of forces', 'Frictional force, gravitational force, elastic spring force'] },
-  { key: 'p6-environment', level: 6, theme: 'Interactions', name: 'Interactions within the Environment', official: 'Interactions within the environment', aliases: ['Interactions in the environment'] },
+const cloudStyle = computed(() => ({
+  opacity: lighting.value.cloud,
+  filter: `brightness(${lighting.value.brightness})`,
+}))
+
+const arenaStyle = computed(() => {
+  const brightness = arenaLightsOn.value
+    ? Math.max(0.82, lighting.value.brightness)
+    : lighting.value.brightness
+
+  const saturation = arenaLightsOn.value
+    ? Math.max(0.95, lighting.value.saturation)
+    : lighting.value.saturation
+
+  return {
+    filter: `brightness(${brightness}) saturate(${saturation})`,
+  }
+})
+
+// Same sun and moon movement as HomeView2.
+function celestialStyle(isMoon) {
+  const h = hour.value
+
+  const progress = isMoon
+    ? ((h - 19 + 24) % 24) / 11
+    : (h - 6) / 13
+
+  const visible = progress > 0 && progress < 1
+  const p = Math.max(0, Math.min(1, progress))
+
+  return {
+    left: `${12 + p * 76}%`,
+    top: `${25 - Math.sin(p * Math.PI) * 19}%`,
+    opacity: visible
+      ? Math.min(1, p * 10, (1 - p) * 10)
+      : 0,
+  }
+}
+
+// The latest arena artwork has two visible outer floodlight banks.
+// Adjust these percentages if you change the background image.
+const floodlights = [
+  { id: 'left', left: 8.7, top: 16.8, angle: -24 },
+  { id: 'right', left: 91.3, top: 16.8, angle: 24 },
 ]
 
-const normaliseTopic = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '')
-const studentScienceLevel = computed(() => {
-  const match = String(profile.value?.school_level?.name || '').trim().match(/^(?:primary\s*|p\s*)?([3-6])(?:\b|$)/i)
-  return match ? Number(match[1]) : null
+const displayTime = computed(() => {
+  const minutes = Math.floor(hour.value * 60)
+
+  const hoursText = String(Math.floor(minutes / 60)).padStart(2, '0')
+  const minutesText = String(minutes % 60).padStart(2, '0')
+
+  return `${hoursText}:${minutesText}`
 })
-const scienceLevel = computed(() => studentScienceLevel.value)
-const scienceSubject = computed(() => catalogue.value.subjects.find(item => normaliseTopic(item.name) === 'science') || { id: 'moe-science-preview', name: 'Science' })
-const visibleSubjects = computed(() => [
-  scienceSubject.value,
-  ...catalogue.value.subjects.filter(item => item.id !== scienceSubject.value.id && catalogue.value.topics.some(t => t.subject_id === item.id)),
-])
-const pickerSubject = computed(() => visibleSubjects.value.find(item => item.id === pickerSubjectId.value))
-const pickingScience = computed(() => pickerSubject.value?.id === scienceSubject.value.id)
-const pickerTopics = computed(() => {
-  if (!pickingScience.value) return catalogue.value.topics.filter(item => item.subject_id === pickerSubjectId.value).map(item => ({ ...item, ready: false }))
-  return scienceTopics.filter(item => item.level === scienceLevel.value && !(scienceCourse.value === 'foundation' && item.standardOnly)).map(item => ({
-    ...item, id: item.key, ready: !!demoBank[item.key]?.length,
-    detail: item.key === 'p6-forces' ? (scienceCourse.value === 'foundation' ? 'Frictional and gravitational forces' : 'Frictional, gravitational and elastic spring forces') : item.official,
-  }))
+
+function refreshClock() {
+  currentTime.value = new Date()
+}
+
+onMounted(() => {
+  refreshClock()
+  clockInterval = setInterval(refreshClock, 1000)
+  document.addEventListener('visibilitychange', refreshClock)
 })
-function topicCanEnter(item) { return item.ready && quizzesOpen.value && !pickerBusy.value }
-function topicStatus(item) {
-  if (!item.ready) return 'Demo questions not added yet'
-  if (!quizzesOpen.value) return 'Available from 7am'
-  return `${demoBank[item.key].length} demo questions · Enter battle →`
+
+onUnmounted(() => {
+  clearInterval(clockInterval)
+  document.removeEventListener('visibilitychange', refreshClock)
+})
+
+const enteredArena = ref(false)
+const entryError = ref('')
+function returnToSelection() {
+  clearAttack()
+  router.push({ name:'selection-topics', query:{ flow:'quiz', course:route.query.course === 'foundation' ? 'foundation' : 'standard' } })
 }
-function selectPickerSubject(item) { pickerSubjectId.value = item.id; pickerError.value = '' }
-function enterTopic(item) {
-  if (!topicCanEnter(item)) return
-  selectedDemoTopic.value = item
-  restartDemo()
-  enteredArena.value = true
-}
-function returnToSelection() { enteredArena.value = false; clearAttack() }
-watch(quizzesOpen, open => { if (!open) enteredArena.value = false })
+const spriteLoading = ref(false)
 const spriteError = ref('')
 const fighters = ref([])
 let spriteController
@@ -164,14 +281,9 @@ async function loadArenaFighters() {
   spriteController?.abort()
   const controller = new AbortController()
   spriteController = controller
+  spriteLoading.value = true
   spriteError.value = ''
   const selected = readArenaBuddy()
-  // The back-sprite component accepts a name or a numeric PokéAPI ID as text.
-  // Use the ID to avoid sending a trainer's custom nickname to PokéAPI.
-  fighters.value = [{
-    name: selected.name || 'Your buddy',
-    pokename: String(selected.id)
-  }]
   // Grounded, fully evolved mentors: Venusaur, Blastoise, Raichu,
   // Nidoqueen, Nidoking, Alakazam, Machamp, Meganium, Typhlosion,
   // Feraligatr, Sceptile, Blaziken and Swampert.
@@ -179,23 +291,27 @@ async function loadArenaFighters() {
     .filter(id => id !== selected.id)
   const enemyId = pool[Math.floor(Math.random() * pool.length)]
   try {
-    // Only the opponent's front sprite is fetched by the parent.
-    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${enemyId}/`, {
-      signal: controller.signal
-    })
-    if (!response.ok) throw new Error(`Pokémon request failed: ${response.status}`)
-    const pokemon = await response.json()
+    const data = await Promise.all([selected.id, enemyId].map(async id => {
+      const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}/`, { signal: controller.signal })
+      if (!response.ok) throw new Error(`Pokémon request failed: ${response.status}`)
+      return response.json()
+    }))
     if (controller.signal.aborted) return
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    const still = pokemon.sprites?.front_default
-    const animated = pokemon.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default
-    fighters.value.push({
-      name: pokemon.name,
-      image: (!reduceMotion && animated) || still,
-      still, failed: false, padding: 0
+    fighters.value = data.map((pokemon, index) => {
+      const side = index === 0 ? 'back_default' : 'front_default'
+      const still = pokemon.sprites?.[side]
+      const animated = pokemon.sprites?.versions?.['generation-v']?.['black-white']?.animated?.[side]
+      return {
+        name: index === 0 ? selected.name || pokemon.name : pokemon.name,
+        image: (!reduceMotion && animated) || still,
+        still, failed: false, padding: 0,
+      }
     })
   } catch (cause) {
-    if (cause.name !== 'AbortError') spriteError.value = 'The opponent could not load.'
+    if (cause.name !== 'AbortError') spriteError.value = 'Battle buddies could not load.'
+  } finally {
+    if (spriteController === controller) spriteLoading.value = false
   }
 }
 function arenaSpriteError(fighter) {
@@ -231,440 +347,6 @@ onUnmounted(() => spriteController?.abort())
 
 
 // Local practice questions only. No scores, EXP or rewards are saved.
-const demoBank = {
-  "p3-living": [
-    [
-      "Which is a living thing?",
-      [
-        "Stone",
-        "Mushroom",
-        "Plastic bottle",
-        "Spoon"
-      ],
-      1,
-      "A mushroom is a living thing. It grows and needs food, air and water."
-    ],
-    [
-      "Which observation alone does NOT prove that something is living?",
-      [
-        "It reproduces",
-        "It grows naturally",
-        "It moves",
-        "It needs food"
-      ],
-      2,
-      "A toy car can move, but it is not living. Consider several characteristics together."
-    ]
-  ],
-  "p3-materials": [
-    [
-      "Which material is suitable for a clear window?",
-      [
-        "Glass",
-        "Cardboard",
-        "Cloth",
-        "Wood"
-      ],
-      0,
-      "Clear glass allows us to see through it."
-    ],
-    [
-      "Why is rubber suitable for a rubber band?",
-      [
-        "It is transparent",
-        "It dissolves easily",
-        "It is magnetic",
-        "It can stretch"
-      ],
-      3,
-      "Rubber can stretch and return towards its original shape."
-    ]
-  ],
-  "p3-life-cycles": [
-    [
-      "What comes after the egg in a butterfly’s life cycle?",
-      [
-        "Adult butterfly",
-        "Pupa",
-        "Larva (caterpillar)",
-        "Seed"
-      ],
-      2,
-      "The egg hatches into a caterpillar, which is the larval stage."
-    ],
-    [
-      "What can a seed grow into under suitable conditions?",
-      [
-        "A young plant",
-        "A pupa",
-        "An egg",
-        "A rock"
-      ],
-      0,
-      "A seed can germinate and develop into a young plant."
-    ]
-  ],
-  "p3-magnets": [
-    [
-      "What happens when two north poles are brought close together?",
-      [
-        "They attract",
-        "They repel",
-        "They disappear",
-        "They melt"
-      ],
-      1,
-      "Like magnetic poles repel one another."
-    ],
-    [
-      "Which object is attracted to a magnet?",
-      [
-        "Wooden ruler",
-        "Plastic cup",
-        "Iron nail",
-        "Glass marble"
-      ],
-      2,
-      "Iron is a magnetic material."
-    ]
-  ],
-  "p4-plants": [
-    [
-      "Which plant part mainly absorbs water from the soil?",
-      [
-        "Flower",
-        "Leaf",
-        "Fruit",
-        "Roots"
-      ],
-      3,
-      "Roots absorb water and mineral salts from the soil."
-    ],
-    [
-      "Which part usually supports the leaves and flowers?",
-      [
-        "Stem",
-        "Seed",
-        "Petal",
-        "Fruit"
-      ],
-      0,
-      "The stem supports the plant and transports substances."
-    ]
-  ],
-  "p4-digestion": [
-    [
-      "Where does digestion begin?",
-      [
-        "Stomach",
-        "Mouth",
-        "Large intestine",
-        "Small intestine"
-      ],
-      1,
-      "Digestion begins in the mouth, where food is chewed and mixed with saliva."
-    ],
-    [
-      "Where is most digested food absorbed into the blood?",
-      [
-        "Mouth",
-        "Food pipe",
-        "Small intestine",
-        "Stomach"
-      ],
-      2,
-      "Most digested food is absorbed through the walls of the small intestine."
-    ]
-  ],
-  "p4-matter": [
-    [
-      "Which statement describes matter?",
-      [
-        "It must be visible",
-        "It must be solid",
-        "It has no mass",
-        "It has mass and occupies space"
-      ],
-      3,
-      "Matter has mass and occupies space. Air is matter too."
-    ],
-    [
-      "What happens to the shape of water when it is poured into another container?",
-      [
-        "It takes the container’s shape",
-        "It always stays square",
-        "It becomes a solid",
-        "It loses all its mass"
-      ],
-      0,
-      "A liquid has no fixed shape and takes the shape of its container."
-    ]
-  ],
-  "p4-light": [
-    [
-      "Why can we see a book under a lamp?",
-      [
-        "The book makes light",
-        "Light reflects from the book into our eyes",
-        "Our eyes send light to it",
-        "The book absorbs all light"
-      ],
-      1,
-      "We see the book when reflected light enters our eyes."
-    ],
-    [
-      "How is a shadow formed?",
-      [
-        "Sound strikes a wall",
-        "Air becomes cold",
-        "An object blocks light",
-        "Water evaporates"
-      ],
-      2,
-      "A shadow forms where an object blocks light from reaching a surface."
-    ]
-  ],
-  "p4-heat": [
-    [
-      "In which direction does heat flow naturally?",
-      [
-        "From colder to hotter",
-        "Only upwards",
-        "Only through water",
-        "From hotter to colder"
-      ],
-      3,
-      "Heat flows from a hotter object or region to a colder one."
-    ],
-    [
-      "Which material is usually suitable for a saucepan handle?",
-      [
-        "Wood",
-        "Copper",
-        "Iron",
-        "Aluminium"
-      ],
-      0,
-      "Wood is a poor conductor of heat, so less heat reaches the hand."
-    ]
-  ],
-  "p5-reproduction": [
-    [
-      "Why do living things reproduce?",
-      [
-        "To become heavier",
-        "To ensure their kind continues",
-        "To stop growing",
-        "To avoid needing food"
-      ],
-      1,
-      "Reproduction produces new individuals and helps a kind of organism continue."
-    ],
-    [
-      "After fertilisation, what can an ovule in a flower develop into?",
-      [
-        "A leaf",
-        "A root",
-        "A seed",
-        "A petal"
-      ],
-      2,
-      "A fertilised ovule can develop into a seed."
-    ]
-  ],
-  "p5-water": [
-    [
-      "What is the change from water vapour to liquid water called?",
-      [
-        "Melting",
-        "Freezing",
-        "Evaporation",
-        "Condensation"
-      ],
-      3,
-      "Condensation changes water vapour into liquid water as it loses heat."
-    ],
-    [
-      "What provides the energy for much of the evaporation in the water cycle?",
-      [
-        "The Sun",
-        "The Moon",
-        "The soil’s colour",
-        "Clouds blocking light"
-      ],
-      0,
-      "Heat from the Sun causes water to evaporate."
-    ]
-  ],
-  "p5-plants": [
-    [
-      "Which substances are carried from roots to other plant parts in water-carrying tubes?",
-      [
-        "Only oxygen",
-        "Water and mineral salts",
-        "Only sugar",
-        "Only carbon dioxide"
-      ],
-      1,
-      "Water-carrying tubes transport water and mineral salts absorbed by roots."
-    ],
-    [
-      "Through which structures does most gas exchange occur in leaves?",
-      [
-        "Petals",
-        "Seeds",
-        "Stomata",
-        "Roots only"
-      ],
-      2,
-      "Stomata are tiny openings through which gases enter and leave leaves."
-    ]
-  ],
-  "p5-human": [
-    [
-      "Which organs take in oxygen from air and remove carbon dioxide?",
-      [
-        "Stomach",
-        "Kidneys",
-        "Food pipe",
-        "Lungs"
-      ],
-      3,
-      "Gas exchange takes place in the lungs."
-    ],
-    [
-      "What is the main function of the heart?",
-      [
-        "Pump blood around the body",
-        "Digest food",
-        "Make air",
-        "Store undigested food"
-      ],
-      0,
-      "The heart pumps blood to transport substances around the body."
-    ]
-  ],
-  "p5-electricity": [
-    [
-      "What is needed for a bulb to light in a simple working circuit?",
-      [
-        "A gap in the wire",
-        "A complete circuit with a cell",
-        "Only a bulb",
-        "A plastic connection"
-      ],
-      1,
-      "Current can flow through a complete circuit connected to a cell."
-    ],
-    [
-      "Which material can complete a circuit by conducting electricity?",
-      [
-        "Rubber",
-        "Plastic",
-        "Copper",
-        "Dry wood"
-      ],
-      2,
-      "Copper conducts electricity and is commonly used in wires."
-    ]
-  ],
-  "p6-photosynthesis": [
-    [
-      "Which gas do green plants take in for photosynthesis?",
-      [
-        "Oxygen",
-        "Nitrogen",
-        "Helium",
-        "Carbon dioxide"
-      ],
-      3,
-      "Plants use carbon dioxide and water to make food in the presence of light."
-    ],
-    [
-      "What is the role of light in photosynthesis?",
-      [
-        "It supplies energy to make food",
-        "It supplies mineral salts",
-        "It replaces water",
-        "It stops gas exchange"
-      ],
-      0,
-      "Light supplies the energy needed for photosynthesis."
-    ]
-  ],
-  "p6-energy": [
-    [
-      "A battery-powered torch mainly converts stored chemical energy into which useful output?",
-      [
-        "Sound",
-        "Light",
-        "Gravitational potential energy",
-        "Elastic potential energy"
-      ],
-      1,
-      "A torch produces useful light energy, as well as some heat."
-    ],
-    [
-      "What happens to a falling ball’s gravitational potential energy as its speed increases?",
-      [
-        "It becomes water",
-        "It disappears completely",
-        "It is converted into kinetic energy",
-        "It becomes food"
-      ],
-      2,
-      "As the ball falls, gravitational potential energy is converted into kinetic energy."
-    ]
-  ],
-  "p6-forces": [
-    [
-      "Which force pulls a dropped object towards Earth?",
-      [
-        "Magnetic force",
-        "Elastic spring force",
-        "Friction only",
-        "Gravitational force"
-      ],
-      3,
-      "Earth’s gravitational force pulls the object towards Earth."
-    ],
-    [
-      "What does friction usually do to a sliding object?",
-      [
-        "Opposes its sliding motion",
-        "Always speeds it up",
-        "Makes it weightless",
-        "Turns it into a magnet"
-      ],
-      0,
-      "Friction opposes motion between surfaces in contact."
-    ]
-  ],
-  "p6-environment": [
-    [
-      "In the chain grass → grasshopper → frog, which organism is the producer?",
-      [
-        "Frog",
-        "Grass",
-        "Grasshopper",
-        "All three"
-      ],
-      1,
-      "Grass makes its own food using light energy."
-    ],
-    [
-      "If food becomes scarce in a habitat, what is likely to increase among animals needing that food?",
-      [
-        "Photosynthesis",
-        "Water production",
-        "Competition",
-        "Seed dispersal"
-      ],
-      2,
-      "Animals compete when a shared resource such as food is limited."
-    ]
-  ]
-}
 const selectedDemoTopic = ref(null)
 const demoIndex = ref(0)
 const demoChoice = ref(null)
@@ -698,19 +380,111 @@ function nextDemo() {
   else { demoIndex.value++; demoChoice.value = null }
 }
 onUnmounted(clearAttack)
+function openRequestedBattle() {
+  if (loading.value || error.value || !profile.value?.school_level_id) return
+  enteredArena.value = false
+  entryError.value = ''
+  const match = String(profile.value.school_level?.name || '').match(/^(?:primary\s*|p\s*)?([3-6])(?:\b|$)/i)
+  const level = match ? Number(match[1]) : null
+  const item = scienceTopics.find(t => t.key === route.query.topic && t.level === level && !(route.query.course === 'foundation' && t.standardOnly))
+  if (!item || !demoBank[item.key]?.length) { entryError.value = 'This quiz is unavailable for your school level. Choose another topic.'; return }
+  if (!quizzesOpen.value) { entryError.value = 'Quizzes open at 7am. Please come back then.'; return }
+  selectedDemoTopic.value = item
+  restartDemo()
+  enteredArena.value = true
+}
+watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen], openRequestedBattle)
+
 
 </script>
 <template>
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
-      <TownBackground
-        class="arena-background-layer"
-        scene="arena"
-        :live="live"
-        :preview-hour="previewHour"
-        :rain-active="rainActive"
+      <!-- SKY -->
+      <div
+        class="layer sky"
+        :style="skyStyle"
+        aria-hidden="true"
+      ></div>
+
+      <!-- SUN / MOON -->
+      <img
+        class="celestial sun"
+        :src="images.sun"
+        :style="celestialStyle(false)"
+        alt=""
+        draggable="false"
       />
+
+      <img
+        class="celestial moon"
+        :src="images.moon"
+        :style="celestialStyle(true)"
+        alt=""
+        draggable="false"
+      />
+
+      <!-- STARS / CLOUDS -->
+      <div
+        class="layer stars-layer"
+        :style="{ opacity: lighting.stars }"
+        aria-hidden="true"
+      >
+        <img
+          class="layer stars"
+          :src="images.stars"
+          alt=""
+          draggable="false"
+        />
+      </div>
+
+      <div
+        class="layer clouds-layer"
+        :style="cloudStyle"
+        aria-hidden="true"
+      >
+        <img
+          class="layer clouds"
+          :src="images.clouds"
+          alt=""
+          draggable="false"
+        />
+      </div>
+
+      <!-- ARENA -->
+      <img
+        class="layer arena-image"
+        :src="images.arena"
+        :style="arenaStyle"
+        alt="StudyDex quiz arena"
+        draggable="false"
+      />
+
+      <!-- EVENING FLOODLIGHTS -->
+      <div
+        class="layer arena-light-effects"
+        :class="{ 'is-on': arenaLightsOn }"
+        aria-hidden="true"
+      >
+        <div
+          v-for="light in floodlights"
+          :key="light.id"
+          class="floodlight"
+          :style="{
+            left: `${light.left}%`,
+            top: `${light.top}%`,
+            '--beam-angle': `${light.angle}deg`,
+          }"
+        >
+          <div class="floodlight-beam"></div>
+          <div class="floodlight-halo"></div>
+          <div class="floodlight-bulbs"></div>
+        </div>
+
+        <div class="court-light-pool"></div>
+      </div>
+
 
       <!-- The question stays on the arena's built-in screen. -->
       <section v-if="enteredArena && quizzesOpen" class="quiz-content demo-board" aria-label="Demo quiz">
@@ -749,15 +523,9 @@ onUnmounted(clearAttack)
       </section>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
         <div class="fighter-shadow"></div>
-        <Pokemon_Backwards
-          v-if="index === 0"
-          :key="fighter.pokename"
-          class="player-back-sprite"
-          :pokename="fighter.pokename"
-        />
-        <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
+        <img v-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
         <span v-else class="fighter-unavailable">Sprite unavailable</span>
-
+        
       </div>
       <p v-if="spriteError && enteredArena" class="sprite-status">{{ spriteError }} <button type="button" @click="loadArenaFighters">Retry</button></p>
 
@@ -770,77 +538,22 @@ onUnmounted(clearAttack)
       </RouterLink>
 
       <button v-if="enteredArena" type="button" class="home-link change-topic" @click="returnToSelection">Topics</button>
-      <div class="arena-clock-widget">
-        <ClockWeather :use-device-location="true" @rain-change="rainActive = $event" />
+      <div v-show="enteredArena" class="quiz-clock-weather">
+        <ClockWeather />
       </div>
     </header>
 
 
-    <!-- ENTRY SCREEN: select a subject, then an unlocked topic. -->
-    <section v-if="!enteredArena" class="arena-picker" aria-labelledby="picker-title">
-      <div class="picker-shell">
-        <span class="picker-eyebrow">STUDYDEX · POKÉ ARENA</span>
-        <h1 id="picker-title">{{ pickerSubject ? 'Choose your topic' : 'What will you master today?' }}</h1>
-        <p class="picker-intro">{{ pickerSubject ? pickerSubject.name + ' · ' + (pickingScience ? (scienceLevel ? 'Primary ' + scienceLevel : 'School level unavailable') : (profile?.school_level?.name || 'Your school level')) : 'Choose a subject to begin your quiz battle.' }}</p>
-        <p v-if="loading" role="status">Loading your subjects…</p>
-        <div v-else-if="error" role="alert">
-          <p>{{ studyErrorMessage(error, 'Your Arena content') }}</p>
-          <button type="button" class="glass-action" @click="initialise">Try again</button>
-        </div>
-        <div v-else-if="!profile?.school_level_id">
-          <p>Set your school level to see the right topics.</p>
-          <RouterLink to="/account" class="glass-action">Account settings</RouterLink>
-        </div>
-        <div v-else>
-          <p v-if="!quizzesOpen" class="picker-notice" role="status">Quizzes open at 7am. You can browse your topics now.</p>
-          <button v-if="pickerSubject" type="button" class="picker-back" @click="pickerSubjectId = null">← All subjects</button>
-          <div v-if="!pickerSubject" class="bubble-grid">
-            <button v-for="item in visibleSubjects" :key="item.id" type="button" class="bubble-card" @click="selectPickerSubject(item)">
-              <span class="bubble-symbol" aria-hidden="true">{{ /science/i.test(item.name) ? '⚗' : /math/i.test(item.name) ? '✦' : '✎' }}</span>
-              <strong>{{ item.name }}</strong><span>Explore topics →</span>
-            </button>
-          </div>
-          <div v-else>
-            <div v-if="pickingScience" class="science-filters">
-              <strong v-if="scienceLevel" class="science-level-label">Primary {{ scienceLevel }}</strong>
-              <label v-if="scienceLevel >= 5">Syllabus view
-                <select v-model="scienceCourse"><option value="standard">Standard Science</option><option value="foundation">Foundation Science</option></select>
-              </label>
-              <p>Showing demo quizzes for your saved school level. Choose a topic to practise.</p>
-            </div>
-            <div class="bubble-grid topic-grid">
-            <div v-for="item in pickerTopics" :key="item.id" class="topic-choice">
-              <button type="button" class="bubble-card" :disabled="!topicCanEnter(item)" @click="enterTopic(item)">
-                <span class="bubble-symbol" aria-hidden="true">{{ item.ready ? '✦' : '◇' }}</span>
-                <span v-if="item.theme" class="science-theme">{{ item.theme }}</span>
-                <strong>{{ item.name }}</strong>
-                <span v-if="item.detail" class="science-detail">{{ item.detail }}</span>
-                <span>{{ topicStatus(item) }}</span>
-              </button>
-            </div>
-          </div>
-          </div>
-          <p v-if="!visibleSubjects.length">No published assessment subjects are available for your school level yet.</p>
-          <p v-else-if="pickingScience && !scienceLevel">We could not identify a Primary 3–6 level from your profile. Check your school level in Account Settings.</p>
-          <p v-else-if="pickerSubject && !pickerTopics.length">No published topics are available for this subject yet.</p>
-          <p v-if="pickerError" role="alert">{{ pickerError }}</p>
-          <p class="picker-footnote">Demo questions are for practice. Scores and EXP are not saved.</p>
-        </div>
-      </div>
+    <section v-if="!enteredArena" class="arena-picker redesigned-picker" style="padding:100px 24px;">
+      <p v-if="loading" role="status">Opening your battle…</p>
+      <div v-else-if="error" role="alert"><p>{{ studyErrorMessage(error, 'Your Arena content') }}</p><button @click="initialise">Try again</button></div>
+      <div v-else-if="!profile?.school_level_id"><p>Set your school level to see the right quizzes.</p><RouterLink to="/account">Account settings</RouterLink></div>
+      <div v-else role="status"><p>{{ entryError }}</p><button @click="returnToSelection">Choose a topic</button></div>
     </section>
 
 
   </main>
-  <footer class="time-preview-bar" aria-label="Time preview controls">
-    <div class="time-bar-inner">
-      <strong class="time-bar-title">Time preview <span>{{ displayTime }}</span></strong>
-      <button type="button" :aria-pressed="live" @click="useLiveTime">Live</button>
-      <button v-for="preset in [{ label: '7am', hour: 7 }, { label: 'Day', hour: 12 }, { label: 'Sunset', hour: 18.5 }, { label: 'Night', hour: 21 }, { label: 'Midnight', hour: 0 }]" :key="preset.label" type="button" :aria-pressed="!live && !autoPreview && Math.abs(previewHour - preset.hour) < .001" @click="setPreview(preset.hour)">{{ preset.label }}</button>
-      <button type="button" :aria-pressed="autoPreview" @click="toggleAutoPreview">{{ autoPreview ? 'Pause cycle' : '▶ Cycle day' }}</button>
-      <label class="time-bar-slider"><span>Time</span><input type="range" min="0" max="1439" step="1" :value="Math.floor(hour * 60)" :aria-valuetext="displayTime" @input="setPreview(Number($event.target.value) / 60)" /></label>
-      <span class="time-bar-status">{{ live ? 'Live clock' : autoPreview ? '24 hours in 60 seconds' : 'Preview paused' }}</span>
-    </div>
-  </footer>
+
   </div>
 </template>
 
@@ -865,6 +578,158 @@ onUnmounted(clearAttack)
   overflow: hidden;
   isolation: isolate;
   container-type: inline-size;
+}
+
+.layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+img.layer {
+  display: block;
+  object-fit: fill;
+  user-select: none;
+}
+
+.sky {
+  z-index: 0;
+}
+
+.celestial {
+  position: absolute;
+  z-index: 1;
+  width: 10%;
+  height: auto;
+  max-width: none;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 1.5s ease;
+}
+
+.moon {
+  width: 7%;
+}
+
+.stars-layer {
+  z-index: 2;
+}
+
+.clouds-layer {
+  z-index: 3;
+}
+
+.clouds {
+  inset: auto;
+  top: 0;
+  left: -5%;
+  width: 110%;
+  height: 100%;
+  max-width: none;
+  animation: cloud-drift 80s ease-in-out infinite alternate;
+}
+
+.stars {
+  animation: twinkle 5s ease-in-out infinite alternate;
+}
+
+.arena-image {
+  z-index: 4;
+  transition: filter 1s ease;
+}
+
+/* FLOODLIGHTS */
+
+.arena-light-effects {
+  z-index: 5;
+  opacity: 0;
+  transition: opacity 1s ease;
+}
+
+.arena-light-effects.is-on {
+  opacity: 1;
+}
+
+.floodlight {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.floodlight-halo {
+  position: absolute;
+  width: 9cqw;
+  height: 6cqw;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgb(255 249 211 / 85%) 0%,
+    rgb(255 226 150 / 35%) 35%,
+    transparent 72%
+  );
+  mix-blend-mode: screen;
+}
+
+.floodlight-bulbs {
+  position: absolute;
+  width: 3.8cqw;
+  height: 1.4cqw;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(
+      circle at 15% 50%,
+      #fffef0 0 14%,
+      transparent 23%
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      #fffef0 0 14%,
+      transparent 23%
+    ),
+    radial-gradient(
+      circle at 85% 50%,
+      #fffef0 0 14%,
+      transparent 23%
+    );
+  filter: drop-shadow(0 0 7px #ffe5a1);
+}
+
+.floodlight-beam {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 28cqw;
+  height: 43cqw;
+  transform-origin: 50% 0;
+  transform: translateX(-50%) rotate(var(--beam-angle));
+  clip-path: polygon(47% 0, 53% 0, 100% 100%, 0 100%);
+  background: linear-gradient(
+    to bottom,
+    rgb(255 245 203 / 24%),
+    rgb(255 239 183 / 8%) 65%,
+    transparent
+  );
+  mix-blend-mode: screen;
+}
+
+.court-light-pool {
+  position: absolute;
+  left: 17%;
+  top: 65%;
+  width: 66%;
+  height: 27%;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    rgb(255 239 184 / 25%),
+    rgb(255 239 184 / 10%) 45%,
+    transparent 72%
+  );
+  mix-blend-mode: screen;
 }
 
 /* FUTURE QUIZ CONTENT */
@@ -922,12 +787,6 @@ onUnmounted(clearAttack)
   color: #ffdc77;
 }
 
-
-
-
-
-
-
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
@@ -935,9 +794,50 @@ input:focus-visible {
   outline-offset: 4px;
 }
 
+@keyframes cloud-drift {
+  from {
+    transform: translateX(-2%);
+  }
+
+  to {
+    transform: translateX(2%);
+  }
+}
+
+@keyframes twinkle {
+  from {
+    opacity: 0.7;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 600px) {
-  .arena-hud { top: 10px; left: 10px; right: 10px; }
-  .home-link { padding: 8px 10px; }
+  .arena-hud {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+  }
+
+  .home-link {
+    padding: 8px 10px;
+  }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clouds,
+  .stars {
+    animation: none;
+  }
+
+  .celestial,
+  .arena-image,
+  .arena-light-effects {
+    transition: none;
+  }
 }
 
 /* ENTRY PICKER */
@@ -949,7 +849,7 @@ input:focus-visible {
 .picker-shell h1 { margin: 16px 0 12px; color: white; font-size: clamp(28px, 4vw, 48px); font-weight: 800; text-shadow: 0 3px 18px #0007; }
 .picker-intro { margin-bottom: 28px; color: #fff6e3; font-size: 17px; }
 .bubble-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 22px; }
-.bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s; background: .18s, box-shadow .18s; }
+.bubble-card { position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 14px; width: 100%; min-height: 190px; padding: 26px 20px; border: 1px solid #ffffff9e; border-radius: 32px; background: linear-gradient(145deg, #ffffff38, #ffffff12); box-shadow: inset 0 1px 0 #ffffffb3, inset 0 -1px 0 #ffffff26, 0 12px 30px #071b3544; backdrop-filter: blur(18px); color: white; font: inherit; cursor: pointer; transition: transform .18s, background .18s, box-shadow .18s; }
 .bubble-card strong { font-size: 22px; line-height: 1.3; overflow-wrap: anywhere; }
 .bubble-card > span:last-child { font-size: 13px; color: #fff5df; }
 .bubble-symbol { font-size: 36px; color: #ffe699; text-shadow: 0 0 18px #ffe4a455; }
@@ -983,7 +883,7 @@ input:focus-visible {
   .bubble-card strong { font-size: 17px; }
   .arena-page:has(.arena-scene:not(.selection-blur)) { overflow-y: auto; display: block; padding-top: 75px; }
   .arena-scene:not(.selection-blur) { width: 100%; aspect-ratio: auto; padding-top: calc(100vw * 941 / 1672); overflow: visible; }
-  .arena-scene:not(.selection-blur) > .arena-background-layer { height: calc(100vw * 941 / 1672); }
+  .arena-scene:not(.selection-blur) > .layer { height: calc(100vw * 941 / 1672); }
   .arena-scene:not(.selection-blur) .quiz-content { position: relative; left: auto; top: auto; width: calc(100% - 24px); height: auto; margin: 16px 12px 180px; padding: 18px; background: #1b3048; border: 3px solid #d4b369; border-radius: 16px; }
   .arena-scene:not(.selection-blur) .player-fighter { top: calc(100vw * 941 / 1672 * .77); }
   .arena-scene:not(.selection-blur) .opponent-fighter { top: calc(100vw * 941 / 1672 * .72); }
@@ -1037,7 +937,7 @@ input:focus-visible {
 /* Recoil the wrapper so sprite foot-alignment remains intact. */
 .player-fighter.is-hit { animation: player-recoil .65s ease-out .22s both; }
 .opponent-fighter.is-hit { animation: opponent-recoil .65s ease-out .22s both; }
-.arena-fighter.is-hit > img, .arena-fighter.is-hit .player-back-sprite :deep(img) { animation: damage-flash .65s ease-out .22s both; }
+.arena-fighter.is-hit > img { animation: damage-flash .65s ease-out .22s both; }
 @keyframes player-recoil {
   0%,100% { transform: translateX(-50%); }
   20% { transform: translateX(-65%) rotate(-4deg); }
@@ -1057,7 +957,7 @@ input:focus-visible {
   20% { opacity: .65; filter: brightness(.65) sepia(1) saturate(10000%) hue-rotate(320deg) drop-shadow(0 0 8px #ff2020); }
   55% { opacity: .85; filter: brightness(.85) sepia(1) saturate(10000%) hue-rotate(320deg) drop-shadow(0 0 4px #ff2020); }
 }
-@media(prefers-reduced-motion: reduce) { .arena-fighter, .arena-fighter > img, .arena-fighter .player-back-sprite :deep(img) { animation: none !important; } }
+@media(prefers-reduced-motion: reduce) { .arenafighter, .arena-fighter > img { animation: none !important; } }
 
 /* The footer is a separate grid row, never an overlay on the battle. */
 .arena-with-preview { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: #101d30; }
@@ -1085,42 +985,24 @@ input:focus-visible {
 .arena-hud { position: fixed; font-family: system-ui, sans-serif; }
 .arena-hud .home-link { font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
 .arena-hud .change-topic { margin-inline: auto; }
+.arena-hud .quiz-clock-weather {
+  margin-left: auto;
+  min-width: 0;
+  pointer-events: auto;
+}
+@media (max-width: 600px) {
+  .arena-hud { flex-wrap: wrap; }
+  .arena-hud .quiz-clock-weather { max-width: 100%; }
+}
 .arena-hud button.home-link { border: 1px solid rgb(255 255 255 / 40%); border-radius: 14px; background: rgb(16 30 52 / 80%); padding: 10px 14px; color: white; }
 .arena-hud button.home-link:hover { border-color: #ffdc77; color: #ffdc77; background: rgb(16 30 52 / 80%); }
 .arena-picker { font-family: system-ui, sans-serif; }
 @media(max-width:600px) { .arena-hud button.home-link { padding: 8px 10px; } }
 
-/* Float the shared clock below Back to Town, with no navigation backdrop. */
-.arena-hud { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: transparent; }
-.arena-hud .home-link { grid-column: 1; grid-row: 1; justify-self: start; }
-.arena-hud .change-topic { grid-column: 2; grid-row: 1; margin: 0; justify-self: end; }
-.arena-clock-widget { grid-column: 1; grid-row: 2; justify-self: start; pointer-events: auto; max-width: 100%; }
-.arena-picker { top: 190px; }
-@media (max-width: 700px) {
-  .arena-page:has(.arena-scene:not(.selection-blur)) { padding-top: 190px; }
-}
-/* Keep the shared back sprite anchored at the original player's floor position. */
-.player-back-sprite {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: auto;
-  min-height: 0;
-  color: white;
-}
-.player-back-sprite :deep(.pokemon-back-sprite) {
-  width: 100%;
-  height: auto;
-  max-width: 100%;
-  object-position: center bottom;
-  image-rendering: pixelated;
-  filter: drop-shadow(0 3px 1px #1b253044);
-}
-.player-back-sprite :deep(.sprite-status) {
-  position: static;
-  margin: 0;
-  padding: 6px;
-  font-size: 11px;
-}
+
+.arena-picker.redesigned-picker { position:fixed; inset:0; padding:0; background:#fff; color:#303557; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+.arena-with-preview { grid-template-rows:minmax(0,1fr); }
+.picker-course { display:flex; align-items:center; gap:12px; color:#684180; font-weight:700; font-size:13px; }
+.picker-course select { padding:8px; border:1px solid #b394c7; border-radius:8px; background:#fff; color:#684180; }
+
 </style>

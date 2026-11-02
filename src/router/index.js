@@ -11,12 +11,24 @@ import TimerView from '../views/timerView.vue'
 import RewardsView from '../views/rewardsView.vue'
 import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
+import { selectionRoutes } from './selectionRoutes'
 
-export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
+export function createAppRouter(
+  history = createWebHistory(import.meta.env.BASE_URL),
+) {
   const router = createRouter({
     history,
 
     routes: [
+      // Register the new Subject, Topic, Study Mode and Quiz Battle pages.
+      ...selectionRoutes.map((route) => ({
+        ...route,
+        meta: {
+          ...route.meta,
+          requiresAuth: true,
+        },
+      })),
+
       {
         path: '/account',
         name: 'account',
@@ -99,32 +111,45 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         name: 'surprise-boss',
         component: () => import('../views/SurpriseBossView.vue'),
         meta: { requiresAuth: true },
-      }
+      },
     ],
   })
 
   router.beforeEach(async (to) => {
-    // Keep existing Lab assessment bookmarks working in the dedicated Arena route.
-    if (to.name === 'study-decks' && ['quiz', 'boss_battle'].includes(to.query.mode)) {
+    // Keep existing Lab assessment bookmarks working in the Arena.
+    if (
+      to.name === 'study-decks' &&
+      ['quiz', 'boss_battle'].includes(to.query.mode)
+    ) {
       return {
         name: 'quiz',
         replace: true,
         query: {
-          ...(typeof to.query.subject === 'string' ? { subject: to.query.subject } : {}),
-          ...(typeof to.query.topic === 'string' ? { topic: to.query.topic } : {}),
-          ...(to.query.mode === 'boss_battle' || to.query.battle === 'boss' ? { battle: 'boss' } : {}),
+          ...(typeof to.query.subject === 'string'
+            ? { subject: to.query.subject }
+            : {}),
+          ...(typeof to.query.topic === 'string'
+            ? { topic: to.query.topic }
+            : {}),
+          ...(to.query.mode === 'boss_battle' || to.query.battle === 'boss'
+            ? { battle: 'boss' }
+            : {}),
         },
       }
     }
+
     if (!to.meta.requiresAuth) return true
+
     try {
       const { data, error } = await getSupabase().auth.getSession()
       if (!error && data.session) return true
     } catch {
       // Keep protected pages behind login if the client is unavailable.
     }
+
     return { name: 'login' }
   })
+
   return router
 }
 
