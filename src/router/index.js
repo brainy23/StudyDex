@@ -12,12 +12,14 @@ import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
 import { requestedTopicId } from '../utils/studyNavigation'
 import { selectionRoutes } from './selectionRoutes'
+import { adminDemoRoutes } from './adminDemoRoutes'
 
 export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
   const router = createRouter({
     history,
 
     routes: [
+      ...adminDemoRoutes,
       ...selectionRoutes.map(route => ({ ...route, meta: { ...route.meta, requiresAuth: true } })),
       {
         path: '/account',
