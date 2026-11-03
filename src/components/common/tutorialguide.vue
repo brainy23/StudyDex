@@ -4,66 +4,159 @@ import axios from 'axios'
 
 const emit = defineEmits(['done'])
 
-// all steps + highlight + mewtwo dialogue
-const steps = [
-  { target: '', text: 'Welcome to StudyDex Town! I am Mewtwo, your guide. Let me show you around.' },
-  { target: '.sd-hud', text: 'This is the town clock. The town changes from day to night, just like real time.' },
-  { target: '.trainer-hud', text: 'This is your Trainer Profile. You can see your name and your buddy here.' },
-  { target: '.town-buddy', text: 'This is your Pokémon buddy. Study hard to earn xp and it will grow stronger!' },
-  { target: '.building-button:nth-child(2)', text: 'The Poké Lab is where you study your flashcard decks.' },
-  { target: '.building-button:nth-child(1)', text: 'The Poké Arena is where you take quizzes and battle bosses.' },
-  { target: '.building-button:nth-child(3)', text: 'The Trainer House is where you check your progress.' },
-  { target: '.quest-toggle', text: 'Open the Trainer Hub to write your to-dos and choose your buddy.' },
-  { target: '.sd-navbar', text: 'Use this navigation bar to jump to Study, Quiz, To-Do List or your Bag.' },
-  { target: '', text: 'You can study up to 4 sessions a day. Have fun, and remember to take breaks!' },
+// Tutorial dialogue shown by Mewtwo
+const tutorialSteps = [
+  {
+    target: '',
+    text: 'Welcome to StudyDex Town! I am Mewtwo, your guide. Let me show you around.'
+  },
+  {
+    target: '.sd-hud',
+    text: 'This is the town clock. The town changes from day to night, just like real time.'
+  },
+  {
+    target: '.trainer-hud',
+    text: 'This is your Trainer Profile. You can see your name and your buddy here.'
+  },
+  {
+    target: '.town-buddy',
+    text: 'This is your Pokémon buddy. Study hard to earn xp and it will grow stronger!'
+  },
+  {
+    target: '.building-button:nth-child(2)',
+    text: 'The Poké Lab is where you study your flashcard decks.'
+  },
+  {
+    target: '.building-button:nth-child(1)',
+    text: 'The Poké Arena is where you take quizzes and battle bosses.'
+  },
+  {
+    target: '.building-button:nth-child(3)',
+    text: 'The Trainer House is where you check your progress.'
+  },
+  {
+    target: '.quest-toggle',
+    text: 'Open the Trainer Hub to write your to-dos and choose your buddy.'
+  },
+  {
+    target: '.sd-navbar',
+    text: 'Use this navigation bar to jump to Study, Quiz, To-Do List or your Bag.'
+  },
+  {
+    target: '',
+    text: 'You can study up to 4 sessions a day. Have fun, and remember to take breaks!'
+  }
 ]
-const index = ref(0)
 
-// Mewtwo picture from PokéAPI
-const mewtwo = ref('')
-axios.get(`${import.meta.env.VITE_POKE_API_URL}/pokemon/mewtwo/`)
-  .then(res => mewtwo.value = res.data.sprites.other['official-artwork'].front_default)
+const currentStep = ref(0)
+const mewtwoImage = ref('')
 
-// Position of the part to highlight
-const spot = computed(() => {
-  const target = steps[index.value].target
-  return target ? document.querySelector(target)?.getBoundingClientRect() : null
-})
+// Get Mewtwo artwork from PokéAPI
+async function loadMewtwo() {
+  try {
+    const response = await axios.get(
+      `${import.meta.env.VITE_POKE_API_URL}/pokemon/mewtwo/`
+    )
 
-function next() {
-  if (index.value < steps.length - 1) index.value++
-  else finish()
+    mewtwoImage.value =
+      response.data.sprites.other['official-artwork'].front_default
+  } catch (error) {
+    console.error('Unable to load Mewtwo artwork:', error)
+  }
 }
 
-function finish() {
-  localStorage.setItem('studydex-tutorial-done', 'true')
-  emit('done')
+loadMewtwo()
+
+const highlightedArea = computed(() => {
+  const selector = tutorialSteps[currentStep.value].target
+
+  if (!selector) {
+    return null
+  }
+
+  const element = document.querySelector(selector)
+
+  if (!element) {
+    console.error(`Unable to find element: ${selector}`)
+    return null
+  }
+
+  return element.getBoundingClientRect() // get the highlighted areas numbers
+})
+
+function nextStep() {
+  if (currentStep.value < tutorialSteps.length - 1) {
+    currentStep.value++
+  } else {
+    endTutorial()
+  }
+}
+
+function endTutorial() {
+  try {
+    localStorage.setItem('studydex-tutorial-done', 'true')
+  } catch (error) {
+    console.error('Unable to save tutorial progress:', error)
+  } emit('done')
 }
 </script>
 
 <template>
-  <div class="tutorial" :class="{ dim: !spot }">
-    <!-- yellow highlight -->
-    <div
-      v-if="spot"
-      class="spotlight"
-      :style="{ top: spot.top + 'px', left: spot.left + 'px', width: spot.width + 'px', height: spot.height + 'px' }"
-    ></div>
+  <div class="tutorial" :class="{ dim: !highlightedArea }">
 
-    <!-- Mewtwo + text box (moves to the top if the highlight is low on the screen) -->
-    <div class="scene" :class="{ top: spot && spot.top > 300 }">
-      <img v-if="mewtwo" :src="mewtwo" alt="Mewtwo" class="teacher" />
+    <div
+      v-if="highlightedArea"
+      class="spotlight"
+      :style="{
+        top: highlightedArea.top + 'px',
+        left: highlightedArea.left + 'px',
+        width: highlightedArea.width + 'px',
+        height: highlightedArea.height + 'px'
+      }"
+    />
+
+    <div
+      class="scene"
+      :class="{ top: highlightedArea && highlightedArea.top > 300 }"
+    >
+      <img
+        v-if="mewtwoImage"
+        :src="mewtwoImage"
+        alt="Mewtwo"
+        class="teacher"
+      />
 
       <div class="box">
         <span class="name">MEWTWO</span>
-        <p>{{ steps[index].text }}</p>
+
+        <p>{{ tutorialSteps[currentStep].text }}</p>
 
         <div class="buttons">
-          <span class="count">{{ index + 1 }} / {{ steps.length }}</span>
-          <button class="skip" @click="finish">Skip</button>
-          <button :disabled="index === 0" @click="index--">Back</button>
-          <button class="next" @click="next">
-            {{ index === steps.length - 1 ? "Let's go!" : 'Next' }} </button>
+          <span class="count">
+            {{ currentStep + 1 }} / {{ tutorialSteps.length }}
+          </span>
+
+          <button class="skip" @click="endTutorial">
+            Skip
+          </button>
+
+          <button
+            :disabled="currentStep === 0"
+            @click="currentStep--"
+          >
+            Back
+          </button>
+
+          <button
+            class="next"
+            @click="nextStep"
+          >
+            {{
+              currentStep === tutorialSteps.length - 1
+                ? "Let's go!"
+                : 'Next'
+            }}
+          </button>
         </div>
       </div>
     </div>
@@ -78,10 +171,13 @@ function finish() {
   font-family: 'Fredoka', sans-serif;
 }
 
+
+
 /* darken the screen when nothing is highlighted */
 .tutorial.dim {
   background: rgba(3, 9, 28, 0.4);
 }
+
 
 /* yellow outline + huge shadow that darkens everything else */
 .spotlight {
@@ -91,11 +187,12 @@ function finish() {
   outline-offset: 6px;
   box-shadow: 0 0 0 9999px rgba(3, 9, 28, 0.4);
 
+
+
   /* slide to the next part, and pulse while waiting */
   transition: top 0.4s, left 0.4s, width 0.4s, height 0.4s;
   animation: pulse 1.5s ease-in-out infinite;
 }
-
 
 
 .scene {
@@ -128,6 +225,7 @@ function finish() {
   color: white;
 }
 
+
 .name {
   padding: 2px 12px;
   border-radius: 10px;
@@ -135,6 +233,8 @@ function finish() {
   color: #072578;
   font-weight: 700;
 }
+
+
 
 .box p {
   font-size: 19px;
@@ -150,6 +250,8 @@ function finish() {
   margin-right: auto;
   color: #ffd117;
 }
+
+
 
 button {
   padding: 6px 16px;

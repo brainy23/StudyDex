@@ -15,11 +15,11 @@ const toggle = ref(null)
 const message = ref('')
 const busy = ref(false)
 const items = [
-  { id: 'town',  label: 'Town',  x: 0,     y: -1,     tile: 'linear-gradient(160deg, #fff3b0, #ffd15a)' },
-  { id: 'study', label: 'Study', x: .3827, y: -.9239, tile: 'linear-gradient(#a2edda, #54c5ac)' },
-  { id: 'quiz',  label: 'Quiz',  x: .7071, y: -.7071, tile: 'linear-gradient(#ffcf92, #f6a95e)' },
-  { id: 'todos', label: 'To-Do', x: .9239, y: -.3827, tile: 'linear-gradient(#b4ecd2, #5fbf95)' },
-  { id: 'bag',   label: 'Bag',   x: 1,     y: 0,      tile: 'linear-gradient(#e0cbff, #b496e7)' },
+  { id: 'town', label: 'Town', x: 0, y: -1, color: '#ffe997' },
+  { id: 'study', label: 'Study', x: .3827, y: -.9239, color: '#8df1dc' },
+  { id: 'quiz', label: 'Quiz', x: .7071, y: -.7071, color: '#ffcb9b' },
+  { id: 'todos', label: 'To-Do', x: .9239, y: -.3827, color: '#acedd9' },
+  { id: 'bag', label: 'Bag', x: 1, y: 0, color: '#d8bdff' },
 ]
 const selected = computed(() => props.current || items.find(item => props.routes[item.id] === route.path)?.id)
 const unavailable = item => selected.value === item.id || (props.sleeping && ['study', 'quiz', 'bag'].includes(item.id))
@@ -93,18 +93,17 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
     <nav ref="root" class="bubble-nav" :class="{ 'is-open': opened }" aria-label="Main navigation"
       @keydown="keyboard" @focusout="event => { if (!root?.contains(event.relatedTarget)) close() }">
       <div class="bubble-halo" aria-hidden="true"></div>
+      <!-- added tile here inside each bubble -->
       <button v-for="(item, index) in items" :key="item.id" type="button"
-        class="bubble-item" :class="{ 'is-current': selected === item.id, 'is-town': item.id === 'town' }"
-        :style="{ '--x': item.x, '--y': item.y, '--tile': item.tile, '--delay': `${index * 35}ms` }"
+        class="bubble-item" :class="[`tile-${item.id}`, { 'is-current': selected === item.id }]" 
+        :style="{ '--x': item.x, '--y': item.y, '--tint': item.color, '--delay': `${index * 35}ms` }"
         :disabled="unavailable(item) || busy" :tabindex="opened ? 0 : -1"
         :aria-hidden="!opened" :aria-current="selected === item.id ? 'page' : undefined"
         :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz','bag'].includes(item.id) ? ', buddy sleeping' : ''}`"
         @click="navigate(item)">
 
-        <!-- Town: the same CSS Pokéball as the town navbar -->
         <span v-if="item.id === 'town'" class="sd-pokeball" aria-hidden="true"></span>
 
-        <!-- Others: coloured icon tile -->
         <span v-else class="icon-tile" aria-hidden="true">
           <svg viewBox="0 0 32 32">
             <template v-if="item.id === 'study'">
@@ -143,7 +142,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 </template>
 
 <style scoped>
-/* Same colours and style town navbar */
 .bubble-nav {
   --size: 72px; --radius: 214px;
   position: fixed; left: max(20px, env(safe-area-inset-left)); bottom: max(20px, env(safe-area-inset-bottom));
@@ -152,7 +150,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 .bubble-nav *, .bubble-nav *::before, .bubble-nav *::after { box-sizing: border-box; }
 
-/* every bubble  blue glass, like the town navbar */
 .bubble-nav button {
   appearance: none; margin: 0; width: var(--size); height: var(--size); border-radius: 50%;
   position: absolute; left: 0; bottom: 0; padding: 6px 3px;
@@ -171,10 +168,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   text-shadow: 0 2px 3px rgba(5, 20, 45, 0.6);
 }
 
-/* coloured icon tiles */
 .icon-tile {
   display: grid; place-items: center; width: 34px; height: 32px; border-radius: 10px;
-  background: var(--tile);
   border: 1px solid rgba(255, 255, 255, 0.65);
   box-shadow: 0 3px 0 rgba(7, 23, 49, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
@@ -183,14 +178,18 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   stroke-linecap: round; stroke-linejoin: round;
 }
 
-/* Town bubble = gold button with Pokéball */
-.bubble-nav .bubble-item.is-town {
+.tile-study .icon-tile { background: linear-gradient(#a2edda, #54c5ac); }
+.tile-quiz  .icon-tile { background: linear-gradient(#ffcf92, #f6a95e); }
+.tile-todos .icon-tile { background: linear-gradient(#b4ecd2, #5fbf95); }
+.tile-bag   .icon-tile { background: linear-gradient(#e0cbff, #b496e7); }
+
+.bubble-nav .bubble-item.tile-town {
   border: 3px solid #fff0ae;
-  background: var(--tile);
+  background: linear-gradient(160deg, #fff3b0, #ffd15a);
   color: #243c68;
   box-shadow: 0 5px 0 #b77d2c, 0 9px 18px rgba(7, 20, 45, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.8);
 }
-.bubble-item.is-town .bubble-label { color: #243c68; text-shadow: none; }
+.bubble-item.tile-town .bubble-label { color: #243c68; text-shadow: none; }
 
 .sd-pokeball {
   position: relative; display: block; width: 32px; height: 32px; flex-shrink: 0; overflow: hidden;
@@ -202,7 +201,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   width: 11px; height: 11px; border: 3px solid #263d63; border-radius: 50%; background: #fff;
 }
 
-/* menu button */
 .bubble-nav .bubble-toggle { z-index: 2; }
 .bubble-toggle svg {
   width: 28px; height: 28px; fill: none; stroke: #ffe17a; stroke-width: 2.4; stroke-linecap: round;
@@ -210,7 +208,6 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 .bubble-nav.is-open .bubble-toggle svg { transform: rotate(90deg); }
 
-/* at the start animation */
 .bubble-nav .bubble-item {
   opacity: 0; visibility: hidden; pointer-events: none; transform: translate(0, 0) scale(.3);
   transition: transform .4s cubic-bezier(.2, .8, .2, 1), opacity .2s, visibility .4s, translate 160ms ease;
@@ -221,18 +218,15 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   transition-delay: var(--delay), var(--delay), var(--delay), 0ms;
 }
 
-/* current page: yellow ring + small yellow bar */
-.bubble-nav .bubble-item.is-current:not(.is-town) { border-color: rgba(255, 226, 137, 0.9); }
+.bubble-nav .bubble-item.is-current:not(.tile-town) { border-color: rgba(255, 226, 137, 0.9); }
 .bubble-nav .bubble-item.is-current::after {
   content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%);
   width: 16px; height: 4px; border-radius: 999px; background: #ffe17a;
 }
 
-/*  unavailable */
 .bubble-nav button:disabled { cursor: not-allowed; }
 .bubble-nav .bubble-item:disabled:not(.is-current) { filter: grayscale(100%); opacity: .45; }
 
-/* hover */
 @media (hover: hover) {
   .bubble-nav button:not(:disabled):hover { translate: 0 -3px; filter: brightness(1.08); }
 }
