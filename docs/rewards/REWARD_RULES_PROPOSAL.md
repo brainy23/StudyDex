@@ -1,6 +1,18 @@
 # Reward rules for discussion
 
-4 November 2026. This proposes implementation rules from the user's XP conversation. It is not approval to implement earning rules or execute database changes.
+4 November 2026. Confirmed: each quiz has its own first-ever accuracy bonus; duplicate XP goes to the selected buddy; the progression framework is halved. The demo needs no further progression after the available collection is fully trained. This document does not authorize database changes. Other earning-rule details remain proposals where explicitly noted.
+
+## Approved progression (cumulative XP)
+
+| Evolution line | Evolution milestones | Fully trained |
+| --- | --- | --- |
+| Three stages | 75 XP, then 175 XP | 250 XP |
+| Two stages | 125 XP | 250 XP |
+| No evolution | None | 250 XP |
+
+XP is not reset after evolution. Final evolution can continue training until 250 XP. Excess XP remains available for another eligible buddy. Activity rewards remain 15 XP per study block, accuracy bonuses capped at 50 XP, 5 XP per repeat quiz, and the intended 25 XP duplicate reward. Browser helpers only support the existing local preview; persisted rewards need authoritative server enforcement.
+
+The capacity evidence is now saved in `capacity_snapshot_20261104.json`; the updated illustrative model is `capacity_model_250.json`. Three fully trained Pokémon cost 750 XP, estimated at 5–8 days across levels under the model's daily-cap/80%-accuracy assumptions. The catalogue remains empty and live earning functions are not deployed.
 
 ## Suggested starting rules
 
@@ -14,7 +26,7 @@
 | High-score pack | Three qualifying quizzes strictly above 80%. Recommend distinct quiz/topic identities and counting only the first graded attempt of each per day; decide whether progress resets after each earned pack and whether the same identities can qualify in later cycles. |
 | Streak pack | Recommend one pack on consecutive active-day milestones 5,10,15,…; one completed validated study block or submitted graded quiz qualifies a day. Login alone does not count. A missed day resets the streak; revisiting the same date does not advance it. |
 | Duplicate draw | Josh's intended +25 XP to the user's currently selected buddy (recipient confirmed by user); persist recipient at award time. Define behavior when selected buddy is absent or capped. |
-| All owned Pokémon capped | Recommend a separately identified recovery pack that guarantees an eligible unowned species, granted once per blocked progression state. This requires an agreed level/XP cap and finite-catalogue fallback before implementation. |
+| All owned Pokémon capped | Recommend a separately identified recovery pack that guarantees an eligible unowned species, granted once per blocked progression state. The approved training cap is 250 XP. For this finite demo, show a collection-complete state when no unowned eligible species remain; no extra progression path is required. |
 
 Accuracy examples: 0% → 0 XP; 80% → 30–40 XP; 100% → 40–50 XP. The random first reward can be below 5 at low accuracy; do not silently impose a participation floor unless agreed.
 
@@ -36,8 +48,8 @@ Secure grading and persisted attempts are prerequisites for quiz rewards; existi
 
 ## Decisions needed next
 
-- Three quiz attempts **globally per day** or **per quiz per day**; and one first-ever accuracy bonus per quiz versus one bonus globally per day.
+- Three quiz attempts **globally per day** or **per quiz per day**. The first-ever accuracy bonus is confirmed **per quiz**, not one global daily bonus.
 - Three distinct qualifying quiz/topics, threshold **>80%** or **>=80%**, and repeat/reset rules for earning subsequent high-score packs.
-- Study block duration, streak qualifying activity/milestones, level/XP curve, and no-eligible-buddy/catalogue-exhaustion behavior.
+- Study block duration, streak qualifying activity/milestones and no-eligible-buddy XP handling. Progression thresholds are approved above; no additional post-collection progression is needed for this demo.
 
 No design work is needed to settle these rules. No reward-rule implementation or database deployment is approved by this proposal.

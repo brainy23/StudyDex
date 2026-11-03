@@ -1,16 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { getRewardInventory, openRewardPack, getStarterStatus, claimStarter } from '../rewardsService'
+import { getRewardInventory, openRewardPack, getStarterStatus, claimStarter, acknowledgeRewardPack } from '../rewardsService'
 const { getUser, rpc } = vi.hoisted(() => ({ getUser: vi.fn(), rpc: vi.fn() }))
 vi.mock('../../lib/supabase', () => ({ getSupabase: () => ({ auth: { getUser }, rpc }) }))
 const packId = '11111111-1111-4111-8111-111111111111'
 const result = { user_id: 'student', pack_id: packId, reward_type: 'pokemon', pokemon: { pokeapi_id: 4, name: 'charmander' } }
 beforeEach(() => {
   vi.resetAllMocks()
+  sessionStorage.clear()
   getUser.mockResolvedValue({ data: { user: { id: 'student' } }, error: null })
 })
 it('loads server counts without accepting a browser user ID or querying answer tables', async () => {
   rpc.mockResolvedValue({ data: { user_id: 'student', unopened_count: 3, packs: [{ id: packId }] } })
-  expect(await getRewardInventory()).toEqual({ userId: 'student', count: 3, packs: [{ id: packId }] })
+  expect(await getRewardInventory()).toEqual({ userId: 'student', count: 3, packs: [{ id: packId }], pendingPackId: null })
   expect(rpc).toHaveBeenCalledExactlyOnceWith('get_reward_inventory')
 })
 it('does not convert a missing backend into zero packs', async () => {
@@ -68,4 +69,33 @@ it('submits only an eligible starter ID and waits for server confirmation', asyn
 it('does not allow an arbitrary Pokemon to be claimed as a starter', async () => {
   await expect(claimStarter(150)).rejects.toThrow('three starters')
   expect(rpc).not.toHaveBeenCalled()
+})
+
+it('recovers the same pending pack after an uncertain opening and an inventory reload', async () => {
+  rpc.mockRejectedValueOnce(new Error('connection lost'))
+  await expect(openRewardPack(packId)).rejects.toThrow('connection lost')
+  rpc.mockResolvedValue({ data: { user_id: 'student', unopened_count: 0, packs: [] } })
+  expect(await getRewardInventory()).toMatchObject({ count: 0, pendingPackId: packId })
+  acknowledgeRewardPack('student', packId)
+  expect(await getRewardInventory()).toMatchObject({ pendingPackId: null })
+})
+it('does not overwrite an uncertain pack with a different pack request', async () => {
+  rpc.mockResolvedValue({ data: result })
+  await openRewardPack(packId)
+  rpc.mockClear()
+  await expect(openRewardPack('22222222-2222-4222-8222-222222222222')).rejects.toThrow('previous pack')
+  expect(rpc).not.toHaveBeenCalled()
+})
+it('rejects inventory returned after switching accounts', async () => {
+  rpc.mockResolvedValue({ data: { user_id: 'student', unopened_count: 0, packs: [] } })
+  getUser.mockResolvedValueOnce({ data: { user: { id: 'student' } } })
+    .mockResolvedValueOnce({ data: { user: { id: 'other' } } })
+  await expect(getRewardInventory()).rejects.toThrow('account changed')
+})
+it('does not leak another accounts pending pack into inventory', async () => {
+  rpc.mockResolvedValue({ data: result })
+  await openRewardPack(packId)
+  getUser.mockResolvedValue({ data: { user: { id: 'other' } } })
+  rpc.mockResolvedValue({ data: { user_id: 'other', unopened_count: 0, packs: [] } })
+  expect(await getRewardInventory()).toMatchObject({ userId: 'other', pendingPackId: null })
 })

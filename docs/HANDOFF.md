@@ -1,27 +1,59 @@
-# StudyDex handoff — Arena merge and Mathematics checkpoint
+# StudyDex handoff — rewards progression and local integration
 
-Updated 4 November 2026 (Asia/Singapore). Read `docs/MERGE_ARENA_MATH.md` for the full scope, files, conflict resolutions and test evidence.
+Updated 4 November 2026 (Asia/Singapore).
 
-Active checkout: `/Users/javanchua/Documents/SMU/IS216 WAD2/Group Project/StudyDex`, branch `integration/user-registration`. The resolved merge was safely transferred here from the temporary worktree on 3 November 2026; the temporary checkout is now detached and retains its staged snapshot. Original target HEAD is f07328e. Backup `backup/integration-before-latest-arena-2026-11-03` preserves it. Incoming design tip is 4edbee6. The merge is resolved/staged but intentionally **uncommitted and unpushed**. Do not switch, reset, abort, commit or push it without the user's direction. The original StudyDex folder now contains the pending integration merge. All 35 pre-existing untracked audit/note files were preserved byte-for-byte; the older handoff is `docs/HANDOFF.before-arena-merge-2026-11-03.md`. A transfer backup and binary patch are at `/private/tmp/studydex-transfer-20261103-_spp6yqx`. No source changes were made during transfer: the complete restored index matched the tested index exactly.
+## Current work and Git state
 
-Math is enabled for saved profile levels using real catalogue topics. New selection/mode screens are subject-neutral; Math question previews use the actual bank, not demo keys. Keep explicit public field lists and private answer-key protection. No SQL or database changes in this task.
+The Arena/Mathematics integration is saved at `b6dc9aa` on `integration/user-registration`. Rewards work started from that checkpoint on `fix/josh-rewards-inventory`; initial frontend checkpoint is `bc8d7ba`. The user has explicitly authorized implementing the functional fixes, halving progression thresholds and merging the rewards branch into integration locally. At this writing the final feature checkpoint/merge is being prepared; check Git for the resulting commit. No push is authorized.
 
-Four conflicts were resolved around the integration's learning engine, auth/router, Arena previews and shared Lab state. New classroom art wraps the existing roadmap/plant Learn engine. Shared timer, Learn/Flashcards state, optional boss practice without punishment, canonical topic_id and legacy topic handling are retained. Existing null-topic cached-slot errors are guarded. Incoming automatic boss/loss resets and demo grading were not carried over.
+The original untracked AGENTS/CLAUDE instructions, audit folder and earlier review notes remain preserved and outside the application commits. Never add them blindly. No environment files were read, copied, edited or committed. No new dependencies.
 
-Verified: 246 unit cases/26 files pass, two fixture Chrome journeys pass (P1 mobile/P6 desktop), production build passes, scoped lint passes. Full lint retains three pre-existing Oxlint/four ESLint errors. Large dashboard/chart chunks remain. Existing lockfile dependencies installed without new packages/versions. No real student login, live RLS, full old browser suite, Safari/Firefox or long real-content visual testing. Fixture configs avoid local environment files and all real database writes.
+## What changed
 
-Next: user reviews Math/Science/long lessons in this original project folder; adapt legacy browser scenarios for new root selection; resolve existing lint debt separately; commit/transfer/push only after explicit approval. Secure grading, saved attempts/rewards and database privilege hardening remain separately approved backend work. Every future approval should briefly explain what Codex will perform.
+- Preserved the Arena/Mathematics work: actual topic catalogue, profile-level selection, Learn/flashcards/shared timer, optional practice without punishment and ungraded Supabase Arena previews. Do not fetch private answer keys in the browser.
+- Selectively ported Josh's rewards/starter components and required assets, preserving existing auth/router/timer. Shared earned/unopened pack count drives Town and Bag badges and direct Rewards navigation.
+- `src/data/pokemonProgression.js`: approved cumulative progression: three stages evolve at **75/175 XP**, two stages at **125 XP**, every Pokémon fully trained at **250 XP**. Study/quiz/duplicate earning amounts are unchanged.
+- `PokemonBuddy.vue` uses the shared rule for its existing local preview: XP survives evolution, final forms keep training to 250, overflow is retained, and backwards preview transitions remain supported. Home/QuestPhone/collection caps use the same constant. Standalone local recovery gifts appear even at an exact cap with no overflow and select the new eligible buddy.
+- Rewards fixes include pointer cancellation, keyboard opening/focus, audio isolation, artwork fallback, async cleanup, reduced motion, same-account RPC response validation, account-isolated pending pack IDs, retry/reload recovery and result acknowledgement. A new request cannot overwrite an uncertain pack opening. Account changes clear the previous card.
+- Signup routes to starter selection; saved claims are checked before confirmation. Errors allow Continue studying rather than blocking the whole app. Email-change callbacks remain in Account. No fake saved starter or reward is substituted when backend functions are unavailable.
 
-## Authorized local checkpoint — 4 November 2026
+Read `docs/rewards/README.md` for file-level details and `docs/rewards/REWARD_RULES_PROPOSAL.md` for confirmed versus pending rules. `docs/MERGE_ARENA_MATH.md` retains the earlier merge evidence.
 
-The user authorized saving the current integration changes in a local commit before beginning rewards work. This checkpoint completes the resolved Arena merge and Mathematics selection work described above; the earlier pending/uncommitted wording records the pre-checkpoint history. No push is authorized. Untracked audit, instruction and prior review files remain outside this application commit. Rewards will be prepared separately; no database operations or permission changes are authorized by this checkpoint. Validation evidence above is from 3 November; no new application changes have been made since that verification.
+## Backend status and decisions not to undo
 
-## Rewards work — 4 November 2026
+**The four reward/starter RPCs are not implemented or deployed.** The live Pokémon catalogue, ownership and packs were empty in the approved read-only evidence. `user_packs` has no read policy. Exact SQL approval is required before any Supabase SQL, imports, migrations, RLS/grants or database changes; no such operation is authorized by the local source merge.
 
-The Arena/Mathematics integration was committed locally as `b6dc9aa` with the user's authorization. It remains on `integration/user-registration`. Active rewards work is on `fix/josh-rewards-inventory`, branched from that checkpoint; Josh's rewards/starter components were selectively ported, preserving the integration router/auth/shared timer and Mathematics/Science behavior. Nothing was pushed.
+`docs/rewards/03_inventory_access_proposal.sql` remains unapproved/unexecuted and is not a complete backend deployment. The other SQL files were approved read-only checks. Fresh capacity counts and the 250-XP model are preserved in `capacity_snapshot_20261104.json` and `capacity_model_250.json`. There is enough educational content for a three-Pokémon demo, conditional on renewable study/repeat XP and eligible Pokémon availability.
 
-Read `docs/rewards/README.md` before continuing. It lists exact changed files, RPC contracts, confirmed/pending product rules, SQL approvals, verified facts and next tasks. Shared badge counts, direct Rewards navigation, interaction/keyboard/audio/cleanup fixes and signup Starter routing are prepared. **The four reward/starter RPCs are not implemented/deployed.** Empty or inaccessible backend state is not replaced with demo rewards. The user requested discussion of the earning rules before implementing them; duplicate XP is to the selected buddy.
+The user confirmed each quiz has its own first-ever accuracy bonus; duplicate XP goes to the selected buddy; the finite demo needs no additional progression after completing its collection. Daily global versus per-quiz attempt limits, exact streak/high-score qualification and trusted study-block validation still need agreement. Do not award from browser clocks, scores, localStorage counters or ungraded previews.
 
-The two exact read-only preflights were approved/run; the second returned a complete snapshot. Pokémon catalogue, ownership and packs are all empty. `user_packs` has no RLS read policy; no reward functions exist. Project identity was verified. No database records, policies or backend functions were changed. `03_inventory_access_proposal.sql` is an unapproved/unexecuted draft, not a complete deployment. Original untracked audit/note/instruction files remain preserved and uncommitted.
+The buddy page/Trainer/Town collection still contains local prototype data. The new progression code does not make those records authenticated server inventory. Same-tab pack recovery relies on session storage and future server idempotency; cross-device result history, actual concurrency, reward persistence, secure grading and earning enforcement remain unfinished. Keep pending XP rather than losing it when a buddy caps.
 
-Frontend validation: production build passes; **284 unit cases/31 files pass** on the final rerun. Both Chrome fixture journeys passed (starter; mobile badge/opening/recount), with simulated backend responses only. Changed-file ESLint passes. Full `pnpm lint` still reports the same three existing Oxlint errors; no unrelated autofixes retained. No new dependencies or environment-file access. Live grants/ownership/concurrency, signup cross-device resumption and durable opening recovery across page reloads remain unverified/unfinished. No design changes are proposed as next tasks.
+## Verification
+
+- **317 unit cases / 35 files pass**, using temporary Vitest configuration with environment-file loading disabled.
+- **5 Chrome rewards fixtures pass**: mobile badge → Rewards → keyboard opening/recount; one-time starter UI; failed-response reload recovery of the same pack; unavailable starter fallback; cumulative progression/evolution/cap/overflow.
+- **2 existing Chrome Mathematics fixtures pass**, P1 mobile and P6 desktop, retaining learning/cards/timer/ungraded preview behavior.
+- Production build passes with environment-file loading disabled and output outside protected `dist/`; existing large chart/dashboard chunk warning remains.
+- Required `pnpm lint` exits 1 on three existing Oxlint errors in Timer and account/registration tests. Separate full no-fix ESLint reports four existing Landing/Timer errors. Changed-file ESLint passes; no unrelated autofixes retained.
+- Browser responses are synthetic; these checks do not prove live RPC deployment, authenticated RLS access, grading, real persistence or cross-tab database safety. No live database operations occurred during this merge task.
+
+## Next steps
+
+1. Review/approve the demo Pokémon catalogue and narrow backend/security changes, showing exact lowercase SQL before execution.
+2. Implement/test inventory, durable one-time starter grants and atomic/idempotent pack opening on a disposable database, then obtain exact deployment approval. Include account isolation, selected-buddy ownership, duplicate XP, capped buddies and concurrent requests.
+3. Implement authoritative study events, reward ledger, daily caps and overflow handling using the approved 250-XP progression rule. Preserve existing Science/Mathematics and student records.
+4. Build secure grading/persisted quiz attempts before enabling quiz XP or high-score packs. Normal/Boss quiz identity and daily attempt rules must be explicit.
+5. Validate live authenticated student journeys and cross-device recovery after backend approval. No push/main merge without explicit authorization.
+
+## Commands
+
+```sh
+pnpm test:unit --run
+pnpm lint
+pnpm build
+STUDYDEX_E2E_BROWSER_CHANNEL=chrome pnpm exec playwright test --config playwright.rewards.config.js
+STUDYDEX_E2E_BROWSER_CHANNEL=chrome pnpm exec playwright test --config playwright.math.config.js
+```
+
+Standard Vite commands use the developer's existing configuration. Fixture servers deliberately avoid local environment files and intercept Supabase with fake credentials. Read `docs/team-testing.md` for broader team testing guidance.

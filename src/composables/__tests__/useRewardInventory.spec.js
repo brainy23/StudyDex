@@ -1,8 +1,8 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useRewardInventory } from '../useRewardInventory'
-import { getRewardInventory, watchRewardAccount } from '../../services/rewardsService'
-vi.mock('../../services/rewardsService', () => ({ getRewardInventory: vi.fn(), watchRewardAccount: vi.fn() }))
+import { getRewardInventory, watchRewardAccount, acknowledgeRewardPack } from '../../services/rewardsService'
+vi.mock('../../services/rewardsService', () => ({ getRewardInventory: vi.fn(), watchRewardAccount: vi.fn(), acknowledgeRewardPack: vi.fn() }))
 let wrappers = []
 let state
 let accountChanged
@@ -67,4 +67,12 @@ it('polls while mounted and cleans up after the last consumer', async () => {
   await vi.advanceTimersByTimeAsync(30000)
   expect(getRewardInventory).toHaveBeenCalledTimes(2)
   expect(unsubscribe).toHaveBeenCalledOnce()
+})
+
+it('acknowledges the current accounts recovered result and clears the local pending state', async () => {
+  getRewardInventory.mockResolvedValue({ userId: 'one', count: 0, packs: [], pendingPackId: 'pending' })
+  consumer(); await flushPromises()
+  state.acknowledge('pending')
+  expect(state.pendingPackId.value).toBe(null)
+  expect(acknowledgeRewardPack).toHaveBeenCalledExactlyOnceWith('one', 'pending')
 })

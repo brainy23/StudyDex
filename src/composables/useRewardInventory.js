@@ -1,11 +1,13 @@
 import { computed, onMounted, onUnmounted, readonly, ref } from 'vue'
-import { getRewardInventory, watchRewardAccount } from '../services/rewardsService'
+import { getRewardInventory, watchRewardAccount, acknowledgeRewardPack } from '../services/rewardsService'
 
 const count = ref(null)
 const packs = ref([])
 const error = ref('')
 const loading = ref(false)
 const notice = ref('')
+const userId = ref(null)
+const pendingPackId = ref(null)
 let owner = null
 let sequence = 0
 let consumers = 0
@@ -19,6 +21,7 @@ function clearInventory() {
   packs.value = []
   error.value = ''
   notice.value = ''
+  pendingPackId.value = null
   loading.value = false
 }
 
@@ -30,6 +33,8 @@ async function refresh() {
     if (request !== sequence || consumers === 0) return
     const previous = owner === result.userId ? count.value : null
     owner = result.userId
+    userId.value = result.userId
+    pendingPackId.value = result.pendingPackId ?? null
     count.value = result.count
     packs.value = result.packs
     notice.value = previous !== null && result.count > previous
@@ -53,13 +58,15 @@ function refreshVisible() {
 
 function start() {
   try {
-    subscription = watchRewardAccount((event, userId) => {
-      if (event === 'SIGNED_OUT' || owner !== userId) {
+    subscription = watchRewardAccount((event, nextUserId) => {
+      if (event === 'SIGNED_OUT' || owner !== nextUserId) {
         clearInventory()
-        owner = userId
+        owner = nextUserId
+        // Clear the previous account's result immediately, before a new fetch.
       }
+      userId.value = nextUserId
       clearTimeout(accountRefresh)
-      if (userId) accountRefresh = setTimeout(refreshVisible, 0)
+      if (nextUserId) accountRefresh = setTimeout(refreshVisible, 0)
     })
   } catch {
     // refresh() provides the friendly configuration/session error.
@@ -81,6 +88,7 @@ function stop() {
   window.removeEventListener('studydex:rewards-changed', refreshVisible)
   document.removeEventListener('visibilitychange', refreshVisible)
   owner = null
+  userId.value = null
   clearInventory()
 }
 
@@ -90,7 +98,13 @@ export function useRewardInventory() {
   return {
     count: readonly(count), packs: readonly(packs), error: readonly(error),
     loading: readonly(loading), notice: readonly(notice),
+    userId: readonly(userId), pendingPackId: readonly(pendingPackId),
     label: computed(() => count.value === null ? '' : count.value > 99 ? '99+' : String(count.value)),
     refresh,
+    acknowledge(packId) {
+      if (!userId.value) return
+      if (pendingPackId.value === packId) pendingPackId.value = null
+      acknowledgeRewardPack(userId.value, packId)
+    },
   }
 }

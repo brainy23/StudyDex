@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import BackToHome from '../components/common/BackToHome.vue'
 import { useRewardInventory } from '../composables/useRewardInventory'
 import { openRewardPack } from '../services/rewardsService'
@@ -40,9 +40,12 @@ const tearVars = computed(() => {
     }
 })
 
-const { count: packCount, packs, error: inventoryError, loading, refresh } = useRewardInventory()
+const { count: packCount, packs, error: inventoryError, loading, refresh,
+    pendingPackId = ref(null), userId: inventoryUserId = ref(null), acknowledge = () => {},
+} = useRewardInventory()
+const canChoosePack = computed(() => Boolean(pendingPackId.value) || packCount.value > 0)
 const packMessage = computed(() => loading.value ? 'Checking your packs…' :
-    inventoryError.value || (packCount.value > 0 ? "Let's rip some packs!" : 'No unopened packs yet.'))
+    inventoryError.value || (pendingPackId.value ? 'Your previous pack is ready to recover.' : packCount.value > 0 ? "Let's rip some packs!" : 'No unopened packs yet.'))
 const openingError = ref('')
 const revealControl = ref(null)
 const resultControl = ref(null)
@@ -50,9 +53,23 @@ const reducedMotion = ref(false)
 let motionQuery
 let active = true
 let selectedPackId = null
+let selectedOwnerId = null
 let assetController
 const apiBase = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
-function updateMotion() { reducedMotion.value = Boolean(motionQuery?.matches) }
+function updateMotion() {
+    reducedMotion.value = Boolean(motionQuery?.matches)
+    if (reducedMotion.value && card.value && ['tear', 'rise', 'flip'].includes(stage.value)) {
+        clearTimers()
+        cancelAnimationFrame(tearRaf)
+        stage.value = 'revealed'
+        rx.value = 0
+        ry.value = 0
+        void focusResult()
+    }
+}
+watch(inventoryUserId, (next, previous) => {
+    if (previous && next !== previous) backToPacks()
+})
 onMounted(() => {
     motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)')
     updateMotion()
@@ -254,7 +271,11 @@ function imageFallback(event) {
 
 // ---------- flow ----------
 function choosePack() {
-    if (packCount.value > 0 && packs.value[0]) { selectedPackId = packs.value[0].id; stage.value = 'idle' }
+    if (canChoosePack.value) {
+        selectedPackId = pendingPackId.value || packs.value[0]?.id
+        selectedOwnerId = inventoryUserId.value
+        stage.value = 'idle'
+    }
 }
 
 function openPack() {
@@ -383,6 +404,7 @@ async function tear() {
         // Retain this exact pack ID: an uncertain network outcome must be retried,
         // never replaced by another pack or by a new browser random draw.
         openingError.value = failure.message || 'Please retry this same pack.'
+        void refresh()
         finishing = false
         tearProgress.value = 0
         stage.value = 'ready'
@@ -392,10 +414,12 @@ async function tear() {
 }
 
 function reset() {
+    if (stage.value === 'revealed' && inventoryUserId.value === selectedOwnerId) acknowledge(selectedPackId)
     clearTimers()
     loadToken++
     assetController?.abort()
-    selectedPackId = packs.value[0]?.id || null
+    selectedPackId = pendingPackId.value || packs.value[0]?.id || null
+    selectedOwnerId = inventoryUserId.value
     openingError.value = ''
     stage.value = 'idle'
     rx.value = 0
@@ -435,7 +459,7 @@ function backToPacks() {
         <h1 class="shelf-title">Your Packs <span class="total">{{ packCount === null ? '—' : packCount }}</span></h1>
         <p class="shelf-sub">Your saved, unopened packs appear here.</p>
         <div class="hero">
-          <button class="hero-pack" :disabled="!packCount || loading || Boolean(inventoryError)" aria-label="Open a pack" @click="choosePack">
+          <button class="hero-pack" :disabled="!canChoosePack || loading || Boolean(inventoryError)" :aria-label="pendingPackId ? 'Resume pack' : 'Open a pack'" @click="choosePack">
             <span class="hero-glow"></span>
             <span v-if="packCount > 1" class="stack s1"></span>
             <span v-if="packCount > 2" class="stack s2"></span>
@@ -443,7 +467,7 @@ function backToPacks() {
             <span class="shine-sweep"></span>
             <span v-if="packCount > 1" class="hero-count">×{{ packCount === null ? '—' : packCount }}</span>
           </button>
-          <button v-if="packCount > 0" class="openbutton primary" @click="choosePack">Open a pack</button>
+          <button v-if="canChoosePack" :disabled="loading || Boolean(inventoryError)" class="openbutton primary" @click="choosePack">{{ pendingPackId ? 'Resume pack' : 'Open a pack' }}</button>
           <p v-else class="empty">No packs left. Study to earn more!</p>
         </div>
       </section>
@@ -554,7 +578,7 @@ function backToPacks() {
 
     <div v-if="stage === 'revealed'" class="reveal-actions">
       <button ref="resultControl" class="openbutton small" @click="backToPacks">Back to packs</button>
-      <button v-if="packCount > 0" class="openbutton small primary" @click="reset">Open another ({{ packCount }} left)</button>
+      <button v-if="packCount > 0" :disabled="loading || Boolean(inventoryError)" class="openbutton small primary" @click="reset">Open another ({{ packCount }} left)</button>
     </div>
 
     <button v-if="stage === 'idle'" class="openbutton small back leaver to-left" @click="backToPacks">← Back to packs</button>
@@ -1352,7 +1376,7 @@ button:focus-visible { outline: 3px solid white; outline-offset: 5px; }
         border-radius: 12px;
         background: url('/assets/reward_pack.png') center / 100% 100% no-repeat;
         filter: brightness(0.75) saturate(0.9);
-        
+
     }
     .stack.s1{
         rotate: -10deg;

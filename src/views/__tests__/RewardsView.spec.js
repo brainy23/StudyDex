@@ -19,7 +19,7 @@ async function ready() {
 }
 beforeEach(() => {
   vi.useFakeTimers(); vi.resetAllMocks(); reduced = true
-  inventory = { count: ref(2), packs: ref([{ id: packId }]), error: ref(''), loading: ref(false), refresh: vi.fn() }
+  inventory = { count: ref(2), packs: ref([{ id: packId }]), error: ref(''), loading: ref(false), refresh: vi.fn(), pendingPackId: ref(null), userId: ref('student'), acknowledge: vi.fn() }
   vi.stubGlobal('matchMedia', () => ({ matches: reduced, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Artwork offline')))
   openRewardPack.mockResolvedValue(result)
@@ -77,4 +77,21 @@ it('ignores an opening response after unmount without scheduling artwork or time
   expect(fetch).not.toHaveBeenCalled()
   expect(inventory.refresh).not.toHaveBeenCalled()
   expect(vi.getTimerCount()).toBe(0)
+})
+
+it('can recover a saved pack result after reload even when no unopened packs remain', async () => {
+  inventory.count.value = 0; inventory.packs.value = []; inventory.pendingPackId.value = packId
+  render(); await ready()
+  await wrapper.get('.hint button').trigger('click'); await flushPromises()
+  expect(openRewardPack).toHaveBeenCalledExactlyOnceWith(packId)
+  expect(wrapper.get('.card-name').text()).toBe('charmander')
+  await wrapper.findAll('button').find(b => b.text() === 'Back to packs').trigger('click')
+  expect(inventory.acknowledge).toHaveBeenCalledExactlyOnceWith(packId)
+})
+it('removes the previous accounts revealed card immediately when the account changes', async () => {
+  render(); await ready(); await wrapper.get('.hint button').trigger('click'); await flushPromises()
+  inventory.userId.value = 'another-student'
+  await flushPromises()
+  expect(wrapper.find('.card-name').exists()).toBe(false)
+  expect(inventory.acknowledge).not.toHaveBeenCalled()
 })

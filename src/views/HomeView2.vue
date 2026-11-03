@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
+import { TRAINING_XP_CAP } from '../data/pokemonProgression'
 import TutorialGuide from '../components/common/TutorialGuide.vue'
 import { useWeatherLocation } from '../composables/useWeatherLocation'
 import { useRewardInventory } from '../composables/useRewardInventory'
@@ -38,7 +39,7 @@ const asset = '/town/'
 const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 
 // to be updated to match user
-const MAX_XP = 200
+const MAX_XP = TRAINING_XP_CAP
 
 
 // The incoming collection is a local prototype, separate from the real trainer profile.

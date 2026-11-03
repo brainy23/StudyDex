@@ -1,6 +1,7 @@
 <script setup>
 import axios from 'axios'
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { TRAINING_XP_CAP, trainingProgress, planTrainingXp } from '../../data/pokemonProgression'
 
 
 const props = defineProps({
@@ -16,7 +17,7 @@ const emit = defineEmits([
 ])
 
 const API = 'https://pokeapi.co/api/v2'
-const MAX_XP = 100
+const MAX_XP = TRAINING_XP_CAP
 
 // Component state
 const busy = ref(false)
@@ -45,7 +46,11 @@ const sprite = computed(() =>
 const isAnimating = computed(() => phase.value !== 'idle')
 
 const isMaxed = computed(() =>
-  displayedPokemon.value?.evolution_stage === 'MAX'
+  (displayedPokemon.value?.xp ?? 0) >= TRAINING_XP_CAP
+)
+
+const nextEvolutionXp = computed(() =>
+  trainingProgress(displayedPokemon.value?.xp ?? 0, displayedPokemon.value?.stageCount ?? 1).nextEvolutionXp
 )
 
 const xpPercentage = computed(() =>
@@ -88,7 +93,7 @@ function wait(milliseconds) {
 
 function prefersReducedMotion() {
   return typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches)
 }
 
 async function request(url) {
@@ -112,48 +117,53 @@ async function request(url) {
 
 async function getEvolutionOptions(pokemonId) {
   const species = await request(
-    `${API}/pokemon-species/${pokemonId}/`
+    `${API}/pokemon-species/${pokemonId.id}/`
   )
 
   if (!species.evolution_chain?.url) {
-    return { previous: null, next: [] }
+    return { previous: null, next: [], stageIndex: 0, stageCount: 1 }
   }
 
   const evolution = await request(species.evolution_chain.url)
 
-  function find(node, previous = null) {
-    if (node.species.name === species.name) {
-      return {
-        previous,
-
-        // Preserve your Gen 1 evolution restriction.
-        next: node.evolves_to
-          .filter(child => {
-            const id = Number(
-              child.species.url.split('/').filter(Boolean).pop()
-            )
-
-            return id >= 1 && id <= 151
-          })
-          .map(child => child.species.name)
-      }
+  function children(node) {
+    return (node.evolves_to || []).filter(child => {
+      const id = Number(child.species.url.split('/').filter(Boolean).pop())
+      return id >= 1 && id <= 151
+    })
+  }
+  function findNode(node, name) {
+    if (node.species.name === name) return node
+    for (const child of node.evolves_to || []) {
+      const found = findNode(child, name)
+      if (found) return found
     }
-
-    for (const child of node.evolves_to) {
-      const result = find(child, node.species.name)
-
-      if (result) return result
-    }
-
     return null
   }
-
-  const result = find(evolution.chain)
-
-  if (!result) {
-    throw new Error('Evolution information unavailable.')
+  // Treat the originally acquired species as this owned Pokémon's starting form.
+  // This also preserves the existing Pichu preview without treating every
+  // acquired Pikachu as having started as Pichu.
+  const originId = pokemonId.originalSpeciesId ?? pokemonId.id
+  const originSpecies = originId === pokemonId.id ? species
+    : await request(`${API}/pokemon-species/${originId}/`)
+  const origin = findNode(evolution.chain, originSpecies.name)
+  function depth(node) {
+    const next = children(node)
+    return 1 + (next.length ? Math.max(...next.map(depth)) : 0)
   }
-
+  function find(node, previous = null, stage = 0) {
+    if (node.species.name === species.name) return {
+      previous, next: children(node).map(child => child.species.name),
+      stageIndex: stage, stageCount: depth(origin),
+    }
+    for (const child of children(node)) {
+      const found = find(child, node.species.name, stage + 1)
+      if (found) return found
+    }
+    return null
+  }
+  const result = origin && find(origin)
+  if (!result) throw new Error('Evolution information unavailable.')
   return result
 }
 
@@ -191,91 +201,36 @@ async function getNextForm(name, currentPokemon, direction) {
 // =========================================
 
 async function prepareXPChange(pokemon, amount) {
-  let result = { ...pokemon }
-  let remainingXP = result.xp + amount
-  let overflow = 0
-
-  const transitions = []
-
-  if (amount > 0) {
-    result.isDefeated = false
-
-    // A previously verified MAX Pokémon needs no new API lookup.
-    if (result.evolution_stage === 'MAX') {
-      return {
-        result: { ...result, xp: MAX_XP },
-        transitions,
-        overflow: amount
-      }
-    }
-
-    while (remainingXP >= MAX_XP) {
-      const options = await getEvolutionOptions(result.id)
-
-      // Final form: fill its bar and preserve the excess.
-      if (!options.next.length) {
-        result.stageBeforeMax = numericStage(result)
-        result.evolution_stage = 'MAX'
-
-        overflow = remainingXP - MAX_XP
-        remainingXP = MAX_XP
-        break
-      }
-
-      const name = options.next[
-        Math.floor(Math.random() * options.next.length)
-      ]
-
-      const nextForm = await getNextForm(name, result, 1)
-
-      transitions.push({
-        previous: { ...result, xp: MAX_XP },
-        next: { ...nextForm, xp: 0 },
-        direction: 1
-      })
-
-      result = nextForm
-      remainingXP -= MAX_XP
-    }
-  } else {
-    // Losing XP reopens a MAX Pokémon's progress bar.
-    if (result.evolution_stage === 'MAX') {
-      result.evolution_stage = numericStage(result)
-    }
-
-    while (remainingXP < 0) {
-      const options = await getEvolutionOptions(result.id)
-
-      if (!options.previous) {
-        remainingXP = 0
-        result.isDefeated = true
-        break
-      }
-
-      const previousForm = await getNextForm(
-        options.previous,
-        result,
-        -1
-      )
-
-      remainingXP += MAX_XP
-
-      transitions.push({
-        previous: { ...result, xp: 0 },
-        next: {
-          ...previousForm,
-          xp: Math.max(0, remainingXP)
-        },
-        direction: -1
-      })
-
-      result = previousForm
-    }
+  const change = planTrainingXp(pokemon.xp, amount)
+  if (amount > 0 && pokemon.xp === TRAINING_XP_CAP && pokemon.evolution_stage === 'MAX') {
+    return { result: { ...pokemon }, transitions: [], overflow: change.overflow }
   }
-
-  result.xp = remainingXP
-
-  return { result, transitions, overflow }
+  let result = { ...pokemon, originalSpeciesId: pokemon.originalSpeciesId ?? pokemon.id }
+  const transitions = []
+  let options = await getEvolutionOptions(result)
+  result.stageCount = options.stageCount
+  let index = options.stageIndex
+  const target = trainingProgress(change.xp, result.stageCount).stage
+  while (index !== target) {
+    const direction = index < target ? 1 : -1
+    const name = direction > 0
+      ? options.next[Math.floor(Math.random() * options.next.length)]
+      : options.previous
+    if (!name) throw new Error('Evolution information unavailable.')
+    const next = await getNextForm(name, { ...result, evolution_stage: index }, direction)
+    transitions.push({
+      previous: { ...result }, next: { ...next, xp: change.xp }, direction,
+    })
+    result = next
+    index += direction
+    options = await getEvolutionOptions(result)
+  }
+  result.xp = change.xp
+  result.stageCount = options.stageCount
+  result.stageBeforeMax = index
+  result.evolution_stage = change.xp === TRAINING_XP_CAP ? 'MAX' : index
+  result.isDefeated = amount > 0 ? false : change.defeated
+  return { result, transitions, overflow: change.overflow }
 }
 
 // =========================================
@@ -518,7 +473,7 @@ onBeforeUnmount(() => {
 
       <div class="buddy-xp">
         <p>
-          {{ isMaxed ? 'Maximum evolution reached!' : 'XP Progress' }}
+          {{ isMaxed ? 'Fully trained!' : 'XP Progress' }}
         </p>
 
         <div
@@ -542,6 +497,7 @@ onBeforeUnmount(() => {
               : `${displayedPokemon?.xp ?? 0} / ${MAX_XP} XP`
           }}
         </p>
+        <p v-if="nextEvolutionXp !== null">Next evolution at {{ nextEvolutionXp }} XP</p>
       </div>
     </template>
 

@@ -13,6 +13,7 @@ const starters = [
 }))
 const loading = ref(true)
 const saving = ref(false)
+const claimed = ref(false)
 const selectedPokemon = ref(null)
 const errorMessage = ref('')
 let active = true
@@ -23,6 +24,7 @@ async function checkStarter() {
   try {
     const status = await getStarterStatus()
     if (!active) return
+    claimed.value = status.claimed
     if (status.claimed) await router.replace({ name: 'landing' })
   } catch (error) {
     if (active) errorMessage.value = error.message
@@ -30,10 +32,10 @@ async function checkStarter() {
 }
 onMounted(checkStarter)
 function selectPokemon(pokemon) {
-  if (!saving.value) selectedPokemon.value = pokemon.id
+  if (!saving.value && !claimed.value) selectedPokemon.value = pokemon.id
 }
 async function confirmSelection() {
-  if (!selectedPokemon.value || saving.value || loading.value || errorMessage.value) return
+  if (!selectedPokemon.value || claimed.value || saving.value || loading.value || errorMessage.value) return
   saving.value = true
   try {
     await claimStarter(selectedPokemon.value)
@@ -54,7 +56,7 @@ function imageFallback(event) {
       Choose your starter Pokemon!
     </div>
 
-    <p v-if="errorMessage" role="alert">{{ errorMessage }} <button type="button" :disabled="saving" @click="checkStarter">Check again</button></p>
+    <p v-if="errorMessage" role="alert">{{ errorMessage }} <button type="button" :disabled="saving" @click="checkStarter">Check again</button> <RouterLink to="/home">Continue studying</RouterLink></p>
     <div class="starters">
       <div v-if="loading" class="loading">
         Loading starters...
@@ -62,7 +64,7 @@ function imageFallback(event) {
 
       <button
         type="button"
-        :disabled="saving || loading"
+        :disabled="saving || loading || claimed"
         :aria-pressed="selectedPokemon === pokemon.id"
         v-for="pokemon in starters"
         :key="pokemon.id"
@@ -88,7 +90,7 @@ function imageFallback(event) {
     <!-- Confirm selection button -->
     <button
       class="confirm-button"
-      :disabled="!selectedPokemon || loading || saving || Boolean(errorMessage)"
+      :disabled="!selectedPokemon || claimed || loading || saving || Boolean(errorMessage)"
       @click="confirmSelection"
     >
       {{ saving ? 'Saving your starter…' : 'I Choose You!' }}
