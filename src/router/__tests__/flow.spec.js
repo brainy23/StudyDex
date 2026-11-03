@@ -238,7 +238,7 @@ it('starts at landing-info, logs in to landing, and waits for Start before openi
   expect(router.currentRoute.value.name).toBe('landing')
   expect(wrapper.text()).toContain('Welcome, Ash!')
   expect(wrapper.text()).toContain('Primary 3')
-  await wrapper.get('a.enter-btn').trigger('click')
+  await wrapper.get('a[href="/home"]').trigger('click')
   await flushPromises()
   expect(router.currentRoute.value.path).toBe('/home')
   expect(wrapper.find('.world-page').exists()).toBe(true)
@@ -260,7 +260,7 @@ it('keeps failed logins on the login page with feedback', async () => {
   expect(wrapper.get('[role="alert"]').text()).toBe('Invalid login credentials')
 })
 
-it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard', '/quiz', '/rewards', '/pokepacks', '/starter'])(
+it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard', '/quiz', '/rewards', '/pokepacks', '/starter', '/characterdesign', '/tutorialguide', '/admin-home', '/admin-users', '/admin-education', '/admin-quiz', '/admin-addquiz', '/admin-quiz/1', '/admin-adddeck', '/admin-education/1'])(
   'sends visitors without a session from %s to login',
   async (path) => {
     const router = await open(path)

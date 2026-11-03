@@ -1,6 +1,6 @@
 <script setup>
 defineOptions({ name: 'AvatarStylePreview' })
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -140,19 +140,15 @@ const selected = computed(() => avatars.find(a => a.id === selectedId.value))
 // Shown in the profile badge. Change this to user's username.
 const username = ref('Trainer')
 
-// Load every idle sheet up front. If one can't load, show the still picture instead.
+// Load only the current style's animation, rather than all ten large sheets.
 const missingIdle = ref([])
-
-onMounted(() => {
-  avatars.forEach(a => {
-    const img = new Image()
-    img.onerror = () => {
-      missingIdle.value.push(a.id)
-      console.warn('Idle sheet not found:', a.idleImage)
-    }
-    img.src = a.idleImage
-  })
-})
+watch(() => selected.value.idleImage, (src, previous, onCleanup) => {
+  const id = selected.value.id
+  const image = new Image()
+  image.onerror = () => { missingIdle.value = [...new Set([...missingIdle.value, id])] }
+  image.src = src
+  onCleanup(() => { image.onerror = null })
+}, { immediate: true })
 
 function start() {
   router.push({ name: 'tutorial' })
@@ -474,6 +470,9 @@ h1 {
   font-weight: 600;
 }
 
+@media (max-width: 720px) {
+  .choose-panel { top: auto; bottom: 12px; right: 12px; transform: none; width: calc(100% - 24px); max-height: 60dvh; }
+}
 @media (max-width: 520px) {
   .profile-badge { top: 12px; left: 12px; }
   .head-circle { width: 72px; height: 72px; border-width: 3px; outline-width: 3px; }

@@ -20,7 +20,7 @@ const screenshots = {
   dashboard: ['/trainer-home/trainer-home-v3.png'],
 }
 onMounted(async () => {
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches ?? true
   page.value.querySelectorAll('.carousel').forEach(element => {
     carousels.push(new Carousel(element, { interval: reducedMotion ? false : 5000, ride: false }))
   })

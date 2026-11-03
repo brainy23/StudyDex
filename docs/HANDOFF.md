@@ -1,10 +1,10 @@
-# StudyDex handoff — Pokémon persistence deployed
+# StudyDex handoff — admin, tutorial and landing integration
 
 Updated 4 November 2026 (Asia/Singapore).
 
 ## Current state
 
-Active branch: `integration/user-registration`. Previous local merge is `1048d8d`; the current session adds real Pokémon persistence and its application wiring. No push, main merge or hosting deployment is authorized/performed. Preserve original untracked AGENTS/CLAUDE files, audit directory and earlier review notes; do not add them blindly.
+Active branch: `integration/user-registration`. Pokémon persistence is committed at `39caa6b`. The user now explicitly authorizes committing and pushing integration for group testing. Admin (`bbcbe40`), Arena tutorial (`147a4a8`) and landing (`3f7f04a`) are merged. No main merge or hosting deployment is included. Read `docs/MERGE_ADMIN_TUTORIAL_LANDING.md` first for branch review, conflict resolutions, latest tests and limitations. Preserve original untracked AGENTS/CLAUDE files, audit directory and earlier review notes; do not add them blindly.
 
 **Supabase backend is deployed**, with explicit approval of the exact installation/verification SQL: migration `20261103212559_studydex_pokemon_persistence_v1`, project `sbrteylcizwkzetcqdro`. Read `docs/rewards/deployment/DEPLOYMENT_REPORT.md`, `execution_20261104.json` and `live_verification_20261104.json`. Do not rerun the installation: it intentionally refuses an already populated/installed baseline.
 
@@ -16,7 +16,7 @@ Active branch: `integration/user-registration`. Previous local merge is `1048d8d
 - Open a legitimately awarded owned pack atomically and retry its saved result safely. Duplicates credit 25 XP to the selected buddy, capped at 250; excess remains available when selecting an eligible buddy. Exact-cap recovery creates one pack while an unowned base remains.
 - No welcome packs are granted. No student's starter was chosen by the agent. The legacy `/pokebuddy` sample-user/XP-testing page redirects to the authenticated Trainer; its standalone component remains development/test source only.
 
-The backend is deployed; application code still needs the team's Git push/hosting deployment. No live signed-in browser claim has been performed by the agent. The database intentionally still had zero owned Pokémon/packs/claim accounts/receipts immediately after installation: users make their own starter choice.
+The backend is deployed; application source is prepared on integration for the authorized team-testing push. Hosting deployment remains separate. No live signed-in browser claim has been performed by the agent. The database intentionally still had zero owned Pokémon/packs/claim accounts/receipts immediately after installation: users make their own starter choice.
 
 ## Files and schema
 
@@ -39,13 +39,21 @@ Approved post-install SQL verifies unchanged educational counts: 81 topics, 313 
 
 ## Verification
 
-- **331 unit cases / 37 files pass.**
-- **6 rewards Chrome fixture journeys pass**, plus **2 P1/P6 Mathematics journeys**. The focused latest saved-collection rerun also covers evolved buddy display in Lab.
+- **341 unit cases / 37 files pass.**
+- **6 rewards Chrome fixture journeys pass**, plus **2 P1/P6 Mathematics journeys** and **3 new branch-integration journeys**. The focused latest saved-collection rerun also covers evolved buddy display in Lab.
 - Production build passes, with existing chart/dashboard chunk warning.
-- Changed-file ESLint passes. Full required lint retains three existing Oxlint errors; separate earlier full ESLint had four existing Landing/Timer errors. No unrelated autofixes retained.
+- Changed-file ESLint passes. Full required lint retains three existing Oxlint errors; latest separate full ESLint has three existing Timer errors. No unrelated autofixes retained.
 - **17 isolated PostgreSQL checks pass**: atomic installation rollback, rerun refusal, account/privilege isolation, durable starter/no welcome pack, invalid/foreign requests, evolution, duplicate XP/overflow, recovery and exact verification SQL.
 - Live metadata/count/privilege checks pass, and migration history records installation. No live signed-in user journey or genuine simultaneous multi-connection test was performed. Profile/pack locks and uniqueness constraints were reviewed; fixture tests are not certification of Supabase Auth itself.
 - Security advisor still reports existing leaked-password protection warning and RLS/no-policy INFO findings (including deliberate private-table denial). See deployment report links; no automatic unrelated fixes applied.
+
+## Latest merge decisions — do not undo
+
+- Admin screens are authenticated, labelled local demos with sample data, separate from student navigation. They grant no admin permissions or live writes. Access directly at `/admin-home` for group review.
+- All ten avatar styles remain an explicitly unsaved preview at `/characterdesign`; user chose this over reducing the picker to saved profile choices. No local avatar choice or database value is written. Landing also offers a direct Town link.
+- `/tutorialguide` redirects to the existing accessible `/tutorial`; keep one canonical `TutorialGuide.vue` implementation/casing, actual auth guard, reward badges and accurate ungraded-preview wording.
+- New public landing references existing labelled illustrations because the incoming screenshots were missing. Keep feature text honest about grading/earning/dashboard limitations.
+- Backup before these merges: `backup/integration-before-admin-tutorial-landing-2026-11-04` at `39caa6b`. No SQL was run during the branch merges. No dependencies added.
 
 ## Still unfinished
 
@@ -55,7 +63,7 @@ Frontend hosting is not deployed from this session. Real account/email-confirmat
 
 ## Next priorities
 
-1. Review/push/deploy the prepared app source through the team's authorized workflow. Do not push/main merge without explicit approval.
+1. Groupmates should pull integration and test the merged app. Git push is authorized in this session; check the remote branch for the final source commit. Hosting deployment/main merge remain separate. Use the team-testing commands in `docs/MERGE_ADMIN_TUTORIAL_LANDING.md`.
 2. In the running app, manually sign up/confirm email, choose one starter, check Town/Trainer/Lab, reload and log out/in, select an eligible buddy and verify persistence. A second account must see its own collection. Re-enter starter selection to verify no repeat claim.
 3. Implement trusted study events/XP ledger and secure grading/persisted attempts before enabling remaining earning rules. Show exact lowercase SQL and obtain approval before every new Supabase SQL/permission/data change.
 4. Verify real concurrent requests and recovery using a disposable/staging environment; never run destructive tests against shared content/students.
@@ -66,6 +74,7 @@ Frontend hosting is not deployed from this session. Real account/email-confirmat
 pnpm test:unit --run
 pnpm lint
 pnpm build
+STUDYDEX_E2E_BROWSER_CHANNEL=chrome pnpm exec playwright test --config playwright.branches.config.js
 STUDYDEX_E2E_BROWSER_CHANNEL=chrome pnpm exec playwright test --config playwright.rewards.config.js
 STUDYDEX_E2E_BROWSER_CHANNEL=chrome pnpm exec playwright test --config playwright.math.config.js
 node docs/rewards/deployment/test-persistence.mjs
