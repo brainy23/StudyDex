@@ -114,6 +114,13 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         meta: { requiresAuth: true },
       },
       {
+        path: '/characterdesign',
+        name: 'characterdesign',
+        component: () => import('../components/characterdesign/characterdesign.vue'),
+        meta: { requiresAuth: true },
+      },
+      { path: '/tutorialguide', redirect: { name: 'tutorial' }, meta: { requiresAuth: true } },
+      {
         path: '/tutorial',
         name: 'tutorial',
         component: HomeView,
