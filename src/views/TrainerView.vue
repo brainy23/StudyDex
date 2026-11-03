@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { updateCurrentAvatar } from '../services/accountService'
 import { avatarOptions } from '../data/avatarOptions'
+import { usePokemonCollection } from '../composables/usePokemonCollection'
 
 import BackToHome from '../components/common/BackToHome.vue'
 
@@ -162,125 +163,12 @@ async function selectTrainer(variant) {
 }
 
 // =====================================================
-// POKÉMON — LOCAL SAMPLE TABLES
-// These records are separate from the live avatar profile.
+// POKÉMON — AUTHENTICATED SAVED COLLECTION
 // =====================================================
 
-const sampleProfiles = [
-  {
-    id: '00000000-0000-4000-8000-000000000101',
-    display_name: 'Jake',
-    school_level_id: null,
-    created_at: '2026-10-01T10:00:00+08:00',
-    avatar_choice: 'male'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000102',
-    display_name: 'Ash',
-    school_level_id: null,
-    created_at: '2026-10-02T10:00:00+08:00',
-    avatar_choice: 'female'
-  }
-]
-
-// Change to sampleProfiles[1].id to preview Ash's Pokémon.
-const currentUserId = ref(sampleProfiles[0].id)
-
-const pokemonCatalog = [
-  {
-    id: '00000000-0000-4000-8000-000000000201',
-    pokeapi_id: 172,
-    name: 'Pichu',
-    sprite_url:
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/172.png',
-    evolves_from_id: null,
-    created_at: '2026-10-01T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000202',
-    pokeapi_id: 4,
-    name: 'Charmander',
-    sprite_url:
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png',
-    evolves_from_id: null,
-    created_at: '2026-10-01T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000203',
-    pokeapi_id: 7,
-    name: 'Squirtle',
-    sprite_url:
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png',
-    evolves_from_id: null,
-    created_at: '2026-10-01T10:00:00+08:00'
-  }
-]
-
-const userPokemons = ref([
-  {
-    id: '00000000-0000-4000-8000-000000000301',
-    user_id: '00000000-0000-4000-8000-000000000101',
-    pokemon_id: '00000000-0000-4000-8000-000000000201',
-    xp: 90,
-    level: 1,
-    is_selected: true,
-    is_defeated: false,
-    obtained_at: '2026-10-01T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000302',
-    user_id: '00000000-0000-4000-8000-000000000101',
-    pokemon_id: '00000000-0000-4000-8000-000000000202',
-    xp: 60,
-    level: 1,
-    is_selected: false,
-    is_defeated: false,
-    obtained_at: '2026-10-03T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000303',
-    user_id: '00000000-0000-4000-8000-000000000102',
-    pokemon_id: '00000000-0000-4000-8000-000000000203',
-    xp: 30,
-    level: 1,
-    is_selected: true,
-    is_defeated: false,
-    obtained_at: '2026-10-02T10:00:00+08:00'
-  }
-])
-
-// =====================================================
-// FIND THE SAMPLE USER'S ACTIVE POKÉMON
-// =====================================================
-
-const activeBuddy = computed(() => {
-  const owned = userPokemons.value.find(record =>
-    record.user_id === currentUserId.value &&
-    record.is_selected
-  )
-
-  if (!owned) return null
-
-  const species = pokemonCatalog.find(
-    pokemon => pokemon.id === owned.pokemon_id
-  )
-
-  if (!species) return null
-
-  return {
-    ownedId: owned.id,
-    pokemon_id: species.id,
-
-    // The component uses the numeric PokéAPI ID.
-    id: species.pokeapi_id,
-    name: species.name,
-
-    xp: owned.xp,
-    level: owned.level,
-    isDefeated: owned.is_defeated,
-    static_img: species.sprite_url || ''
-  }
-})
+const { active: activeBuddy, loading: collectionLoading, error: collectionError,
+  starterClaimed, refresh: refreshCollection,
+} = usePokemonCollection()
 
 // =====================================================
 // FETCH THE BUDDY IMAGE
@@ -364,14 +252,14 @@ watch(
 )
 
 // The single object passed to PokemonBuddy.
-// All sample species above are their initial forms.
+// Evolution appearance is calculated by the server from cumulative XP.
 const roomPokemon = computed(() => {
   if (!activeBuddy.value) return null
 
   return {
     ...activeBuddy.value,
     animated_img: buddySprite.value,
-    evolution_stage: 0
+    evolution_stage: activeBuddy.value.evolution_stage
   }
 })
 
@@ -542,10 +430,13 @@ onUnmounted(() => {
             aria-live="polite"
             @error.capture="buddyError = 'Your buddy could not load.'"
           >
-            <span v-if="buddyLoading" class="scene-message">
+            <span v-if="collectionLoading || buddyLoading" class="scene-message">
               Loading…
             </span>
 
+            <span v-else-if="collectionError" class="scene-message" role="alert">
+              {{ collectionError }} <button type="button" @click="refreshCollection">Try again</button>
+            </span>
             <span v-else-if="buddyError" class="scene-message">
               {{ buddyError }}
             </span>
@@ -558,12 +449,13 @@ onUnmounted(() => {
             />
 
             <span v-else class="scene-message">
-              No active buddy yet
+              <RouterLink v-if="starterClaimed === false" to="/starter">Choose your starter</RouterLink>
+              <template v-else>No active buddy yet</template>
             </span>
           </div>
 
           <!-- <div class="buddy-figure" aria-live="polite">
-            <span v-if="buddyLoading" class="scene-message">
+            <span v-if="collectionLoading || buddyLoading" class="scene-message">
               Loading…
             </span>
 

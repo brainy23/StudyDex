@@ -1,6 +1,8 @@
-# Reward rules for discussion
+# Reward rules and implementation status
 
 4 November 2026. Confirmed: each quiz has its own first-ever accuracy bonus; duplicate XP goes to the selected buddy; the progression framework is halved. The demo needs no further progression after the available collection is fully trained. This document does not authorize database changes. Other earning-rule details remain proposals where explicitly noted.
+
+Persistence update: starter/collection/selection/pack-opening functions are now deployed; see `deployment/DEPLOYMENT_REPORT.md`. Normal study/quiz/streak earning remains unimplemented. No welcome pack is granted.
 
 ## Approved progression (cumulative XP)
 

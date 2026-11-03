@@ -1,0 +1,24 @@
+{
+  "date_singapore": "2026-11-04",
+  "project_ref": "sbrteylcizwkzetcqdro",
+  "approval": "Explicit chat approval of both exact scripts and deployment checks",
+  "installation_sha256": "20c25218d69e4c01769802c628724fcd7fc7412fb5dfd48d23da4705a2c0f19d",
+  "verification_sha256": "aee088a7d13b05d17b9f3670ff9586137395896edfeab8cbab3f15993d4deb32",
+  "migration": {
+    "version": "20261103212559",
+    "name": "studydex_pokemon_persistence_v1"
+  },
+  "status": "applied_and_metadata_verified",
+  "verification": {
+    "educational_counts_match": true,
+    "catalogue_rows": 9,
+    "integrity_failures": 0,
+    "browser_write_privileges": 0,
+    "api_truncate_grants": 0,
+    "public_rpcs": 6,
+    "anonymous_rpc_execution": false
+  },
+  "student_records_created_or_modified_by_agent": 0,
+  "app_push_or_hosting_deployment": false,
+  "live_signed_in_browser_test": "not performed"
+}

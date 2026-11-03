@@ -1,4 +1,5 @@
 import { getSupabase } from '../lib/supabase'
+import { getOwnedPokemon } from './pokemonService'
 
 // Explicit field lists deliberately exclude question_answers and grading data.
 const TOPIC_FIELDS = 'id, level_id, subject_id, name, description, topic_order'
@@ -112,14 +113,15 @@ export async function getTopicFlashcards(topicId) {
 }
 
 export async function getSelectedStudyBuddy(userId) {
-  const { data, error } = await getSupabase()
-    .from('user_pokemon')
-    .select('id, xp, level, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)')
-    .eq('user_id', userId)
-    .eq('is_selected', true)
-    .maybeSingle()
-  if (error) throw error
-  return data
+  const collection = await getOwnedPokemon()
+  if (collection.userId !== userId) throw new Error('Your account changed. Please log in again.')
+  const selected = collection.pokemon.find(pokemon => pokemon.is_selected)
+  return selected ? {
+    id: selected.ownedId, xp: selected.xp, level: selected.level,
+    originalSpeciesId: selected.originalSpeciesId, stageCount: selected.stageCount,
+    evolution_stage: selected.evolution_stage, stageBeforeMax: selected.stageBeforeMax,
+    pokemon: { id: selected.pokemon_id, pokeapi_id: selected.id, name: selected.name, sprite_url: selected.static_img },
+  } : null
 }
 
 export function resolveStudyImage(path) {

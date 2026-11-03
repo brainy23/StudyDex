@@ -12,6 +12,7 @@ import { TRAINING_XP_CAP } from '../data/pokemonProgression'
 import TutorialGuide from '../components/common/TutorialGuide.vue'
 import { useWeatherLocation } from '../composables/useWeatherLocation'
 import { useRewardInventory } from '../composables/useRewardInventory'
+import { usePokemonCollection } from '../composables/usePokemonCollection'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
@@ -42,92 +43,12 @@ const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/a
 const MAX_XP = TRAINING_XP_CAP
 
 
-// The incoming collection is a local prototype, separate from the real trainer profile.
-const demoCollectionOwnerId = '11111111-1111-4111-8111-111111111111'
-
-// Temporary Pokémon lookup.
-// Adapt these fields to your actual Pokémon table later.
-// pokemon_id in user_pokemon refers to one of these UUIDs.
-const pokemonCatalog = {
-  '22222222-2222-4222-8222-222222222222': {
-    pokeapi_id: 25,
-    name: 'Pikachu',
-  },
-  '33333333-3333-4333-8333-333333333333': {
-    pokeapi_id: 133,
-    name: 'Eevee',
-  },
-  '44444444-4444-4444-8444-444444444444': {
-    pokeapi_id: 4,
-    name: 'Charmander',
-  },
-}
-
-// Separate object containing the user's Pokémon records.
-// Every entry matches the user_pokemon columns shown.
-const userPokemon = ref({
-  pokemons: [
-    {
-      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      user_id: demoCollectionOwnerId,
-      pokemon_id: '22222222-2222-4222-8222-222222222222',
-      xp: 90,
-      level: 1,
-      is_selected: true,
-      is_defeated: false,
-      obtained_at: '2026-10-22T06:00:00Z',
-    },
-    {
-      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      user_id: demoCollectionOwnerId,
-      pokemon_id: '33333333-3333-4333-8333-333333333333',
-      xp: 45,
-      level: 1,
-      is_selected: false,
-      is_defeated: false,
-      obtained_at: '2026-10-22T06:05:00Z',
-    },
-    {
-      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-      user_id: demoCollectionOwnerId,
-      pokemon_id: '44444444-4444-4444-8444-444444444444',
-      xp: 60,
-      level: 1,
-      is_selected: false,
-      is_defeated: false,
-      obtained_at: '2026-10-22T06:10:00Z',
-    },
-  ],
+const { pokemon: ownedPokemon, active: savedBuddy, loading: collectionLoading,
+  saving: collectionSaving, error: collectionError, starterClaimed, pendingXp, select: setActiveBuddy,
+} = usePokemonCollection()
+const activeBuddy = computed(() => savedBuddy.value || {
+  ownedId: null, id: null, name: 'No buddy selected', xp: 0, level: 1, is_defeated: false,
 })
-
-const ownedPokemon = computed(() =>
-  userPokemon.value.pokemons
-    .filter(record => record.user_id === demoCollectionOwnerId)
-    .map(record => {
-      const details = pokemonCatalog[record.pokemon_id]
-
-      return {
-        ownedId: record.id,
-        id: details?.pokeapi_id ?? null,
-        name: details?.name ?? 'Unknown Pokémon',
-        xp: record.xp,
-        level: record.level,
-        is_selected: record.is_selected,
-        is_defeated: record.is_defeated,
-      }
-    })
-)
-
-const activeBuddy = computed(() =>
-  ownedPokemon.value.find(pokemon => pokemon.is_selected) ?? {
-    ownedId: null,
-    id: null,
-    name: 'No buddy selected',
-    xp: 0,
-    level: 1,
-    is_defeated: false,
-  }
-)
 
 const buildingButtons = [
   {
@@ -731,7 +652,7 @@ const pokemonCache = new Map()
 const activeBuddyImage = computed(() => {
   const sprites = buddyData.value?.sprites
 
-  if (!sprites) return ''
+  if (!sprites) return activeBuddy.value.static_img || ''
 
   return (
     sprites.versions?.['generation-v']?.['black-white']
@@ -811,23 +732,6 @@ async function getPokeBall() {
   }
 }
 
-
-// Call this when a Pokémon is selected as the active buddy.
-function setActiveBuddy(pokemon) {
-  const selectedRecord = userPokemon.value.pokemons.find(
-    record =>
-      record.id === pokemon.ownedId &&
-      record.user_id === demoCollectionOwnerId
-  )
-
-  if (!selectedRecord) return
-
-  userPokemon.value.pokemons.forEach(record => {
-    if (record.user_id === demoCollectionOwnerId) {
-      record.is_selected = record.id === selectedRecord.id
-    }
-  })
-}
 
 const ballShaking = ref(false)
 
@@ -1455,6 +1359,10 @@ watch(
     :todo-storage-notice="todoStorageNotice"
     todo-modal-target="#todoModal"
     @toggle-todo="toggleTodo"
+    :collection-notice="collectionError"
+    :collection-busy="collectionLoading || collectionSaving"
+    :starter-needed="starterClaimed === false"
+    :pending-xp="pendingXp"
     @select-buddy="setActiveBuddy"
   />
 

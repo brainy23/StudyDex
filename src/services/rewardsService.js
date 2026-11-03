@@ -61,6 +61,7 @@ export async function openRewardPack(packId) {
       (data.reward_type === 'xp' && (!Number.isSafeInteger(data.xp_awarded) || data.xp_awarded <= 0))) {
     throw new Error('Your pack result could not be checked. Retry this same pack to recover it.')
   }
+  window.dispatchEvent(new Event('studydex:pokemon-changed'))
   return data
 }
 
@@ -97,5 +98,6 @@ export async function claimStarter(pokeapiId) {
     throw new Error('Your starter could not be confirmed. Please check again before retrying.')
   }
   window.dispatchEvent(new Event('studydex:rewards-changed'))
+  window.dispatchEvent(new Event('studydex:pokemon-changed'))
   return data
 }

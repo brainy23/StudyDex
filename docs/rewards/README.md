@@ -1,99 +1,13 @@
-# Rewards functionality checkpoint — 4 November 2026
+# StudyDex rewards — current status, 4 November 2026
 
-## Saved integration and scope
+The Pokémon persistence backend is deployed to Supabase as `20261103212559_studydex_pokemon_persistence_v1`, after explicit approval of exact SQL hashes. Read [deployment report](deployment/DEPLOYMENT_REPORT.md), [execution record](deployment/execution_20261104.json) and [live verification](deployment/live_verification_20261104.json).
 
-The user authorized saving the resolved Arena/Mathematics integration. Local merge commit `b6dc9aa` has parents `f07328e` and `4edbee6`. Integration is preserved at that commit. Nothing was pushed. Rewards work is on `fix/josh-rewards-inventory`, based on that integration checkpoint, as the user selected. Josh's reviewed source is fetched `origin/josh` at `263f9a1`.
+Users can choose one signup starter and save an authenticated collection/selected buddy. Town, Trainer and Lab source now read that saved collection, including its current evolution. Existing table columns were retained; nine catalogue entries and two private support tables were added. Six authenticated functions enforce starter claims, collection reads/selection and atomic/idempotent opening of legitimately awarded packs. No welcome pack is granted. No starter was selected for a real user by the agent.
 
-Only the rewards/starter components and their required pack/starter assets were ported. Josh's old router, quiz and timer were not merged. Auth, Mathematics and Science selection, private answer-key exclusion, ungraded Arena and the shared timer remain.
+Approved cumulative progression: three stages evolve at 75/175 XP, two stages at 125 XP, all fully trained at 250 XP. XP is not reset after evolution. Duplicate packs credit the selected buddy and retain overflow. See [rules](REWARD_RULES_PROPOSAL.md).
 
-## Implemented frontend and service contracts
+Existing educational data remains unchanged: 81 topics, 313 goals, 375 concepts, 751 flashcards, 1,015 questions and 4,060 options. Browser inventory writes and public-table truncate privileges were removed. No frontend secrets or private answer keys were introduced.
 
-- `src/services/rewardsService.js`: authenticated inventory, opening and starter RPC adapters; explicit response/account checks; UUID pack IDs; no browser reward selection, direct inventory writes or secret keys. The four RPCs below are **not deployed**.
-- `src/composables/useRewardInventory.js`: one shared count and list across consumers; unknown count on backend failure; account-change invalidation; focus/visibility refresh, 30-second visible-page polling and an in-app reward-change event; cleanup after the last subscriber. Polling is not an instant cross-device push notification.
-- `src/views/HomeView2.vue`: removes hardcoded three-pack count; existing Bag badge uses verified unopened count. Bag routes to Rewards when packs exist, otherwise retains Trainer destination. Sleeping does not block bag access.
-- `src/components/common/StudydexBubbleNav.vue`: same shared count and Rewards routing, including from the Trainer page when Bag is already current. Count is announced accessibly. No new visual redesign.
-- `src/views/rewardsView2.vue`: Josh's pack presentation; removes hardcoded five packs, sample ownership and browser random rewards. Explicit opening action calls the server with a specific owned pack ID; only a verified result is displayed. Failed/uncertain requests retain that account-specific pack ID for retry, including after same-tab reload when session storage is available. Missing artwork cannot reroll the server result. Cancellation is separate from release; keyboard opening, optional failure-isolated audio, reduced motion, visible errors, fallback artwork and async cleanup are implemented.
-- `src/views/starterSelectionView.vue`: Josh's three choices, accessible buttons and working confirmation handler. Checks server claim status and waits for successful grant before continuing. Missing backend is an error, not a simulated successful grant.
-- `src/views/RegisterView.vue`: authenticated signup/email confirmation goes to Starter, then successful starter confirmation continues to Landing. Email-change callbacks still return to Account. Onboarding enforcement after logging in on another device is not yet implemented.
-- `src/router/index.js`: protects Rewards and Starter with existing auth guards; `/pokepacks` aliases `/rewards`.
-- Five new unit spec files plus updated registration/router cases exercise contracts, stale-account responses, count changes, navigation, duplicate XP display, cancellations, retry identity, audio/artwork failures, cleanup and starter confirmation.
-- `e2e/rewards-flow.spec.js`, `playwright.rewards.config.js`: isolated synthetic Chrome journeys; never connect to the real project.
+The app code is prepared locally; Git push/hosting deployment and a real signed-in user acceptance test remain. Quiz/streak pack earning, secure grading, first-attempt quiz XP and trusted study-block validation are not yet implemented. The backend does not replace them with free packs. Older `01/02` preflight files and `03_inventory_access_proposal.sql` are historical artifacts; do not apply that earlier partial proposal over the deployed installation.
 
-RPC contracts proposed for backend implementation:
-
-| RPC | Input | Required response / guarantee |
-| --- | --- | --- |
-| `get_reward_inventory` | none | Verified `user_id`, total `unopened_count`, oldest up to 20 unopened `packs` with IDs/earned timestamps. |
-| `open_reward_pack` | `p_pack_id` UUID | Verified `user_id`, same `pack_id`, `reward_type`, catalogue `pokemon` (`pokeapi_id`, `name`, nullable `sprite_url`), `xp_awarded` for duplicates. Server owns selection and all writes. Retrying a previously opened pack returns its saved result. |
-| `get_starter_status` | none | Verified `user_id`, boolean `claimed`. |
-| `claim_starter` | `p_pokeapi_id` in 1,4,7 | Verified `user_id`, `claimed: true`; one lifetime starter grant, enforced by durable server uniqueness/locking. |
-
-These are reviewable client contracts, not proof that backend operations exist. The opening UI now preserves uncertain request identity across same-tab reloads with session storage, with a memory-only fallback if storage is blocked. Same-tab reload recovery now caches only the account-specific pending pack ID until the result is acknowledged. It still relies on an idempotent server result. Cross-device recovery/history and actual backend persistence remain unfinished.
-
-## Live evidence — read-only only
-
-Project metadata confirms `sbrteylcizwkzetcqdro`, Studydex Database, active/healthy. The user approved both exact SQL files below. No data, permissions, imports, migrations or backend functions were changed.
-
-1. `01_read_only_preflight.sql`, SHA-256 `f8d896c47f51fcc9ba174eb34e2a9746c56ee0b6425dcc630fddaf863d0ff878`: multi-result tool output exposed only the final non-empty owned-Pokémon count (zero). Other checks cannot be certified from that first output.
-2. `02_read_only_preflight_snapshot.sql`, SHA-256 `b6fd0737e8bdd2f5178c62b895c82545d9ae399742fc4c1a73bd329a973d7ec6`: approved replacement returned one complete JSON result, saved as `preflight_snapshot.json`. Transaction was read-only, repeatable-read; execution role was postgres, so this is **not** an authenticated browser/RLS test.
-
-Confirmed: Pokémon catalogue 0, owned Pokémon 0, earned/opened/unopened packs 0. All four inspected tables have RLS enabled. Catalogue and owned-Pokémon have their existing authenticated read policies; `user_packs` has no policies. None of the four proposed reward RPCs exist. Broad API-role grants, including `truncate`, remain the separately identified audit concern; no destructive route was tested and no grants were altered.
-
-`03_inventory_access_proposal.sql` is an **unexecuted, unapproved** own-pack read policy and security-invoker summary RPC proposal. It grants no pack creation, ownership writes or XP awards. Its SHA-256 is `997b504cc2c54dfc0128d5abb6d16f8284370043eccf80810555130c6a8afa2c`. It is not a complete rewards deployment, has not been tested on disposable Postgres, and must not be executed as implied permission from the read-only approval.
-
-## Product rules: confirmed versus under discussion
-
-Read `REWARD_RULES_PROPOSAL.md` for the beginner-friendly rule proposal and the important 120-versus-210 XP cap ambiguity.
-
-Confirmed by user: signup starter selection, each quiz's own first-ever bonus, the halved 250-XP progression cap, and duplicate pack XP to the currently selected buddy. Josh's +25 XP value is an intended prototype behavior; no backend award exists.
-
-The user's latest conversation proposes:
-
-- 15 XP for each completed study block, up to four blocks/60 XP per day.
-- Quiz version 2: first-ever attempt of a quiz gets an accuracy-based random amount capped at 50; later attempts get 5 participation XP; daily maximum three attempts. Only the global versus per-quiz daily attempt limit still requires confirmation; the first-ever accuracy bonus is confirmed per quiz.
-- For first-attempt accuracy `a`, proposed upper bound is floor(50 × a), lower bound max(0, upper − 10), inclusive integer random draw. Thus 80% gives 30–40 XP and 100% gives 40–50 XP. This is a proposal, not deployed grading.
-- Pack triggers: three quizzes strictly above 80%, five-day streak, and no Pokémon left eligible for XP. Need decisions on distinct quiz identity, repeat eligibility/reset cycles, streak qualifying activity/milestones, block duration, level/XP caps and collection-exhaustion behavior.
-- Daily dates should be server-calculated in Asia/Singapore. No client clock/count/score may authorize a reward.
-
-Quiz scoring is currently an ungraded preview. Secure server grading and persisted attempt snapshots must precede quiz XP or high-score packs. Never expose `question_answers` in the browser.
-
-## Verification
-
-- Full unit suite uses an environment-disabled temporary config; **284 cases passed across 31 files** on the final rerun.
-- Changed-file ESLint passes. Required `pnpm lint` exits 1 on the three existing Oxlint errors: missing throw messages in account/registration service tests and unused expression in `components/timer/Timer.vue`. ESLint stage therefore does not run in that command. No unrelated autofixes retained.
-- Production build passes with local environment loading disabled and output outside protected `dist/`. Existing large dashboard/chart chunk warning remains; temporary config bundling also produced external optional-tool import warnings.
-- Chrome starter journey passed. Mobile (390px), reduced-motion badge/opening journey passed after correcting the test's starting route to Trainer, where the shared Bag nav actually exists. Both use synthetic RPCs: successful backend persistence/authorization/concurrency is **not** verified.
-- No new dependencies. No environment files read/copied/edited. No live student record or private answer-key read.
-
-Commands (standard commands require the developer's already configured environment; fixture commands never load local environment files):
-
-```sh
-pnpm test:unit --run
-pnpm lint
-pnpm build
-STUDYDEX_E2E_BROWSER_CHANNEL=chrome pnpm exec playwright test --config playwright.rewards.config.js
-```
-
-## Next tasks, functionality only
-
-1. Confirm remaining daily attempt, pack, streak and study-validation rules, including selected-buddy overflow handling. Per-quiz first-ever bonuses and the 250-XP progression cap are approved.
-2. Review and approve a catalogue-only import and narrow permissions/security changes. Catalogue is empty; neither starters nor random pack draws can work against it yet. Preserve all educational/student data.
-3. Implement and independently test the authenticated inventory, one-time starter and atomic/idempotent opening backend on a disposable database before approving exact deployment SQL. Test own/other/anonymous users, concurrent tabs, network retries, rollback and full-page result recovery. Keep duplicate XP and pack consumption in one transaction; serialize per student to prevent overlapping pack/starter awards.
-4. Add server-validated focus block events, immutable reward ledger and uniqueness constraints for daily caps/milestones. Frontend timers alone are insufficient proof of completed study.
-5. Build secure grading and persisted quiz attempts, then add quiz XP/high-score pack triggers; verify small 3–5-question Mathematics quizzes and real account access. Do not award from the present preview UI.
-
-Current decision: **frontend integration prepared and fixture-tested; NO-GO for live reward grants/pack opening until the approved backend/catalogue/security work is implemented and tested.**
-
-
-## Halved progression and integration update — 4 November 2026
-
-The user authorized halving progression thresholds and merging this feature branch into integration locally. `src/data/pokemonProgression.js` is the common rule: three-stage evolution at 75/175 cumulative XP, two-stage evolution at 125 XP, and all lines fully trained at 250 XP. Activity reward amounts are unchanged. The real local buddy preview uses the new rule, preserves cumulative XP through evolution, supports backwards preview transitions and retains overflow. Home, QuestPhone and collection XP caps now use the shared constant. The local recovery-gift preview also handles an exactly capped collection with zero overflow, selecting the new buddy and preventing another recovery gift while an eligible buddy remains.
-
-Additional fixes: inventory/starter responses are checked against the authenticated account again after RPC completion; malformed/duplicate inventory IDs are rejected; pending pack IDs are stored separately per account without cached XP/results/auth data; a different pack cannot replace an uncertain request; successful results can be acknowledged; old revealed cards disappear when accounts change. Runtime reduced-motion changes skip the remaining reveal movement. Starter setup errors include Continue studying and already-claimed starters cannot be submitted again during navigation.
-
-Live counts from the approved capacity query are preserved in `capacity_snapshot_20261104.json`. Its read-only SQL SHA-256 is `8e6a7574579785d1955094b036887ae7413acb262b77f942a3f56e90fd24b1e0`. The 250-XP model in `capacity_model_250.json` estimates 5–8 days for three fully trained Pokémon under its explicitly listed assumptions. Neither file certifies earning implementation, student RLS access or answer correctness.
-
-This update does not implement/deploy reward RPCs, a Pokémon catalogue, trusted study completion, secure grading, reward ledgers, daily XP limits or persisted evolution. Those remain separately approved backend work. The source merge must not be described as a live reward-system deployment.
-
-
-Final checks before the authorized local merge: **317 unit cases across 35 files pass**. **Five rewards Chrome fixture journeys pass**, including cumulative progression and uncertain-opening recovery after reload; the **two existing P1/P6 Mathematics journeys pass**. Production build passes with local environment files disabled and output in OS temporary storage. Full `pnpm lint` retains three pre-existing Oxlint errors; separate full no-fix ESLint retains four pre-existing errors in Landing/Timer. Changed-file ESLint passes. No new dependencies or environment-file access. SQL files remain unexecuted proposals; this turn made no database calls or changes.
+Validation: 331 unit cases/37 files, six Chrome rewards fixtures, two Mathematics fixtures, production build and 17 isolated PostgreSQL cases pass. Live metadata/count/privilege verification passes. Full lint retains the known pre-existing errors. Project dependencies and environment files were not changed.

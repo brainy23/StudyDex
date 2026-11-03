@@ -379,7 +379,7 @@ async function tear() {
             id: result.pokemon.pokeapi_id, name: prettyName(result.pokemon.name),
             img: result.pokemon.sprite_url || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${result.pokemon.pokeapi_id}.png`,
             sprite: result.pokemon.sprite_url || `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${result.pokemon.pokeapi_id}.png`, types: [],
-            isNew: result.reward_type === 'pokemon', xp: result.xp_awarded || 0,
+            isNew: result.reward_type === 'pokemon', xp: result.xp_awarded || 0, pendingXp: result.xp_pending || 0,
         }
         void refresh()
         void loadArtwork(result, token)
@@ -564,6 +564,7 @@ function backToPacks() {
     <div v-if="stage === 'revealed' && card" class="reveal-info" role="status" aria-live="polite">
       <div class="found">You found</div>
       <div class="card-name">{{ card.name }}</div>
+      <p v-if="card.pendingXp > 0">{{ card.pendingXp }} XP saved. Choose another buddy to use it.</p>
       <div class="chips">
         <span v-if="card.isNew" class="chip chip-new">NEW!</span>
         <span v-else class="chip chip-xp">Duplicate: +{{ card.xp }} XP</span>

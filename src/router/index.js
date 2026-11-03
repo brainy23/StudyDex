@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import HomeView from '../views/HomeView2.vue'
-import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import Landing from '../components/landing/landing.vue'
 import Landinginfo from '../components/landing-info/landing-info.vue'
 import RegisterView from '../views/RegisterView.vue'
@@ -62,7 +61,8 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
       {
         path: '/pokebuddy',
         name: 'pokebuddy',
-        component: Pokebuddy,
+        redirect: { name: 'trainer' },
+        meta: { requiresAuth: true },
       },
       {
         path: '/landing',

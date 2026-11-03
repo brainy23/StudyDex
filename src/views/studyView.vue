@@ -368,8 +368,8 @@ onMounted(async () => {
 onUnmounted(() => previewController?.abort())
 const roomPokemon = computed(() => {
   if (buddy.value?.pokemon?.sprite_url) return {
-    id: buddy.value.pokemon.pokeapi_id, name: buddy.value.pokemon.name, xp: buddy.value.xp,
-    evolution_stage: 0, animated_img: buddy.value.pokemon.sprite_url, static_img: buddy.value.pokemon.sprite_url,
+    ...buddy.value, id: buddy.value.pokemon.pokeapi_id, name: buddy.value.pokemon.name, xp: buddy.value.xp,
+    evolution_stage: buddy.value.evolution_stage ?? 0, animated_img: buddy.value.pokemon.sprite_url, static_img: buddy.value.pokemon.sprite_url,
   }
   const data = previewPokemon.value
   if (!data) return null

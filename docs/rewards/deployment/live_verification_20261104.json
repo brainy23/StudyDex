@@ -1,0 +1,470 @@
+{
+  "rls": [
+    {
+      "table": "pokemon",
+      "schema": "public",
+      "enabled": true
+    },
+    {
+      "table": "user_packs",
+      "schema": "public",
+      "enabled": true
+    },
+    {
+      "table": "user_pokemon",
+      "schema": "public",
+      "enabled": true
+    },
+    {
+      "table": "studydex_reward_accounts",
+      "schema": "private",
+      "enabled": true
+    },
+    {
+      "table": "studydex_pack_receipts",
+      "schema": "private",
+      "enabled": true
+    }
+  ],
+  "counts": {
+    "goals": 313,
+    "packs": 0,
+    "topics": 81,
+    "options": 4060,
+    "pokemon": 9,
+    "concepts": 375,
+    "profiles": 3,
+    "receipts": 0,
+    "questions": 1015,
+    "flashcards": 751,
+    "owned_pokemon": 0,
+    "reward_accounts": 0
+  },
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = ( SELECT auth.uid() AS uid))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "user_pokemon",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_own_buddy",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "pokemon",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_pokemon_catalogue",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = user_id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "user_packs",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydex_read_own_packs",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "catalogue": [
+    {
+      "name": "bulbasaur",
+      "pokeapi_id": 1,
+      "parent_pokeapi_id": null
+    },
+    {
+      "name": "ivysaur",
+      "pokeapi_id": 2,
+      "parent_pokeapi_id": 1
+    },
+    {
+      "name": "venusaur",
+      "pokeapi_id": 3,
+      "parent_pokeapi_id": 2
+    },
+    {
+      "name": "charmander",
+      "pokeapi_id": 4,
+      "parent_pokeapi_id": null
+    },
+    {
+      "name": "charmeleon",
+      "pokeapi_id": 5,
+      "parent_pokeapi_id": 4
+    },
+    {
+      "name": "charizard",
+      "pokeapi_id": 6,
+      "parent_pokeapi_id": 5
+    },
+    {
+      "name": "squirtle",
+      "pokeapi_id": 7,
+      "parent_pokeapi_id": null
+    },
+    {
+      "name": "wartortle",
+      "pokeapi_id": 8,
+      "parent_pokeapi_id": 7
+    },
+    {
+      "name": "blastoise",
+      "pokeapi_id": 9,
+      "parent_pokeapi_id": 8
+    }
+  ],
+  "functions": [
+    {
+      "name": "studydex_reward_uid",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": false
+    },
+    {
+      "name": "studydex_get_reward_inventory",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "name": "studydex_owned_pokemon",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": false
+    },
+    {
+      "name": "studydex_ensure_recovery",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": false
+    },
+    {
+      "name": "studydex_get_user_pokemon",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "name": "studydex_select_user_pokemon",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "name": "studydex_get_starter_status",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "name": "studydex_claim_starter",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "name": "studydex_open_reward_pack",
+      "schema": "private",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": true,
+      "authenticated_execute": true
+    },
+    {
+      "name": "get_user_pokemon",
+      "schema": "public",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": true
+    },
+    {
+      "name": "select_user_pokemon",
+      "schema": "public",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": true
+    },
+    {
+      "name": "get_starter_status",
+      "schema": "public",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": true
+    },
+    {
+      "name": "claim_starter",
+      "schema": "public",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": true
+    },
+    {
+      "name": "get_reward_inventory",
+      "schema": "public",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": true
+    },
+    {
+      "name": "open_reward_pack",
+      "schema": "public",
+      "settings": [
+        "search_path=\"\""
+      ],
+      "anon_execute": false,
+      "security_definer": false,
+      "authenticated_execute": true
+    }
+  ],
+  "integrity": {
+    "cross_user_receipts": 0,
+    "cross_user_xp_recipients": 0,
+    "multiple_selected_buddies": 0,
+    "cross_user_starter_records": 0
+  },
+  "read_only": "on",
+  "table_privileges": [
+    {
+      "role": "anon",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "select"
+    },
+    {
+      "role": "anon",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "insert"
+    },
+    {
+      "role": "anon",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "update"
+    },
+    {
+      "role": "anon",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "delete"
+    },
+    {
+      "role": "anon",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "truncate"
+    },
+    {
+      "role": "authenticated",
+      "table": "pokemon",
+      "effective": true,
+      "privilege": "select"
+    },
+    {
+      "role": "authenticated",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "insert"
+    },
+    {
+      "role": "authenticated",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "update"
+    },
+    {
+      "role": "authenticated",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "delete"
+    },
+    {
+      "role": "authenticated",
+      "table": "pokemon",
+      "effective": false,
+      "privilege": "truncate"
+    },
+    {
+      "role": "anon",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "select"
+    },
+    {
+      "role": "anon",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "insert"
+    },
+    {
+      "role": "anon",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "update"
+    },
+    {
+      "role": "anon",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "delete"
+    },
+    {
+      "role": "anon",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "truncate"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_pokemon",
+      "effective": true,
+      "privilege": "select"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "insert"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "update"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "delete"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_pokemon",
+      "effective": false,
+      "privilege": "truncate"
+    },
+    {
+      "role": "anon",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "select"
+    },
+    {
+      "role": "anon",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "insert"
+    },
+    {
+      "role": "anon",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "update"
+    },
+    {
+      "role": "anon",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "delete"
+    },
+    {
+      "role": "anon",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "truncate"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_packs",
+      "effective": true,
+      "privilege": "select"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "insert"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "update"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "delete"
+    },
+    {
+      "role": "authenticated",
+      "table": "user_packs",
+      "effective": false,
+      "privilege": "truncate"
+    }
+  ],
+  "remaining_api_truncate_grants": 0
+}

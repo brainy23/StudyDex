@@ -13,6 +13,10 @@ const props = defineProps({
     default: () => ({ ownedId: null, name: 'No buddy selected' })
   },
   maxXp: { type: Number, default: TRAINING_XP_CAP },
+  collectionNotice: { type: String, default: '' },
+  collectionBusy: { type: Boolean, default: false },
+  starterNeeded: { type: Boolean, default: false },
+  pendingXp: { type: Number, default: 0 },
   deviceImage: { type: String, default: '/town/pokedex-goals.png' },
   todoStorageNotice: { type: String, default: '' },
   todoModalTarget: { type: String, default: '#todoModal' }
@@ -225,6 +229,9 @@ onUnmounted(() => clearTimeout(questBootTimer))
               <span>Town buddy: <strong>{{ activeBuddy.name }}</strong></span>
             </div>
 
+            <p v-if="collectionNotice" role="alert">{{ collectionNotice }}</p>
+            <p v-if="collectionBusy" role="status">Checking your Pokémon…</p>
+            <p v-if="pendingXp > 0" role="status">{{ pendingXp }} XP saved. Choose a buddy that can keep training.</p>
             <!-- OWNED POKÉMON -->
             <div v-if="ownedPokemon.length" class="pokedex-grid">
               <button
@@ -234,6 +241,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
                 class="pokedex-card"
                 :class="{ 'is-active': activeBuddy.ownedId === pokemon.ownedId }"
                 :aria-pressed="activeBuddy.ownedId === pokemon.ownedId"
+                :disabled="collectionBusy"
                 :aria-label="`Choose ${pokemon.name} as your town buddy`"
                 @click="emit('select-buddy', pokemon)"
               >
@@ -265,7 +273,8 @@ onUnmounted(() => clearTimeout(questBootTimer))
             </div>
 
             <p v-else class="quest-empty">
-              No Pokémon yet. Open a pack to meet your first buddy!
+              <RouterLink v-if="starterNeeded" to="/starter">Choose your starter Pokémon</RouterLink>
+              <template v-else>No Pokémon yet.</template>
             </p>
 
             <footer class="quest-footer">

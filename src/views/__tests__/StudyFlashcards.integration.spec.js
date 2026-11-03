@@ -33,6 +33,7 @@ beforeEach(() => {
           topic_concepts: studyLesson.concepts,
           questions: [],
           user_pokemon: [],
+          get_user_pokemon: { user_id: studentProfile.id, pokemon: [], starter_claimed: false, pending_xp: 0 },
         }
         const { body, status } = table === 'flashcards'
           ? flashcardResponse

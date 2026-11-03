@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { getSupabase } from '../lib/supabase'
+import { getStarterStatus } from '../services/rewardsService'
 import axios from 'axios'
 
 const router = useRouter()
@@ -23,9 +24,10 @@ async function login() {
     })
     if (error) throw error
     if (!data.session) throw new Error('Unable to log in. Please try again.')
-    console.log('Login successful:', data.user?.id)
     password.value = ''
-    await router.replace({ name: 'landing' })
+    let destination = 'landing'
+    try { if (!(await getStarterStatus()).claimed) destination = 'starter' } catch { /* Starter can be retried from the collection. */ }
+    await router.replace({ name: destination })
   } catch (error) {
     errorMessage.value = error.message || 'Unable to log in. Please try again.'
   } finally {

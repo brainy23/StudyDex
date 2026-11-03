@@ -1,0 +1,75 @@
+{
+  "engine": "pglite 0.5.15 (embedded postgres, disposable synthetic schema)",
+  "live_supabase": false,
+  "checks": [
+    {
+      "name": "transaction rolls back all seed/DDL if any later statement fails",
+      "status": "pass"
+    },
+    {
+      "name": "fresh deployment succeeds atomically",
+      "status": "pass"
+    },
+    {
+      "name": "no existing profile or educational row changes and no free pack",
+      "status": "pass"
+    },
+    {
+      "name": "anonymous users cannot execute public/private reward functions",
+      "status": "pass"
+    },
+    {
+      "name": "authenticated users cannot write inventory or truncate any public table",
+      "status": "pass"
+    },
+    {
+      "name": "private tables and unexposed helpers remain inaccessible to authenticated clients",
+      "status": "pass"
+    },
+    {
+      "name": "new student has empty real inventory and unclaimed starter",
+      "status": "pass"
+    },
+    {
+      "name": "starter is persisted, selected and idempotent even if a different starter is retried",
+      "status": "pass"
+    },
+    {
+      "name": "invalid starter is refused without a partial claim",
+      "status": "pass"
+    },
+    {
+      "name": "collection and direct reads are isolated by account",
+      "status": "pass"
+    },
+    {
+      "name": "derived evolution follows 75/175/250 cumulative XP without changing the owned base",
+      "status": "pass"
+    },
+    {
+      "name": "earned packs appear only for their owner",
+      "status": "pass"
+    },
+    {
+      "name": "pack opening stores one durable result; repeated requests cannot consume twice",
+      "status": "pass"
+    },
+    {
+      "name": "duplicate reward targets the selected buddy, caps XP and preserves overflow",
+      "status": "pass"
+    },
+    {
+      "name": "exactly capped collection creates only one unowned recovery pack",
+      "status": "pass"
+    },
+    {
+      "name": "deployment rerun is refused without altering existing rewards",
+      "status": "pass"
+    },
+    {
+      "name": "the exact read-only post-deployment verification succeeds",
+      "status": "pass"
+    }
+  ],
+  "concurrency": "profile and pack row locks reviewed; overlapping real PostgreSQL connections not yet tested"
+}

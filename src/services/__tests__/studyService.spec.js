@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
+  getSelectedStudyBuddy,
   getStudyCatalogue,
   getTopicLesson,
   getStudyQuestions,
@@ -7,6 +8,8 @@ import {
   studyErrorMessage,
   resolveStudyImage,
 } from '../studyService'
+import { getOwnedPokemon } from '../pokemonService'
+vi.mock('../pokemonService', () => ({ getOwnedPokemon: vi.fn() }))
 import { revisionCards } from '../../test/studyFixtures'
 
 const { from } = vi.hoisted(() => ({ from: vi.fn() }))
@@ -126,4 +129,9 @@ it('returns all 15 flashcard records with matching front/back content and topic/
   expect(query.select).toHaveBeenCalledWith(
     'id, topic_id, concept_id, front_text, back_text, front_image_path, back_image_path, card_order',
   )
+})
+
+it('uses the selected saved evolution in Lab without resetting its stage', async () => {
+  getOwnedPokemon.mockResolvedValue({ userId: 'student', pokemon: [{ ownedId: 'owned', pokemon_id: 'catalogue-base', id: 6, originalSpeciesId: 4, name: 'Charizard', xp: 175, level: 3, stageCount: 3, evolution_stage: 2, is_selected: true, static_img: '/saved.png' }] })
+  expect(await getSelectedStudyBuddy('student')).toMatchObject({ xp: 175, evolution_stage: 2, stageCount: 3, originalSpeciesId: 4, pokemon: { pokeapi_id: 6, name: 'Charizard' } })
 })

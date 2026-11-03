@@ -4,7 +4,7 @@ import { studentProfile } from '../src/test/studyFixtures'
 const packId = '11111111-1111-4111-8111-111111111111'
 async function fixtures(page) {
   const { errors } = await mockLab(page)
-  const state = { count: 3, claimed: false, opens: [], claims: [], dropOpeningResponse: false }
+  const state = { count: 3, claimed: false, opens: [], claims: [], dropOpeningResponse: false, owned: [], selections: [] }
   await page.route('https://raw.githubusercontent.com/**', route => route.abort())
   await page.route('https://pokeapi.co/**', route => route.abort())
   await page.route('https://studydex-fixture.invalid/rest/v1/rpc/**', async route => {
@@ -12,6 +12,7 @@ async function fixtures(page) {
     const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET, POST, OPTIONS' }
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
     let data
+    if (name === 'get_user_pokemon') data = { user_id: studentProfile.id, pokemon: state.owned, starter_claimed: state.claimed, pending_xp: 0 }
     if (name === 'get_reward_inventory') data = { user_id: studentProfile.id, unopened_count: state.count, packs: state.count ? [{ id: packId, earned_at: '2026-11-04T00:00:00Z' }] : [] }
     if (name === 'open_reward_pack') {
       state.opens.push(route.request().postDataJSON())
@@ -19,9 +20,17 @@ async function fixtures(page) {
       if (state.dropOpeningResponse) { state.dropOpeningResponse = false; return route.abort('connectionreset') }
       data = { user_id: studentProfile.id, pack_id: packId, reward_type: 'pokemon', xp_awarded: 0, pokemon: { pokeapi_id: 4, name: 'charmander', sprite_url: null } }
     }
+    if (name === 'select_user_pokemon') {
+      const id = route.request().postDataJSON().p_owned_id
+      state.selections.push(id)
+      state.owned = state.owned.map(p => ({ ...p, is_selected: p.owned_id === id }))
+      data = { user_id: studentProfile.id, pokemon: state.owned, starter_claimed: state.claimed, pending_xp: 0 }
+    }
     if (name === 'get_starter_status') data = { user_id: studentProfile.id, claimed: state.claimed }
     if (name === 'claim_starter') {
       state.claims.push(route.request().postDataJSON()); state.claimed = true
+      const id = route.request().postDataJSON().p_pokeapi_id
+      state.owned = [{ owned_id: packId, pokemon_id: packId, pokeapi_id: id, original_pokeapi_id: id, name: { 1: 'bulbasaur', 4: 'charmander', 7: 'squirtle' }[id], xp: 0, level: 1, stage_count: 3, evolution_stage: 0, fully_trained: false, is_selected: true, is_defeated: false, sprite_url: '/selection/pokeball-purple.svg' }]
       data = { user_id: studentProfile.id, claimed: true }
     }
     await route.fulfill({ headers, status: data ? 200 : 404, json: data || {} })
@@ -107,37 +116,40 @@ test('unavailable starter setup keeps studying accessible without inventing a gr
   expect(errors).toEqual([])
 })
 
-test('local buddy preview uses cumulative 75 and 175 evolution thresholds and a 250 cap', async ({ page }) => {
+test('legacy buddy link opens the authenticated Trainer collection', async ({ page }) => {
   const { errors } = await fixtures(page)
-  await page.emulateMedia({ reducedMotion: 'reduce' })
-  const node = (id, name, next = []) => ({ species: { name, url: `https://pokeapi.co/api/v2/pokemon-species/${id}/` }, evolves_to: next })
-  const chain = node(4, 'charmander', [node(5, 'charmeleon', [node(6, 'charizard')])])
-  const names = { 4: 'charmander', 5: 'charmeleon', 6: 'charizard', 172: 'pichu' }
-  await page.route('https://pokeapi.co/api/v2/**', route => {
-    const path = new URL(route.request().url()).pathname.split('/').filter(Boolean)
-    const kind = path.at(-2), value = path.at(-1)
-    if (kind === 'evolution-chain') return route.fulfill({ json: { chain } })
-    if (kind === 'pokemon-species') return route.fulfill({ json: { name: names[value], evolution_chain: { url: 'https://pokeapi.co/api/v2/evolution-chain/1/' } } })
-    const id = Number(value) || Number(Object.keys(names).find(id => names[id] === value))
-    return route.fulfill({ json: { id, name: names[id], sprites: { front_default: '/selection/pokeball-purple.svg' } } })
-  })
   await page.goto('/pokebuddy')
-  await page.locator('.pokemon-card').filter({ has: page.getByRole('heading', { name: 'Charmander', exact: true }) }).getByRole('button', { name: 'Make active' }).click()
-  const buddy = page.locator('.pokemon-buddy')
-  await page.getByRole('button', { name: '+10 XP', exact: true }).click()
-  await expect(buddy).toContainText('70 / 250 XP')
-  await page.getByRole('button', { name: '+10 XP', exact: true }).click()
-  await expect(buddy.getByRole('heading', { name: 'Charmeleon', exact: true })).toBeVisible()
-  await expect(buddy).toContainText('80 / 250 XP')
-  await page.getByRole('button', { name: '+50 XP', exact: true }).click()
-  await expect(buddy).toContainText('130 / 250 XP')
-  await page.getByRole('button', { name: '+50 XP', exact: true }).click()
-  await expect(buddy.getByRole('heading', { name: 'Charizard', exact: true })).toBeVisible()
-  await expect(buddy).toContainText('180 / 250 XP')
-  await page.getByRole('button', { name: '+50 XP', exact: true }).click()
-  await expect(buddy).toContainText('230 / 250 XP')
-  await page.getByRole('button', { name: '+50 XP', exact: true }).click()
-  await expect(buddy).toContainText('Fully trained!')
-  await expect(page.getByRole('heading', { name: /30 XP waiting to be transferred/ })).toBeVisible()
+  await expect(page).toHaveURL(/\/trainer$/)
+  await expect(page.getByRole('link', { name: 'Choose your starter', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '+50 XP', exact: true })).toHaveCount(0)
+  expect(errors).toEqual([])
+})
+
+test('saved starter appears in Town and Trainer after reload, and buddy selection persists', async ({ page }) => {
+  const { state, errors } = await fixtures(page)
+  await page.goto('/starter')
+  await page.getByRole('button', { name: 'charmander' }).click()
+  await page.getByRole('button', { name: 'I Choose You!' }).click()
+  await expect(page).toHaveURL(/\/landing$/)
+  await page.goto('/home')
+  await expect(page.locator('.trainer-buddy-name')).toHaveText('Charmander')
+  await page.reload()
+  await expect(page.locator('.trainer-buddy-name')).toHaveText('Charmander')
+  state.owned.push({ ...state.owned[0], owned_id: '22222222-2222-4222-8222-222222222222', pokeapi_id: 7, original_pokeapi_id: 7, name: 'squirtle', is_selected: false })
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')))
+  await page.getByRole('button', { name: /Trainer Hub/ }).click()
+  await page.getByRole('button', { name: /Pokédex/ }).click()
+  await page.getByRole('button', { name: 'Choose Squirtle as your town buddy' }).click()
+  await expect(page.locator('.trainer-buddy-name')).toHaveText('Squirtle')
+  await page.reload()
+  await expect(page.locator('.trainer-buddy-name')).toHaveText('Squirtle')
+  await page.goto('/trainer')
+  await expect(page.locator('.buddy-figure h3')).toHaveText('Squirtle')
+  Object.assign(state.owned[1], { pokeapi_id: 9, name: 'blastoise', xp: 175, level: 3, evolution_stage: 2 })
+  await page.goto('/study-decks?subject=science&topic_id=water-topic&mode=flashcards')
+  await page.getByRole('button', { name: 'Start Study Session', exact: true }).click()
+  await expect(page.locator('.lab-pokemon-buddy h3')).toHaveText('Blastoise')
+  expect(state.selections).toEqual(['22222222-2222-4222-8222-222222222222'])
+  expect(state.claims).toHaveLength(1)
   expect(errors).toEqual([])
 })

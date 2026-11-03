@@ -10,6 +10,10 @@ import { avatarOptions } from '../../data/avatarOptions'
 
 // A mutable fixture stands in for the saved profile; no live database writes occur.
 const { saved } = vi.hoisted(() => ({ saved: { profile: null } }))
+vi.mock('../../services/pokemonService', () => ({
+  getOwnedPokemon: vi.fn(async () => ({ userId: 'student-ash', pokemon: [], starterClaimed: false, pendingXp: 0 })),
+  selectOwnedPokemon: vi.fn(),
+}))
 vi.mock('../../services/profileService', () => ({
   getCurrentProfile: vi.fn(async () => structuredClone(saved.profile)),
 }))

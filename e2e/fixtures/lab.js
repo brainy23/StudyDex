@@ -87,13 +87,14 @@ export async function mockLab(page, { deferConcepts = false, buddyFailure = fals
     const headers = {
       'access-control-allow-origin': '*',
       'access-control-allow-headers': '*',
-      'access-control-allow-methods': 'GET, OPTIONS',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
     }
     if (request.method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
     if (url.pathname === '/auth/v1/user') return route.fulfill({ json: user, headers })
     if (url.pathname === '/auth/v1/token') return route.fulfill({ json: session, headers })
     const table = url.pathname.split('/').at(-1)
     requests.push({ table, method: request.method(), query: Object.fromEntries(url.searchParams) })
+    if (table === 'get_user_pokemon') return route.fulfill({ status: buddyFailure ? 400 : 200, json: buddyFailure ? { message: 'Buddy temporarily unavailable.' } : { user_id: profile.id, pokemon: [], starter_claimed: false, pending_xp: 0 }, headers })
     if (request.method() !== 'GET')
       return route.fulfill({
         status: 405,
