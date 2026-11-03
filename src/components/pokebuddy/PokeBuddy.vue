@@ -3,9 +3,10 @@ import axios from 'axios'
 import { computed, nextTick, onMounted, ref } from 'vue'
 import NavBar from '../common/NavBar.vue'
 import PokemonBuddy from './PokemonBuddy.vue'
+import { TRAINING_XP_CAP } from '../../data/pokemonProgression'
 
 const API = 'https://pokeapi.co/api/v2'
-const MAX_XP = 100
+const MAX_XP = TRAINING_XP_CAP
 
 // =========================================
 // SAMPLE USER
@@ -76,7 +77,7 @@ const controlsLocked = computed(() =>
 
 const xpRecipients = computed(() =>
   user.value.pokemons.filter(
-    pokemon => pokemon.evolution_stage !== 'MAX'
+    pokemon => pokemon.xp < TRAINING_XP_CAP
   )
 )
 
@@ -237,7 +238,7 @@ async function transferXP(pokemon) {
   if (
     controlsLocked.value ||
     unallocatedXP.value <= 0 ||
-    pokemon.evolution_stage === 'MAX'
+    pokemon.xp >= TRAINING_XP_CAP
   ) return
 
   processingReward.value = true
@@ -273,7 +274,7 @@ async function addRandomPokemon(asGift = false) {
 
   if (
     asGift &&
-    (unallocatedXP.value <= 0 || xpRecipients.value.length > 0)
+    (!user.value.pokemons.length || xpRecipients.value.length > 0)
   ) return
 
   addingPokemon.value = true
@@ -335,7 +336,9 @@ async function addRandomPokemon(asGift = false) {
   // A gift becomes the new buddy and receives the saved XP.
   // If applying XP fails, the Pokémon and saved XP remain available.
   if (asGift && newPokemon) {
-    await transferXP(newPokemon)
+    user.value.active_pokemon_species = newPokemon.species
+    await nextTick()
+    if (unallocatedXP.value > 0) await transferXP(newPokemon)
   }
 }
 </script>
@@ -479,7 +482,7 @@ async function addRandomPokemon(asGift = false) {
 
               <p>
                 {{
-                  pokemon.evolution_stage === 'MAX'
+                  pokemon.xp >= TRAINING_XP_CAP
                     ? 'Maximum evolution'
                     : `${pokemon.xp} / ${MAX_XP} XP`
                 }}
@@ -535,8 +538,9 @@ async function addRandomPokemon(asGift = false) {
         </section>
 
         <!-- LEFTOVER XP -->
-        <section v-if="unallocatedXP > 0" class="overflow-panel">
-          <h2>⭐ {{ unallocatedXP }} XP waiting to be transferred</h2>
+        <section v-if="unallocatedXP > 0 || (user.pokemons.length > 0 && !xpRecipients.length)" class="overflow-panel">
+          <h2 v-if="unallocatedXP > 0">⭐ {{ unallocatedXP }} XP waiting to be transferred</h2>
+          <h2 v-else>Your Pokémon are fully trained!</h2>
 
           <template v-if="xpRecipients.length">
             <p>
@@ -560,8 +564,8 @@ async function addRandomPokemon(asGift = false) {
 
           <template v-else>
             <p>
-              All your Pokémon are MAX! Open a gift to receive a new buddy
-              and transfer your leftover XP.
+              All your Pokémon are fully trained! Open a gift to receive a new buddy.
+              <span v-if="unallocatedXP > 0">Your leftover XP will be transferred.</span>
             </p>
 
             <button

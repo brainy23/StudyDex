@@ -84,12 +84,12 @@ it('keeps the form available for retry after an Auth error', async () => {
   wrapper.unmount()
 })
 
-it('sends an immediately authenticated signup to landing', async () => {
+it('sends an immediately authenticated signup to starter selection', async () => {
   registerUser.mockResolvedValue({ needsEmailConfirmation: false })
   const wrapper = await fillRegistration()
   await wrapper.get('form').trigger('submit')
   await flushPromises()
-  expect(replace).toHaveBeenCalledWith({ name: 'landing' })
+  expect(replace).toHaveBeenCalledWith({ name: 'starter' })
   wrapper.unmount()
 })
 

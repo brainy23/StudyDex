@@ -1,0 +1,155 @@
+{
+  "training_xp_cap": 250,
+  "evolution_milestones": {
+    "one_stage": [],
+    "two_stage": [
+      125
+    ],
+    "three_stage": [
+      75,
+      175
+    ]
+  },
+  "model_only_not_live_rewards": true,
+  "assumptions": {
+    "four_study_blocks_daily": 60,
+    "three_quiz_attempts_globally_daily": true,
+    "first_quiz_accuracy_percent": 80,
+    "first_bonus_bounds": [
+      30,
+      40
+    ],
+    "repeat_bonus": 5,
+    "xp_carryover_preserved": true,
+    "eligible_pokemon_available_when_needed": true,
+    "boss_and_duplicate_xp_excluded": true
+  },
+  "levels": [
+    {
+      "school_level": 1,
+      "regular_quiz_topics": 8,
+      "days_to_targets": [
+        {
+          "fully_trained_pokemon": 1,
+          "optimistic_days": 2,
+          "conservative_days": 2
+        },
+        {
+          "fully_trained_pokemon": 2,
+          "optimistic_days": 3,
+          "conservative_days": 4
+        },
+        {
+          "fully_trained_pokemon": 3,
+          "optimistic_days": 7,
+          "conservative_days": 8
+        }
+      ]
+    },
+    {
+      "school_level": 2,
+      "regular_quiz_topics": 10,
+      "days_to_targets": [
+        {
+          "fully_trained_pokemon": 1,
+          "optimistic_days": 2,
+          "conservative_days": 2
+        },
+        {
+          "fully_trained_pokemon": 2,
+          "optimistic_days": 3,
+          "conservative_days": 4
+        },
+        {
+          "fully_trained_pokemon": 3,
+          "optimistic_days": 6,
+          "conservative_days": 7
+        }
+      ]
+    },
+    {
+      "school_level": 3,
+      "regular_quiz_topics": 14,
+      "days_to_targets": [
+        {
+          "fully_trained_pokemon": 1,
+          "optimistic_days": 2,
+          "conservative_days": 2
+        },
+        {
+          "fully_trained_pokemon": 2,
+          "optimistic_days": 3,
+          "conservative_days": 4
+        },
+        {
+          "fully_trained_pokemon": 3,
+          "optimistic_days": 5,
+          "conservative_days": 6
+        }
+      ]
+    },
+    {
+      "school_level": 4,
+      "regular_quiz_topics": 16,
+      "days_to_targets": [
+        {
+          "fully_trained_pokemon": 1,
+          "optimistic_days": 2,
+          "conservative_days": 2
+        },
+        {
+          "fully_trained_pokemon": 2,
+          "optimistic_days": 3,
+          "conservative_days": 4
+        },
+        {
+          "fully_trained_pokemon": 3,
+          "optimistic_days": 5,
+          "conservative_days": 5
+        }
+      ]
+    },
+    {
+      "school_level": 5,
+      "regular_quiz_topics": 17,
+      "days_to_targets": [
+        {
+          "fully_trained_pokemon": 1,
+          "optimistic_days": 2,
+          "conservative_days": 2
+        },
+        {
+          "fully_trained_pokemon": 2,
+          "optimistic_days": 3,
+          "conservative_days": 4
+        },
+        {
+          "fully_trained_pokemon": 3,
+          "optimistic_days": 5,
+          "conservative_days": 5
+        }
+      ]
+    },
+    {
+      "school_level": 6,
+      "regular_quiz_topics": 15,
+      "days_to_targets": [
+        {
+          "fully_trained_pokemon": 1,
+          "optimistic_days": 2,
+          "conservative_days": 2
+        },
+        {
+          "fully_trained_pokemon": 2,
+          "optimistic_days": 3,
+          "conservative_days": 4
+        },
+        {
+          "fully_trained_pokemon": 3,
+          "optimistic_days": 5,
+          "conservative_days": 5
+        }
+      ]
+    }
+  ]
+}

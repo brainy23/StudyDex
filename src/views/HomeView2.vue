@@ -8,8 +8,10 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
+import { TRAINING_XP_CAP } from '../data/pokemonProgression'
 import TutorialGuide from '../components/common/TutorialGuide.vue'
 import { useWeatherLocation } from '../composables/useWeatherLocation'
+import { useRewardInventory } from '../composables/useRewardInventory'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
@@ -37,7 +39,7 @@ const asset = '/town/'
 const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 
 // to be updated to match user
-const MAX_XP = 200
+const MAX_XP = TRAINING_XP_CAP
 
 
 // The incoming collection is a local prototype, separate from the real trainer profile.
@@ -858,14 +860,7 @@ const homepagePokemon = computed(() => {
   }
 })
 
-// Sample count — connect this to the user's inventory later.
-const unopenedPackCount = ref(3)
-
-const unopenedPackLabel = computed(() =>
-  unopenedPackCount.value > 99
-    ? '99+'
-    : String(unopenedPackCount.value)
-)
+const { count: unopenedPackCount, label: unopenedPackLabel, notice: packNotice } = useRewardInventory()
 
 // Trainer identity always comes from the authenticated student's saved profile.
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
@@ -1687,17 +1682,17 @@ watch(
 
     <!-- BAG -->
     <!-- BAG WITH UNOPENED PACK COUNT -->
+    <span class="visually-hidden" role="status" aria-live="polite">{{ packNotice }}</span>
     <button
       type="button"
       class="sd-nav-button"
       :aria-label="
-        unopenedPackCount > 0
-          ? `Bag, ${unopenedPackCount} unopened packs`
+        unopenedPackCount === null ? 'Bag, pack count unavailable' : unopenedPackCount > 0
+          ? `Rewards, ${unopenedPackCount} unopened packs`
           : 'Bag, no unopened packs'
       "
 
-      :disabled="buddySleeping"
-      @click="router.push({ name: 'trainer' })"
+      @click="router.push({ name: unopenedPackCount > 0 ? 'rewards' : 'trainer' })"
     >
       <span class="sd-icon-tile sd-icon-bag">
         <svg viewBox="0 0 32 32" aria-hidden="true">

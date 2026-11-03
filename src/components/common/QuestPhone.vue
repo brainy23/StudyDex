@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onUnmounted } from 'vue'
 import VueTyper from 'vue3-typer'
+import { TRAINING_XP_CAP } from '../../data/pokemonProgression'
 import 'vue3-typer/dist/vue-typer.css'
 
 // Home owns shared data and persistence. This component only emits changes.
@@ -11,7 +12,7 @@ const props = defineProps({
     type: Object,
     default: () => ({ ownedId: null, name: 'No buddy selected' })
   },
-  maxXp: { type: Number, default: 200 },
+  maxXp: { type: Number, default: TRAINING_XP_CAP },
   deviceImage: { type: String, default: '/town/pokedex-goals.png' },
   todoStorageNotice: { type: String, default: '' },
   todoModalTarget: { type: String, default: '#todoModal' }
