@@ -43,7 +43,7 @@ const now = ref(new Date())
 let clock
 onMounted(() => { clock = setInterval(() => { now.value = new Date() }, 1000) })
 onUnmounted(() => clearInterval(clock))
-const quizzesOpen = computed(() => now.value.getHours() >= 7)
+const quizzesOpen = computed(() => true)
 const science = computed(() => catalogue.value.subjects.find(s => /^science$/i.test(s.name.trim())))
 const level = computed(() => {
   const match = String(profile.value?.school_level?.name || '').match(/^(?:primary\s*|p\s*)?([3-6])(?:\b|$)/i)
@@ -53,12 +53,8 @@ const topics = computed(() => flow.value === 'quiz'
   ? scienceTopics.filter(t => t.level === level.value && !(scienceCourse.value === 'foundation' && t.standardOnly)).map(t => ({ ...t, id:t.key, description:t.official, ready:!!demoBank[t.key]?.length }))
   : catalogue.value.topics.filter(t => t.subject_id === science.value?.id))
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
-function disabled(item) { 
-  return flow.value === 'quiz' && (!item.ready || !quizzesOpen.value) 
-}
-function actionText(item) { 
-  return flow.value !== 'quiz' ? 'Choose Learn or Study →' : !item.ready ? 'Coming soon' : !quizzesOpen.value ? 'Available from 7am' : 'Enter battle →' 
-}
+function disabled(item) { return flow.value === 'quiz' && (!item.ready || !quizzesOpen.value) }
+function actionText(item) { return flow.value !== 'quiz' ? 'Choose Learn or Study →' : !item.ready ? 'Coming soon' : !quizzesOpen.value ? 'Available from 7am' : 'Enter battle →' }
 function selectTopic(item) {
   if (disabled(item)) return
   const query = { subject:science.value?.id || 'moe-science-preview', topic:item.id }
@@ -69,7 +65,6 @@ function selectTopic(item) {
 </script>
 <template>
 <main class="sd-picker sd-topics" :style="{ '--page-art': `url(${asset('science-purple.png')})` }">
-  {{ quizzesOpen }}
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-subjects', query:{ flow } }">← All subjects</RouterLink></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · SCIENCE</p><h1>Your Science adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
   <p v-if="loading" class="sd-page-state" role="status">Loading your subjects…</p>

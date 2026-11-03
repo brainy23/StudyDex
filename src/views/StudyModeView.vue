@@ -40,7 +40,7 @@ const topic = computed(() => catalogue.value.topics.find(t => String(t.id) === S
 const choices = [{ mode:'learn', name:'Learn', icon:'learn', theme:'purple', detail:'Explore the lesson with Professor Mewtwo' }, { mode:'flashcards', name:'Study', icon:'study', theme:'green', detail:'Practise flashcards and start your focus timer' }]
 function selectMode(mode) {
   if (!topic.value) return
-  router.push({ name:'study-decks', query:{ subject:topic.value.subject_id, topic:topic.value.id, mode } })
+  router.push({ name: mode === 'learn' ? 'learn' : 'study-decks', query:{ subject:topic.value.subject_id, topic:topic.value.id } })
 }
 </script>
 <template>

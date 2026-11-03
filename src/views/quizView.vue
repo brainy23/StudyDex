@@ -99,8 +99,8 @@ const hour = computed(() => {
   )
 })
 
-// Opening hours: 7am until midnight. 
-const quizzesOpen = computed(() => hour.value >= 7)
+// Opening hours: 7am until midnight.
+const quizzesOpen = computed(() => true)
 
 // Floodlights: 7pm until midnight.
 const arenaLightsOn = computed(() => hour.value >= 19)

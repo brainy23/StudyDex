@@ -1,18 +1,16 @@
 <script setup>
-import { FAST_CARD_MS, FAST_CARD_STREAK, BOSS_COOLDOWN_MS, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
+import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
   getStudyCatalogue,
   getTopicFlashcards,
-  getTopicLesson,
   studyErrorMessage,
 } from '../services/studyService'
 import TownBackground from '@/components/common/TownBackground.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import StudyImage from '../components/study/StudyImage.vue'
-import { useTimeOfDay } from '@/composables/useTimeofDay'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
@@ -29,8 +27,6 @@ const resources = reactive({})
 let alive = true
 let generation = 0
 
-// Both modes stay mounted in this page so flashcard progress survives a lesson visit.
-const mode = computed(() => route.query.mode === 'learn' ? 'learn' : 'flashcards')
 const subject = computed(() => {
   const subjects = catalogue.value.subjects
   if (route.query.subject) return subjects.find((item) => item.id === route.query.subject) || null
@@ -77,7 +73,7 @@ async function loadResource(topicId, name) {
   target.loading = true
   target.error = null
   try {
-    const data = await (name === 'lesson' ? getTopicLesson(topicId) : getTopicFlashcards(topicId))
+    const data = await getTopicFlashcards(topicId)
     if (alive && resources[topicId]?.[name] === target) target.data = data
   } catch (cause) {
     if (alive && resources[topicId]?.[name] === target) target.error = cause
@@ -89,14 +85,13 @@ async function loadResource(topicId, name) {
 function loadTopic(id) {
   if (!id || resources[id]) return
   resources[id] = Object.fromEntries(
-    ['flashcards', 'lesson'].map((name) => [
+    ['flashcards'].map((name) => [
       name,
       { loading: false, data: null, error: null },
     ]),
   )
   // Load the selected flashcard deck; formal assessments belong to Arena.
   loadResource(id, 'flashcards')
-  if (mode.value === 'learn') loadResource(id, 'lesson')
 }
 
 function retryMode() {
@@ -104,168 +99,50 @@ function retryMode() {
     loadResource(topic.value.id, 'flashcards')
 }
 
-const lessonResource = computed(() => currentResources.value?.lesson)
-const lessonConcepts = computed(() => [...(lessonResource.value?.data?.concepts || [])]
-  .sort((a, b) => (a.concept_order ?? Infinity) - (b.concept_order ?? Infinity)))
-const lessonGoals = computed(() => lessonResource.value?.data?.goals || [])
-const learnBoard = ref(null)
-const rainActive = ref(false)
-const { hour: learnHour, lighting: learnLighting } = useTimeOfDay({ live: ref(true), previewHour: ref(12) })
-const learnBase = import.meta.env.BASE_URL
-const learnImages = {
-  room: `${learnBase}poke-lab/learn-classroom.png`,
-  landscape: `${learnBase}trainer-home/window-landscape-clean.png`,
-  sun: `${learnBase}town/bg_sun.png`, moon: `${learnBase}town/bg_moon.png`,
-  stars: `${learnBase}town/bg_stars.png`, clouds: `${learnBase}town/bg_clouds.png`,
-}
-const learnRoomFailed = ref(false)
-const learnSkyStyle = computed(() => ({ background: `linear-gradient(to bottom, ${learnLighting.value.top} 0%, ${learnLighting.value.horizon} 30%)` }))
-const learnLandscapeStyle = computed(() => ({ filter: `brightness(${learnLighting.value.brightness}) saturate(${learnLighting.value.saturation})` }))
-const learnRoomStyle = computed(() => ({ filter: `brightness(${Math.max(.78, learnLighting.value.brightness)}) saturate(${Math.max(.9, learnLighting.value.saturation)})` }))
-function learnCelestialStyle(isMoon) {
-  const h = learnHour.value
-  const progress = isMoon ? ((h - 19 + 24) % 24) / 11 : (h - 6) / 13
-  const p = Math.max(0, Math.min(1, progress))
-  return { left: `${12 + p * 76}%`, top: `${25 - Math.sin(p * Math.PI) * 19}%`,
-    opacity: progress > 0 && progress < 1 && !rainActive.value ? Math.min(1, p * 10, (1 - p) * 10) : 0 }
-}
-function hideDecorativeImage(event) { event.target.style.visibility = 'hidden' }
-// Custom coat artwork is embedded so no extra image installation is needed.
-const professorSprite = `${import.meta.env.BASE_URL}poke-lab/professor-mewtwo.png`
-const professorFailed = ref(false)
-const learnerFailed = ref(false)
-const classroomCharmander = ref(null)
-const stoolHome = { x: 11, y: 87 }
-const stoolPosition = reactive({ ...stoolHome })
-const stoolCanvas = ref(null)
-const stoolImage = new Image()
-stoolImage.src = `${import.meta.env.BASE_URL}poke-lab/pixel-stool.png`
-function paintStool() {
-  const canvas = stoolCanvas.value
-  if (!canvas || !stoolImage.complete || !stoolImage.naturalWidth) return
-  const context = canvas.getContext('2d')
-  if (!context) return
-  context.clearRect(0, 0, canvas.width, canvas.height)
-  context.imageSmoothingEnabled = false
-  context.drawImage(stoolImage, 0, 0, canvas.width, canvas.height)
-}
-stoolImage.onload = paintStool
-watch(stoolCanvas, paintStool, { flush: 'post' })
-onUnmounted(() => { stoolImage.onload = null })
-const stoolFloor = ref(null)
-const stoolDragging = ref(false)
-let stoolPointer = null
-let stoolGrabOffset = { x: 0, y: 0 }
-const stoolMoved = computed(() => Math.hypot(stoolPosition.x - stoolHome.x, stoolPosition.y - stoolHome.y) > 4)
-const learnerSprite = computed(() => {
-  const sprites = classroomCharmander.value?.sprites
-  const gen5 = sprites?.versions?.['generation-v']?.['black-white']
-  return stoolMoved.value ? (gen5?.front_default || sprites?.front_default || '') : (gen5?.back_default || sprites?.back_default || '')
-})
-
-const buddyCanvas = ref(null)
-let buddyPaintVersion = 0
-// Crop invisible sprite padding so the visible feet rest on the seat.
-watch([learnerSprite, buddyCanvas], async ([url, canvas]) => {
-  const version = ++buddyPaintVersion
-  if (!url || !canvas) return
-  const sprite = new Image()
-  sprite.crossOrigin = 'anonymous'
-  try {
-    sprite.src = url
-    await sprite.decode()
-    if (version !== buddyPaintVersion) return
-    const scratch = document.createElement('canvas')
-    scratch.width = sprite.naturalWidth
-    scratch.height = sprite.naturalHeight
-    const ctx = scratch.getContext('2d')
-    ctx.drawImage(sprite, 0, 0)
-    let left = scratch.width, top = scratch.height, right = -1, bottom = -1
-    try {
-      const pixels = ctx.getImageData(0, 0, scratch.width, scratch.height).data
-      for (let y = 0; y < scratch.height; y++) for (let x = 0; x < scratch.width; x++) {
-        if (pixels[(y * scratch.width + x) * 4 + 3] > 16) {
-          left = Math.min(left, x); top = Math.min(top, y)
-          right = Math.max(right, x); bottom = Math.max(bottom, y)
-        }
-      }
-    } catch { left = 0; top = 0; right = scratch.width - 1; bottom = scratch.height - 1 }
-    if (right < left) return
-    canvas.width = right - left + 1
-    canvas.height = bottom - top + 1
-    const output = canvas.getContext('2d')
-    output.imageSmoothingEnabled = false
-    output.drawImage(sprite, left, top, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height)
-    learnerFailed.value = false
-  } catch { if (version === buddyPaintVersion) learnerFailed.value = true }
-}, { flush: 'post' })
-onUnmounted(() => { buddyPaintVersion++ })
-const stoolStyle = computed(() => ({ left: `${stoolPosition.x}%`, top: `${stoolPosition.y}%` }))
-function floorPoint(event) {
-  const rect = stoolFloor.value?.getBoundingClientRect()
-  if (!rect?.width || !rect?.height) return null
-  return { x: (event.clientX - rect.left) / rect.width * 100, y: (event.clientY - rect.top) / rect.height * 100 }
-}
-function moveStool(x, y) {
-  stoolPosition.x = Math.max(6, Math.min(94, x))
-  stoolPosition.y = Math.max(68, Math.min(90, y))
-}
-function grabStool(event) {
-  if (event.button !== 0 || stoolPointer !== null) return
-  const point = floorPoint(event)
-  if (!point) return
-  stoolPointer = event.pointerId
-  stoolGrabOffset = { x: point.x - stoolPosition.x, y: point.y - stoolPosition.y }
-  event.currentTarget.setPointerCapture(event.pointerId)
-  stoolDragging.value = true
-}
-function dragStool(event) {
-  if (event.pointerId !== stoolPointer) return
-  const point = floorPoint(event)
-  if (point) moveStool(point.x - stoolGrabOffset.x, point.y - stoolGrabOffset.y)
-}
-function releaseStool(event) {
-  if (event.pointerId !== stoolPointer) return
-  stoolPointer = null
-  stoolDragging.value = false
-  if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
-  if (!stoolMoved.value) Object.assign(stoolPosition, stoolHome)
-}
-function returnStool() { Object.assign(stoolPosition, stoolHome) }
-function stoolKey(event) {
-  const offsets = { ArrowLeft: [-2, 0], ArrowRight: [2, 0], ArrowUp: [0, -2], ArrowDown: [0, 2] }
-  if (event.key === 'Home' || event.key === 'Escape') { event.preventDefault(); returnStool(); return }
-  const offset = offsets[event.key]
-  if (offset) { event.preventDefault(); moveStool(stoolPosition.x + offset[0], stoolPosition.y + offset[1]) }
-}
-
-onMounted(async () => {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12000)
-  try {
-    const response = await fetch(`${POKE_API_BASE}/pokemon/27/`, { signal: controller.signal })
-    if (!response.ok) throw new Error('Charmander unavailable')
-    const data = await response.json()
-    if (alive) classroomCharmander.value = data
-  } catch { if (alive) learnerFailed.value = true }
-  finally { clearTimeout(timeout) }
-})
 const learningNavigationError = ref('')
 const learningNavigationBusy = ref(false)
-async function setStudyMode(nextMode) {
-  if (!['learn', 'flashcards'].includes(nextMode) || !topic.value || learningNavigationBusy.value) return
+const learnSnapshotKey = computed(() => `studydex-learn-return-v1:${profile.value?.id}:${topic.value?.id}`)
+async function openLearn() {
+  if (!topic.value || learningNavigationBusy.value || bossNavigating.value) return
   pauseFocusTimer()
   fastStreak = 0
   learningNavigationError.value = ''
   learningNavigationBusy.value = true
-  const query = { ...route.query, subject: topic.value.subject_id, topic: topic.value.id, mode: nextMode }
-  delete query.bossReturn
   try {
-    const failure = await router.push({ name: 'study-decks', query })
-    if (failure && route.query.mode !== nextMode) learningNavigationError.value = 'Could not switch study modes. Please try again.'
-    else enteredLab.value = true
-  } catch { learningNavigationError.value = 'Could not switch study modes. Please try again.' }
+    sessionStorage.setItem(learnSnapshotKey.value, JSON.stringify({
+      cardIds: cards.value.map(card => String(card.id)), queue: [...reviewQueue.value],
+      completed: completedCards.value, seconds: focusSeconds.value,
+      answerVisible: answerVisible.value, finished: timerFinished.value,
+    }))
+    const failure = await router.push({ name: 'learn', query: { subject: topic.value.subject_id, topic: topic.value.id } })
+    if (failure) learningNavigationError.value = 'Could not open Learn. Your flashcards are still here.'
+  } catch { learningNavigationError.value = 'Could not save your place or open Learn. Your flashcards are still here.' }
   finally { learningNavigationBusy.value = false }
+}
+let restoredLearnKey = ''
+function restoreLearnProgress() {
+  if (route.query.resume !== 'learn' || route.query.bossReturn || !flashResource.value?.data || !profile.value) return
+  const key = learnSnapshotKey.value
+  if (restoredLearnKey === key) return
+  restoredLearnKey = key
+  try {
+    const raw = sessionStorage.getItem(key)
+    if (!raw) return
+    const saved = JSON.parse(raw)
+    const sameCards = JSON.stringify(saved.cardIds) === JSON.stringify(cards.value.map(card => String(card.id)))
+    const validQueue = Array.isArray(saved.queue) && saved.queue.every(i => Number.isInteger(i) && i >= 0 && i < cards.value.length) && new Set(saved.queue).size === saved.queue.length
+    if (!sameCards || !validQueue || !Number.isInteger(saved.completed) || saved.completed !== cards.value.length - saved.queue.length || !Number.isFinite(saved.seconds) || saved.seconds < 0 || saved.seconds > 1500) {
+      ratingMessage.value = 'The deck changed or the saved visit was invalid. Starting a fresh review.'
+    } else {
+      reviewQueue.value = saved.queue
+      completedCards.value = saved.completed
+      focusSeconds.value = saved.seconds
+      timerFinished.value = saved.finished === true
+      answerVisible.value = saved.answerVisible === true
+      ratingMessage.value = 'Welcome back! Your place is saved. Press Start to resume your timer.'
+    }
+    sessionStorage.removeItem(key)
+  } catch { ratingMessage.value = 'Your saved place could not be restored. Starting a fresh review.' }
 }
 
 watch(() => topic.value?.id, loadTopic)
@@ -373,7 +250,6 @@ watch([buddyApiKey, spriteRetry], async ([key], previous, onCleanup) => {
   }
 }, { immediate: true })
 
-watch(learnerSprite, () => { learnerFailed.value = false })
 
 const backgroundFailed = ref(false)
 const enteredLab = ref(false)
@@ -491,7 +367,6 @@ const unsupportedCards = computed(() => {
 const bossNavigating = ref(false)
 let cardShownAt = performance.now()
 let fastStreak = 0
-let bossCooldownUntil = 0
 let restoredBoss = ''
 watch([currentCard, enteredLab], () => { cardShownAt = performance.now() })
 function resetRushOnVisibility() { cardShownAt = performance.now(); fastStreak = 0 }
@@ -499,7 +374,7 @@ onMounted(() => document.addEventListener('visibilitychange', resetRushOnVisibil
 onUnmounted(() => document.removeEventListener('visibilitychange', resetRushOnVisibility))
 async function startSurpriseBoss() {
   fastStreak = 0
-  if (Date.now() < bossCooldownUntil || bossNavigating.value) return
+  if (bossNavigating.value) return
   const questions = makeQuestions(cards.value)
   if (!questions.length) return // Image-only/one-answer decks cannot form a fair MCQ.
   if (!router.hasRoute('surprise-boss')) {
@@ -554,14 +429,13 @@ function restoreBossProgress() {
   answerVisible.value = false
   fastStreak = 0
   cardShownAt = performance.now()
-  bossCooldownUntil = Date.now() + BOSS_COOLDOWN_MS
 }
 function revealCard() {
   if (currentCard.value) answerVisible.value = !answerVisible.value
 }
 // Ratings apply only to this visit: Again repeats soon, Hard later, Easy retires it.
 async function rateCard(rating) {
-  if (mode.value !== 'flashcards' || !currentCard.value || !answerVisible.value ||
+  if (!currentCard.value || !answerVisible.value ||
       !['again', 'easy', 'hard'].includes(rating) || bossNavigating.value) return
   const wasFast = performance.now() - cardShownAt < FAST_CARD_MS
   const next = [...reviewQueue.value]
@@ -588,41 +462,29 @@ function restartCards() {
   ratingMessage.value = ''
 }
 function handleCardKey(event) {
-  if (mode.value !== 'flashcards' || !currentCard.value || event.target !== event.currentTarget) return
+  if (!currentCard.value || event.target !== event.currentTarget) return
   if (event.key === ' ' || event.key === 'Enter') { event.preventDefault(); revealCard() }
 }
 watch([() => topic.value?.id, () => flashResource.value?.data], restartCards, { immediate: true, flush: 'sync' })
 watch([() => flashResource.value?.data, () => route.query.bossReturn], restoreBossProgress, { immediate: true, flush: 'post' })
-watch([mode, () => topic.value?.id], ([nextMode, id]) => {
-  pauseFocusTimer()
-  fastStreak = 0
-  cardShownAt = performance.now()
-  if (nextMode === 'learn' && id) {
-    loadTopic(id)
-    const resource = resources[id]?.lesson
-    if (resource && !resource.data && !resource.loading && !resource.error) loadResource(id, 'lesson')
-  }
-}, { immediate: true })
-// Direct lesson links should open their selected classroom after catalogue loading.
+// Open the selected flashcard deck after catalogue loading.
 watch(() => topic.value?.id, id => {
   enteredLab.value = !!(id && route.query.topic)
 }, { immediate: true })
 onUnmounted(() => { clearInterval(focusInterval) })
-</script>
 
+watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
+</script>
 <template>
   <div class="study-page">
-  <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab, 'is-learning': enteredLab && mode === 'learn' }">
+  <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
     <header class="study-header">
       <nav class="study-navigation" aria-label="Study navigation">
         <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-        <button v-if="enteredLab && mode === 'learn'" type="button" class="home-link"
-          :disabled="learningNavigationBusy" @click="setStudyMode('flashcards')">‹ Back to flashcards</button>
-        <button v-if="enteredLab" type="button" class="home-link" @click="returnToSelection">Topics</button>
+        
+        <button type="button" class="home-link" @click="returnToSelection">Topics</button>
       </nav>
-      <div v-show="enteredLab" class="study-clock">
-        <ClockWeather :use-device-location="true" @rain-change="rainActive = $event" />
-      </div>
+      <div v-show="enteredLab" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
@@ -637,7 +499,7 @@ onUnmounted(() => { clearInterval(focusInterval) })
 
     <div v-else-if="!topic" class="lab-state"><p>This topic is unavailable for your school level.</p><button @click="returnToSelection">Choose a topic</button></div>
     <template v-else>
-      <section v-show="!enteredLab || mode === 'flashcards'" class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
+      <section  class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
         <TownBackground scene="lab" @image-error="backgroundFailed = true" />
 
         <!-- This coloured ring follows the lower-left monitor in the new room artwork. -->
@@ -661,7 +523,7 @@ onUnmounted(() => { clearInterval(focusInterval) })
 
         <!-- Blue screen: question and answer on the same display. -->
         <section class="lab-screen answer-screen" aria-label="Flashcard answer and learning content" tabindex="0" @keydown="handleCardKey">
-          <template v-if="mode === 'flashcards'">
+          <template v-if="true">
             <p class="screen-eyebrow">{{ answerVisible ? 'Flashcard · Answer' : 'Flashcard · Question' }}</p>
             <div v-if="!topic" class="screen-message"><h2>Choose a study topic</h2><p>Use Topics above to get started.</p></div>
             <div v-else-if="flashResource?.loading || !flashResource" class="screen-message" role="status">Loading your flashcards…</div>
@@ -709,69 +571,19 @@ onUnmounted(() => { clearInterval(focusInterval) })
         <!-- Rating buttons plus a compact entry to the classroom. -->
         <nav class="lab-console" aria-label="Flashcard ratings and learning">
           <div class="console-actions rating-actions">
-            <button class="rate-again" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('again')">Again</button>
-            <button class="rate-easy" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('easy')">Easy</button>
-            <button class="rate-hard" :disabled="mode !== 'flashcards' || !currentCard || !answerVisible" @click="rateCard('hard')">Hard</button>
+            <button class="rate-again" :disabled="!currentCard || !answerVisible" @click="rateCard('again')">Again</button>
+            <button class="rate-easy" :disabled="!currentCard || !answerVisible" @click="rateCard('easy')">Easy</button>
+            <button class="rate-hard" :disabled="!currentCard || !answerVisible" @click="rateCard('hard')">Hard</button>
           </div>
           <p class="console-status">{{ currentCard ? answerVisible ? 'How well did you remember?' : 'Reveal the answer to rate this card.' : cards.length ? 'Round complete' : 'Choose a deck to begin' }}</p>
           <div class="console-learning-row">
             <span v-if="cards.length" class="console-status">{{ reviewedCount }} / {{ cards.length }} finished</span>
-            <button type="button" class="console-learn-button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="setStudyMode('learn')">Learn with Mewtwo →</button>
+            <button type="button" class="console-learn-button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="openLearn">Learn with Mewtwo →</button>
           </div>
         </nav>
       </section>
-      <section v-show="enteredLab && mode === 'learn'" class="inline-classroom" aria-label="Learn with Mewtwo">
-        <div class="inline-learn-scene">
-          <div class="inline-learn-sky" :style="learnSkyStyle" aria-hidden="true">
-            <img draggable="false" class="learn-celestial" :src="learnImages.sun" :style="learnCelestialStyle(false)" alt="" @error="hideDecorativeImage" />
-            <img draggable="false" class="learn-celestial learn-moon" :src="learnImages.moon" :style="learnCelestialStyle(true)" alt="" @error="hideDecorativeImage" />
-            <img draggable="false" class="learn-sky-layer" :src="learnImages.stars" :style="{ opacity: rainActive ? 0 : learnLighting.stars }" alt="" @error="hideDecorativeImage" />
-            <img draggable="false" class="learn-sky-layer learn-clouds" :src="learnImages.clouds" :style="{ opacity: learnLighting.cloud, filter: `brightness(${learnLighting.brightness})` }" alt="" @error="hideDecorativeImage" />
-            <img draggable="false" class="learn-landscape" :src="learnImages.landscape" :style="learnLandscapeStyle" alt="" @error="hideDecorativeImage" />
-          </div>
-          <img draggable="false" v-if="!learnRoomFailed" class="inline-learn-room" :src="learnImages.room" :style="learnRoomStyle" alt="" @error="learnRoomFailed = true" />
-          <img draggable="false" v-if="professorSprite && !professorFailed" class="inline-professor" :src="professorSprite" alt="Mewtwo teaching beside the whiteboard" @error="professorFailed = true" />
-          <div ref="stoolFloor" class="classroom-play-floor">
-            <canvas v-show="learnerSprite && !learnerFailed" ref="buddyCanvas" class="stool-buddy" :class="{ 'is-protesting': stoolMoved }" role="img" :aria-label="stoolMoved ? 'Charmander asking for his stool back' : 'Charmander resting on the stool, facing the whiteboard'"></canvas>
-            <button class="pixel-stool" :class="{ 'is-dragging': stoolDragging }" :style="stoolStyle" type="button" aria-label="Move Charmander’s stool. Drag, or use arrow keys. Press Home to return it." @pointerdown="grabStool" @pointermove="dragStool" @pointerup="releaseStool" @pointercancel="releaseStool" @lostpointercapture="releaseStool" @keydown="stoolKey" @dblclick="returnStool">
-              <canvas ref="stoolCanvas" width="440" height="530" aria-hidden="true"></canvas>
-            </button>
-            <div v-if="stoolMoved" class="stool-speech" role="status" aria-live="polite">
-              <span class="stool-speaker">CHARMANDER</span>
-              <strong>Hey, focus! Give me back my stool!!!</strong>
-              <button type="button" @click="returnStool">Give it back</button>
-            </div>
-          </div>
-          <article ref="learnBoard" class="inline-whiteboard" tabindex="0" aria-label="Lesson content">
-            <p class="learn-eyebrow">LEARN WITH MEWTWO</p>
-            <h1>{{ topic?.name || 'Your lesson' }}</h1>
-            <p v-if="learnRoomFailed" class="learn-note">Classroom image unavailable. Your lesson is still available below.</p>
-            <p v-if="lessonResource?.loading || !lessonResource" role="status">Loading your lesson…</p>
-            <div v-else-if="lessonResource.error || lessonResource.data?.errors?.concepts" role="alert">
-              <p>{{ studyErrorMessage(lessonResource.error || lessonResource.data.errors.concepts, 'Your lesson') }}</p>
-              <button @click="loadResource(topic.id, 'lesson')">Try again</button>
-            </div>
-            <template v-else-if="lessonResource.data">
-              <p v-if="topic?.description" class="learn-copy">{{ topic.description }}</p>
-              <section v-if="lessonGoals.length" class="learn-goals">
-                <h2>What you’ll learn</h2>
-                <ul><li v-for="goal in lessonGoals" :key="goal.id">{{ goal.goal_text }}</li></ul>
-              </section>
-              <p v-if="lessonResource.data.errors?.goals" role="status">Learning goals could not load. You can still read the concepts below.</p>
-              <section v-for="(concept, index) in lessonConcepts" :key="concept.id" class="inline-concept">
-                <p class="learn-eyebrow">CONCEPT {{ index + 1 }} OF {{ lessonConcepts.length }}</p>
-                <h2>{{ concept.title }}</h2>
-                <p class="learn-copy">{{ concept.explanation_text }}</p>
-                <div v-if="concept.example_text" class="inline-example"><h3>Example</h3><p class="learn-copy">{{ concept.example_text }}</p></div>
-              </section>
-              <p v-if="!lessonConcepts.length">No lesson content has been added for this topic yet.</p>
-            </template>
-            <p v-else>No lesson content is available yet.</p>
-          </article>
-        </div>
-      </section>
       <p v-if="learningNavigationError" class="learn-navigation-error" role="alert">{{ learningNavigationError }}</p>
-      <footer v-if="enteredLab && mode !== 'learn'" class="lab-footer">
+      <footer v-if="enteredLab" class="lab-footer">
         <span role="status">{{ ratingMessage }}</span>
         <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
         <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
@@ -785,7 +597,6 @@ onUnmounted(() => { clearInterval(focusInterval) })
   </main>
   </div>
 </template>
-
 <style scoped>
 
 
@@ -1509,5 +1320,6 @@ input:focus-visible {
   }
   .poke-lab-page .study-navigation .home-link { padding:8px 12px; font-size:13px; }
 }
+
 
 </style>
