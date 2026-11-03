@@ -8,7 +8,7 @@ import LoginView from '../views/LoginView.vue'
 import AccountView from '../views/AccountView.vue'
 import { getSupabase } from '../lib/supabase'
 import TimerView from '../views/timerView.vue'
-import RewardsView from '../views/rewardsView.vue'
+import RewardsView from '../views/rewardsView2.vue'
 import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
 import { requestedTopicId } from '../utils/studyNavigation'
@@ -81,9 +81,17 @@ export function createAppRouter(history = createWebHistory(import.meta.env.BASE_
         component: TimerView,
       },
       {
+        path: '/starter',
+        name: 'starter',
+        component: () => import('../views/starterSelectionView.vue'),
+        meta: { requiresAuth: true },
+      },
+      {
         path: '/rewards',
+        alias: '/pokepacks',
         name: 'rewards',
         component: RewardsView,
+        meta: { requiresAuth: true },
       },
       {
         path: '/study-decks',

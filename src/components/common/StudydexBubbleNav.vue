@@ -1,12 +1,14 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useRewardInventory } from '../../composables/useRewardInventory'
 
 const props = defineProps({
   current: { type: String, default: '' },
   sleeping: { type: Boolean, default: false },
   routes: { type: Object, default: () => ({ town: '/home', study: '/study-decks', quiz: '/quiz', bag: '/trainer' }) },
 })
+const { count: packCount, label: packLabel, notice: packNotice } = useRewardInventory()
 const router = useRouter()
 const route = useRoute()
 const opened = ref(false)
@@ -22,7 +24,7 @@ const items = [
   { id: 'bag',   label: 'Bag',   x: 1,     y: 0,      tile: 'linear-gradient(#e0cbff, #b496e7)' },
 ]
 const selected = computed(() => props.current || items.find(item => props.routes[item.id] === route.path)?.id)
-const unavailable = item => selected.value === item.id || (props.sleeping && ['study', 'quiz', 'bag'].includes(item.id))
+const unavailable = item => (selected.value === item.id && !(item.id === 'bag' && packCount.value > 0)) || (props.sleeping && ['study', 'quiz'].includes(item.id))
 function close(restoreFocus = false) {
   opened.value = false
   if (restoreFocus) toggle.value?.focus()
@@ -68,7 +70,8 @@ async function navigate(item) {
   busy.value = true
   message.value = ''
   try {
-    const destination = item.id === 'todos' ? props.routes.town : props.routes[item.id]
+    const destination = item.id === 'bag' && packCount.value > 0 ? '/rewards'
+      : item.id === 'todos' ? props.routes.town : props.routes[item.id]
     if (!destination) throw new Error('This destination has not been configured.')
     const failure = await router.push(destination)
     if (failure && route.path !== destination) throw new Error('Navigation was cancelled. Please try again.')
@@ -92,15 +95,17 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   <Teleport to="body">
     <nav ref="root" class="bubble-nav" :class="{ 'is-open': opened }" aria-label="Main navigation"
       @keydown="keyboard" @focusout="event => { if (!root?.contains(event.relatedTarget)) close() }">
+      <span class="visually-hidden" role="status" aria-live="polite">{{ packNotice }}</span>
       <div class="bubble-halo" aria-hidden="true"></div>
       <button v-for="(item, index) in items" :key="item.id" type="button"
         class="bubble-item" :class="{ 'is-current': selected === item.id, 'is-town': item.id === 'town' }"
         :style="{ '--x': item.x, '--y': item.y, '--tile': item.tile, '--delay': `${index * 35}ms` }"
         :disabled="unavailable(item) || busy" :tabindex="opened ? 0 : -1"
         :aria-hidden="!opened" :aria-current="selected === item.id ? 'page' : undefined"
-        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz','bag'].includes(item.id) ? ', buddy sleeping' : ''}`"
+        :aria-label="`${item.label}${item.id === 'bag' && packCount > 0 ? `, ${packCount} unopened packs, open Rewards` : ''}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz'].includes(item.id) ? ', buddy sleeping' : ''}`"
         @click="navigate(item)">
 
+        <span v-if="item.id === 'bag' && packCount > 0" class="reward-badge" aria-hidden="true">{{ packLabel }}</span>
         <!-- Town: the same CSS Pokéball as the town navbar -->
         <span v-if="item.id === 'town'" class="sd-pokeball" aria-hidden="true"></span>
 
@@ -143,6 +148,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 </template>
 
 <style scoped>
+.reward-badge { position: absolute; top: -5px; right: -5px; z-index: 2; min-width: 22px; padding: 2px 5px; border-radius: 12px; background: #b52434; color: white; font-size: 12px; font-weight: 800; }
 /* Same colours and style town navbar */
 .bubble-nav {
   --size: 72px; --radius: 214px;

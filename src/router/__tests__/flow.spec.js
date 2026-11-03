@@ -260,7 +260,7 @@ it('keeps failed logins on the login page with feedback', async () => {
   expect(wrapper.get('[role="alert"]').text()).toBe('Invalid login credentials')
 })
 
-it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard', '/quiz'])(
+it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboard', '/quiz', '/rewards', '/pokepacks', '/starter'])(
   'sends visitors without a session from %s to login',
   async (path) => {
     const router = await open(path)
@@ -268,12 +268,14 @@ it.each(['/landing', '/home', '/account', '/study-decks', '/trainer', '/dashboar
   },
 )
 
-it('returns a confirmed signup to landing', async () => {
+it('returns a confirmed signup to starter selection', async () => {
   window.location.hash = '#access_token=test&type=signup'
   getUser.mockResolvedValue({ data: { user: { id: 'test-user' } }, error: null })
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
   const router = await open('/register')
-  expect(router.currentRoute.value.name).toBe('landing')
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('starter')
 })
 
 it('opens signup from landing-info and keeps the registration alias working', async () => {
@@ -298,7 +300,7 @@ it('logs out from the town menu and blocks protected pages afterward', async () 
   await flushPromises()
   expect(signOut).toHaveBeenCalledWith({ scope: 'local' })
   expect(router.currentRoute.value.name).toBe('login')
-  for (const path of ['/home', '/account', '/landing', '/study-decks', '/trainer', '/dashboard', '/quiz']) {
+  for (const path of ['/home', '/account', '/landing', '/study-decks', '/trainer', '/dashboard', '/quiz', '/rewards', '/pokepacks', '/starter']) {
     await router.push(path)
     expect(router.currentRoute.value.name).toBe('login')
   }
@@ -508,10 +510,8 @@ it('pauses the running study timer when returning to Town with the shared link',
   expect(useTimer().state.status).toBe('paused')
 })
 
-it('keeps Town behind login when a signed-out visitor follows the shared link', async () => {
+it('keeps Rewards behind login for a signed-out visitor', async () => {
   const router = await open('/rewards')
-  await wrapper.get('a[href="/home"]').trigger('click')
-  await flushPromises()
   expect(router.currentRoute.value.name).toBe('login')
   expect(wrapper.find('.world-page').exists()).toBe(false)
 })

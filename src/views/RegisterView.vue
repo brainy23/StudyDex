@@ -37,7 +37,7 @@ async function submitRegistration() {
     completed.value = true
     password_field.value = ''
     confirmPassword_field.value = ''
-    if (!result.needsEmailConfirmation) await router.replace({ name: 'landing' })
+    if (!result.needsEmailConfirmation) await router.replace({ name: 'starter' })
   } catch (error) {
     errorMessage.value = error.message || 'Registration failed. Please try again.'
   } finally {
@@ -287,7 +287,7 @@ onMounted(async () => {
           await router.replace({
             name: callback.get('type') === 'email_change'
               ? 'account'
-              : 'landing',
+              : 'starter',
           })
         }
       }
@@ -398,7 +398,7 @@ watch(question_no, () => {
           link to finish setting up your account.
         </p>
         <p v-else>Your StudyDex profile is ready.</p>
-        <RouterLink v-if="!needsEmailConfirmation" to="/landing">Continue</RouterLink>
+        <RouterLink v-if="!needsEmailConfirmation" to="/starter">Choose your starter</RouterLink>
         <RouterLink v-if="needsEmailConfirmation" to="/login">Log in after confirming</RouterLink>
         <RouterLink to="/landing-info">Back to StudyDex</RouterLink>
       </div>

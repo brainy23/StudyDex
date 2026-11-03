@@ -1,0 +1,564 @@
+{
+  "packs": [
+    {
+      "earned_packs": 0,
+      "opened_packs": 0,
+      "unopened_packs": 0
+    }
+  ],
+  "columns": [
+    {
+      "data_type": "uuid",
+      "table_name": "pokemon",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "data_type": "integer",
+      "table_name": "pokemon",
+      "column_name": "pokeapi_id",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "data_type": "text",
+      "table_name": "pokemon",
+      "column_name": "name",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "data_type": "text",
+      "table_name": "pokemon",
+      "column_name": "sprite_url",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "pokemon",
+      "column_name": "evolves_from_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "data_type": "timestamp with time zone",
+      "table_name": "pokemon",
+      "column_name": "created_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_packs",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_packs",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "data_type": "timestamp with time zone",
+      "table_name": "user_packs",
+      "column_name": "earned_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "data_type": "timestamp with time zone",
+      "table_name": "user_packs",
+      "column_name": "opened_at",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "data_type": "text",
+      "table_name": "user_packs",
+      "column_name": "reward_type",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_packs",
+      "column_name": "reward_pokemon_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "data_type": "integer",
+      "table_name": "user_packs",
+      "column_name": "xp_awarded",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_packs",
+      "column_name": "xp_recipient_id",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_pokemon",
+      "column_name": "id",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_pokemon",
+      "column_name": "user_id",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "data_type": "uuid",
+      "table_name": "user_pokemon",
+      "column_name": "pokemon_id",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "data_type": "integer",
+      "table_name": "user_pokemon",
+      "column_name": "xp",
+      "is_nullable": "NO",
+      "column_default": "0"
+    },
+    {
+      "data_type": "integer",
+      "table_name": "user_pokemon",
+      "column_name": "level",
+      "is_nullable": "NO",
+      "column_default": "1"
+    },
+    {
+      "data_type": "boolean",
+      "table_name": "user_pokemon",
+      "column_name": "is_selected",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "data_type": "boolean",
+      "table_name": "user_pokemon",
+      "column_name": "is_defeated",
+      "is_nullable": "NO",
+      "column_default": "false"
+    },
+    {
+      "data_type": "timestamp with time zone",
+      "table_name": "user_pokemon",
+      "column_name": "obtained_at",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    }
+  ],
+  "identity": [
+    {
+      "read_only": "on",
+      "database_name": "postgres",
+      "executing_role": "postgres",
+      "postgres_version": "PostgreSQL 17.11 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit"
+    }
+  ],
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "pokemon",
+      "policyname": "studydeck_read_pokemon_catalogue",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = ( SELECT auth.uid() AS uid))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "user_pokemon",
+      "policyname": "studydeck_read_own_buddy",
+      "with_check": null
+    }
+  ],
+  "triggers": [],
+  "catalogue": [
+    {
+      "catalogue_size": 0,
+      "catalogue_base_forms": 0
+    }
+  ],
+  "functions": [
+    {
+      "settings": [
+        "search_path=\"\""
+      ],
+      "arguments": "",
+      "schema_name": "private",
+      "function_name": "create_registration_profile",
+      "security_definer": true,
+      "explicit_privileges": [
+        "postgres=X/postgres"
+      ]
+    },
+    {
+      "settings": [
+        "search_path=pg_catalog"
+      ],
+      "arguments": "",
+      "schema_name": "public",
+      "function_name": "rls_auto_enable",
+      "security_definer": true,
+      "explicit_privileges": [
+        "postgres=X/postgres",
+        "service_role=X/postgres"
+      ]
+    }
+  ],
+  "ownership": [
+    {
+      "owned_pokemon": 0
+    }
+  ],
+  "relations": [
+    {
+      "force_rls": false,
+      "table_name": "pokemon",
+      "rls_enabled": true,
+      "schema_name": "public"
+    },
+    {
+      "force_rls": false,
+      "table_name": "profiles",
+      "rls_enabled": true,
+      "schema_name": "public"
+    },
+    {
+      "force_rls": false,
+      "table_name": "user_packs",
+      "rls_enabled": true,
+      "schema_name": "public"
+    },
+    {
+      "force_rls": false,
+      "table_name": "user_pokemon",
+      "rls_enabled": true,
+      "schema_name": "public"
+    }
+  ],
+  "privileges": [
+    {
+      "effective": true,
+      "privilege": "delete",
+      "role_name": "anon",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "insert",
+      "role_name": "anon",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "select",
+      "role_name": "anon",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "truncate",
+      "role_name": "anon",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "update",
+      "role_name": "anon",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "delete",
+      "role_name": "anon",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "insert",
+      "role_name": "anon",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "select",
+      "role_name": "anon",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "truncate",
+      "role_name": "anon",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "update",
+      "role_name": "anon",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "delete",
+      "role_name": "anon",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "insert",
+      "role_name": "anon",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "select",
+      "role_name": "anon",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "truncate",
+      "role_name": "anon",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "update",
+      "role_name": "anon",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "delete",
+      "role_name": "authenticated",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "insert",
+      "role_name": "authenticated",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "select",
+      "role_name": "authenticated",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "truncate",
+      "role_name": "authenticated",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "update",
+      "role_name": "authenticated",
+      "table_name": "pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "delete",
+      "role_name": "authenticated",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "insert",
+      "role_name": "authenticated",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "select",
+      "role_name": "authenticated",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "truncate",
+      "role_name": "authenticated",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "update",
+      "role_name": "authenticated",
+      "table_name": "user_packs"
+    },
+    {
+      "effective": true,
+      "privilege": "delete",
+      "role_name": "authenticated",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "insert",
+      "role_name": "authenticated",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "select",
+      "role_name": "authenticated",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "truncate",
+      "role_name": "authenticated",
+      "table_name": "user_pokemon"
+    },
+    {
+      "effective": true,
+      "privilege": "update",
+      "role_name": "authenticated",
+      "table_name": "user_pokemon"
+    }
+  ],
+  "constraints": [
+    {
+      "definition": "CHECK ((evolves_from_id IS DISTINCT FROM id))",
+      "table_name": "pokemon",
+      "convalidated": true,
+      "constraint_name": "pokemon_cannot_evolve_from_itself"
+    },
+    {
+      "definition": "FOREIGN KEY (evolves_from_id) REFERENCES pokemon(id) ON DELETE RESTRICT",
+      "table_name": "pokemon",
+      "convalidated": true,
+      "constraint_name": "pokemon_evolves_from_id_fkey"
+    },
+    {
+      "definition": "UNIQUE (name)",
+      "table_name": "pokemon",
+      "convalidated": true,
+      "constraint_name": "pokemon_name_key"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "pokemon",
+      "convalidated": true,
+      "constraint_name": "pokemon_pkey"
+    },
+    {
+      "definition": "CHECK ((pokeapi_id > 0))",
+      "table_name": "pokemon",
+      "convalidated": true,
+      "constraint_name": "pokemon_pokeapi_id_check"
+    },
+    {
+      "definition": "UNIQUE (pokeapi_id)",
+      "table_name": "pokemon",
+      "convalidated": true,
+      "constraint_name": "pokemon_pokeapi_id_key"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "user_packs_pkey"
+    },
+    {
+      "definition": "FOREIGN KEY (reward_pokemon_id) REFERENCES pokemon(id) ON DELETE RESTRICT",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "user_packs_reward_pokemon_id_fkey"
+    },
+    {
+      "definition": "CHECK ((reward_type = ANY (ARRAY['pokemon'::text, 'xp'::text])))",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "user_packs_reward_type_check"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "user_packs_user_id_fkey"
+    },
+    {
+      "definition": "CHECK ((xp_awarded >= 0))",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "user_packs_xp_awarded_check"
+    },
+    {
+      "definition": "FOREIGN KEY (xp_recipient_id) REFERENCES user_pokemon(id) ON DELETE RESTRICT",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "user_packs_xp_recipient_id_fkey"
+    },
+    {
+      "definition": "CHECK (((opened_at IS NULL) OR (opened_at >= earned_at)))",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "valid_pack_opening_time"
+    },
+    {
+      "definition": "CHECK ((((opened_at IS NULL) AND (reward_type IS NULL) AND (reward_pokemon_id IS NULL) AND (xp_awarded = 0) AND (xp_recipient_id IS NULL)) OR ((opened_at IS NOT NULL) AND (reward_type IS NOT NULL) AND (reward_type = 'pokemon'::text) AND (reward_pokemon_id IS NOT NULL) AND (xp_awarded = 0) AND (xp_recipient_id IS NULL)) OR ((opened_at IS NOT NULL) AND (reward_type IS NOT NULL) AND (reward_type = 'xp'::text) AND (reward_pokemon_id IS NULL) AND (xp_awarded > 0) AND (xp_recipient_id IS NOT NULL))))",
+      "table_name": "user_packs",
+      "convalidated": true,
+      "constraint_name": "valid_pack_reward"
+    },
+    {
+      "definition": "CHECK ((level >= 1))",
+      "table_name": "user_pokemon",
+      "convalidated": true,
+      "constraint_name": "user_pokemon_level_check"
+    },
+    {
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "user_pokemon",
+      "convalidated": true,
+      "constraint_name": "user_pokemon_pkey"
+    },
+    {
+      "definition": "FOREIGN KEY (pokemon_id) REFERENCES pokemon(id) ON DELETE RESTRICT",
+      "table_name": "user_pokemon",
+      "convalidated": true,
+      "constraint_name": "user_pokemon_pokemon_id_fkey"
+    },
+    {
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+      "table_name": "user_pokemon",
+      "convalidated": true,
+      "constraint_name": "user_pokemon_user_id_fkey"
+    },
+    {
+      "definition": "UNIQUE (user_id, pokemon_id)",
+      "table_name": "user_pokemon",
+      "convalidated": true,
+      "constraint_name": "user_pokemon_user_id_pokemon_id_key"
+    },
+    {
+      "definition": "CHECK ((xp >= 0))",
+      "table_name": "user_pokemon",
+      "convalidated": true,
+      "constraint_name": "user_pokemon_xp_check"
+    }
+  ]
+}
