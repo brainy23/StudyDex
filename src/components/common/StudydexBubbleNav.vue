@@ -98,7 +98,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
       <span class="visually-hidden" role="status" aria-live="polite">{{ packNotice }}</span>
       <div class="bubble-halo" aria-hidden="true"></div>
       <button v-for="(item, index) in items" :key="item.id" type="button"
-        class="bubble-item" :class="{ 'is-current': selected === item.id, 'is-town': item.id === 'town' }"
+        class="bubble-item" :class="{ 'is-current': selected === item.id, [`tile-${item.id}`]: true }"
         :style="{ '--x': item.x, '--y': item.y, '--tile': item.tile, '--delay': `${index * 35}ms` }"
         :disabled="unavailable(item) || busy" :tabindex="opened ? 0 : -1"
         :aria-hidden="!opened" :aria-current="selected === item.id ? 'page' : undefined"
@@ -190,13 +190,13 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 
 /* Town bubble = gold button with Pokéball */
-.bubble-nav .bubble-item.is-town {
+.bubble-nav .bubble-item.tile-town {
   border: 3px solid #fff0ae;
   background: var(--tile);
   color: #243c68;
   box-shadow: 0 5px 0 #b77d2c, 0 9px 18px rgba(7, 20, 45, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.8);
 }
-.bubble-item.is-town .bubble-label { color: #243c68; text-shadow: none; }
+.bubble-item.tile-town .bubble-label { color: #243c68; text-shadow: none; }
 
 .sd-pokeball {
   position: relative; display: block; width: 32px; height: 32px; flex-shrink: 0; overflow: hidden;
@@ -228,7 +228,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 
 /* current page: yellow ring + small yellow bar */
-.bubble-nav .bubble-item.is-current:not(.is-town) { border-color: rgba(255, 226, 137, 0.9); }
+.bubble-nav .bubble-item.is-current:not(.tile-town) { border-color: rgba(255, 226, 137, 0.9); }
 .bubble-nav .bubble-item.is-current::after {
   content: ""; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%);
   width: 16px; height: 4px; border-radius: 999px; background: #ffe17a;
