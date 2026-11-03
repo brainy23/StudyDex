@@ -1,23 +1,83 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { Carousel } from 'bootstrap'
+import axios from 'axios'
 
+// pokemon on the right side of hero
+const heroPokemon = ref('')
 
-const images = ref({
-  home: ['/landing/home_1.png', '/landing/home_2.png', '/landing/home_3.png'],
-  packs: ['/landing/packs_1.png', '/landing/packs_2.png', '/landing/packs_3.png'],
-  timer: ['/landing/timer_1.png', '/landing/timer_2.png', '/landing/timer_3.png'],
-  deck: ['/landing/deck_1.png', '/landing/deck_2.png', '/landing/deck_3.png'],
-  battle: ['/landing/battle_1.png', '/landing/battle_2.png', '/landing/battle_3.png'],
-  quiz: ['/landing/quiz_1.png', '/landing/quiz_2.png', '/landing/quiz_3.png'],
-  dashboard: ['/landing/dashboard_1.png', '/landing/dashboard_2.png', '/landing/dashboard_3.png'],
+async function getHeroPokemon() {
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_POKE_API_URL}/pokemon/pikachu/`)
+    heroPokemon.value = response.data.sprites.other['official-artwork'].front_default
+  } catch (error) {
+    console.error('Unable to load Pokémon:', error.message)
+  }
+}
+
+// Screenshots used throughout the landing page
+const screenshots = ref({
+  home: [
+    '/landing/home_1.png',
+    '/landing/home_2.png',
+    '/landing/home_3.png'
+  ],
+
+  packs: [
+    '/landing/packs_1.png',
+    '/landing/packs_2.png',
+    '/landing/packs_3.png'
+  ],
+
+  timer: [
+    '/landing/timer_1.png',
+    '/landing/timer_2.png',
+    '/landing/timer_3.png'
+  ],
+
+  deck: [
+    '/landing/deck_1.png',
+    '/landing/deck_2.png',
+    '/landing/deck_3.png'
+  ],
+
+  battle: [
+    '/landing/battle_1.png',
+    '/landing/battle_2.png',
+    '/landing/battle_3.png'
+  ],
+
+  quiz: [
+    '/landing/quiz_1.png',
+    '/landing/quiz_2.png',
+    '/landing/quiz_3.png'
+  ],
+
+  dashboard: [
+    '/landing/dashboard_1.png',
+    '/landing/dashboard_2.png',
+    '/landing/dashboard_3.png'
+  ]
 })
 
-// start every carousel sliding on its own every 2 seconds
+function startCarousels() {
+  try {
+    const carousels = document.querySelectorAll('.carousel')
+
+    carousels.forEach((carousel) => {
+      new Carousel(carousel, {
+        interval: 2000,
+        ride: 'carousel'
+      })
+    })
+  } catch (error) {
+    console.error('Unable to start carousels:', error)
+  }
+}
+
 onMounted(() => {
-  document.querySelectorAll('.carousel').forEach(el => {
-    new Carousel(el, { interval: 2000, ride: 'carousel' })
-  })
+  startCarousels()
+  getHeroPokemon()
 })
 </script>
 
@@ -26,7 +86,6 @@ onMounted(() => {
     <img src="/backgrounds/studydex_logo.png" alt="StudyDex" class="logo" />
     <div class="links">
       <a href="/tutorial">Tutorial</a>
-      <a href="/help">Need help?</a>
       <a href="/login" class="btn outline">Log in</a>
     </div>
   </nav>
@@ -38,7 +97,8 @@ onMounted(() => {
       <p>Focus in short study sessions and grow your Pokémon buddy along the way.</p>
       <a href="/signup" class="btn yellow">Sign up now</a>
     </div>
-    <img src="" alt="" class="hero-img" />
+    <img v-if="heroPokemon" 
+    :src="heroPokemon" alt="Pikachu" class="hero-img" />
   </section>
 
   <section class="info">
@@ -81,7 +141,7 @@ onMounted(() => {
   <section class="detail">
     <div id="home" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.home" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.home" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -103,7 +163,7 @@ onMounted(() => {
   <section class="detail flip">
     <div id="packs" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.packs" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.packs" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -125,7 +185,7 @@ onMounted(() => {
   <section class="detail">
     <div id="timer" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.timer" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.timer" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -147,7 +207,7 @@ onMounted(() => {
   <section class="detail flip">
     <div id="deck" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.deck" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.deck" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -169,7 +229,7 @@ onMounted(() => {
   <section class="detail">
     <div id="battle" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.battle" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.battle" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -191,7 +251,7 @@ onMounted(() => {
   <section class="detail flip">
     <div id="quiz" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.quiz" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.quiz" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -213,7 +273,7 @@ onMounted(() => {
   <section class="detail">
     <div id="dashboard" class="carousel slide">
       <div class="carousel-inner">
-        <div v-for="(src, i) in images.dashboard" :key="src" :class="['carousel-item', { active: i === 0 }]">
+        <div v-for="(src, i) in screenshots.dashboard" :key="src" :class="['carousel-item', { active: i === 0 }]">
           <img :src="src" class="screen" alt="" />
         </div>
       </div>
@@ -233,9 +293,6 @@ onMounted(() => {
   </section>
 
   <section class="ending">
-    <h2>Want to collaborate with us?</h2>
-    <br>
-    <a href="/signup" class="btn yellow">Contact Us</a>
   </section>
 </template>
 
