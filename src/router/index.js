@@ -12,12 +12,14 @@ import RewardsView from '../views/rewardsView.vue'
 import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
 import { requestedTopicId } from '../utils/studyNavigation'
+import { selectionRoutes } from './selectionRoutes'
 
 export function createAppRouter(history = createWebHistory(import.meta.env.BASE_URL)) {
   const router = createRouter({
     history,
 
     routes: [
+      ...selectionRoutes.map(route => ({ ...route, meta: { ...route.meta, requiresAuth: true } })),
       {
         path: '/account',
         name: 'account',

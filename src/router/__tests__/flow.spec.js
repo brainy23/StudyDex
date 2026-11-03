@@ -98,7 +98,7 @@ it('keeps the tutorial protected even when the old development bypass flag is se
 })
 
 it.each([
-  ['Study', '/study-decks'], ['Quiz', '/quiz'], ['Bag', '/trainer'],
+  ['Study', '/subjects'], ['Quiz', '/subjects'], ['Bag', '/trainer'],
 ])('connects the Town %s navigation button to %s', async (label, destination) => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date(2026, 10, 2, 12))
@@ -394,6 +394,22 @@ it('keeps a failed logout on home and allows retrying without duplicate requests
   expect(router.currentRoute.value.name).toBe('login')
 })
 
+
+async function chooseMathTopic(flow = 'study') {
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  await wrapper.findAll('.sd-path').find(button => button.text().includes('Mathematics')).trigger('click')
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  await wrapper.get('.sd-topic-card').trigger('click')
+  await vi.dynamicImportSettled()
+  await flushPromises()
+  if (flow === 'study') {
+    await wrapper.findAll('.sd-path').find(button => button.get('strong').text() === 'Learn').trigger('click')
+    await flushPromises()
+  }
+}
+
 it('opens profile-level lessons from Poké Lab and supports learning mode navigation', async () => {
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
   const router = await open('/home')
@@ -402,6 +418,8 @@ it('opens profile-level lessons from Poké Lab and supports learning mode naviga
     .find((button) => button.text().includes('Poké Lab'))
   await lab.trigger('click')
   await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/subjects')
+  await chooseMathTopic()
   expect(router.currentRoute.value.path).toBe('/study-decks')
   expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
   expect(getStudyCatalogue).toHaveBeenCalledWith('level-3')
@@ -422,8 +440,10 @@ it('keeps Poké Arena separate from the Poké Lab study screen', async () => {
     .find((button) => button.text().includes('Poké Arena'))
   await arena.trigger('click')
   await flushPromises()
-  expect(router.currentRoute.value.path).toBe('/quiz')
-  expect(wrapper.get('h1').text()).toBe('Poké Arena')
+  expect(router.currentRoute.value.path).toBe('/subjects')
+  await chooseMathTopic('quiz')
+  expect(router.currentRoute.value.path).toBe('/quiz-battle')
+  expect(wrapper.find('.designed-arena').exists()).toBe(true)
   expect(wrapper.find('.study-screen').exists()).toBe(false)
   expect(wrapper.find('.card-front').exists()).toBe(false)
 
@@ -434,6 +454,8 @@ it('keeps Poké Arena separate from the Poké Lab study screen', async () => {
     .find((button) => button.text().includes('Poké Lab'))
   await lab.trigger('click')
   await flushPromises()
+  expect(router.currentRoute.value.path).toBe('/subjects')
+  await chooseMathTopic()
   expect(router.currentRoute.value.path).toBe('/study-decks')
   expect(wrapper.get('.study-overview h2').text()).toBe('Test Topic')
 })
@@ -455,7 +477,8 @@ it('keeps Poké Lab and Arena available when the buddy is sleeping at night', as
     .find((button) => button.text().includes('Poké Lab'))
   await lab.trigger('click')
   await flushPromises()
-  expect(router.currentRoute.value.path).toBe('/study-decks')
+  expect(router.currentRoute.value.path).toBe('/subjects')
+  expect(router.currentRoute.value.query.flow).toBe('study')
 })
 
 it.each(['/quiz', '/study-decks', '/trainer', '/account', '/dashboard', '/rewards'])(
@@ -476,7 +499,7 @@ it.each(['/quiz', '/study-decks', '/trainer', '/account', '/dashboard', '/reward
 
 it('pauses the running study timer when returning to Town with the shared link', async () => {
   getSession.mockResolvedValue({ data: { session: { access_token: 'test' } }, error: null })
-  const router = await open('/study-decks')
+  const router = await open('/study-decks?topic_id=topic-1')
   await wrapper.findAll('button').find((button) => button.text() === 'Start Study Session').trigger('click')
   expect(useTimer().state.status).toBe('running')
   await wrapper.get('a[href="/home"]').trigger('click')
@@ -498,7 +521,7 @@ it('uses Go to Poké Arena for a covered topic and pauses the Lab timer on the w
   const completion = useTopicCompletion()
   completion.bindStudent(studentProfile.id, studentProfile.school_level_id)
   completion.markComplete('topic-1')
-  const router = await open('/study-decks')
+  const router = await open('/study-decks?topic_id=topic-1')
   expect(getStudyQuestions).not.toHaveBeenCalled()
   await wrapper.findAll('button').find((button) => button.text() === 'Start Study Session').trigger('click')
   await wrapper.findAll('button').find((button) => button.text() === 'Go to Poké Arena').trigger('click')

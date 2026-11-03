@@ -133,7 +133,11 @@ watch(
   },
   { flush: 'post' },
 )
-onMounted(initialise)
+onMounted(() => {
+  if (!requestedTopicId(route.query) && router.hasRoute('selection-subjects')) {
+    router.replace({ name: 'selection-subjects', query: { flow: 'quiz' } })
+  } else initialise()
+})
 onUnmounted(() => {
   arenaTransition.clearArrival()
   alive = false

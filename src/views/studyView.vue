@@ -12,6 +12,7 @@ import {
 } from '../services/studyService'
 import { useTimer } from '../components/timer/useTimer'
 import StudyLearn from '../components/study/StudyLearn.vue'
+import StudyClassroom from '../components/study/StudyClassroom.vue'
 import StudyFlashcards from '../components/study/StudyFlashcards.vue'
 import StudyImage from '../components/study/StudyImage.vue'
 import TownBackground from '../components/common/TownBackground.vue'
@@ -294,7 +295,11 @@ watch(() => [profile.value?.id, topic.value?.id, currentResources.value?.flashca
 watch(() => [selectingTopic.value, catalogue.value.topics], ([selecting]) => {
   if (selecting) catalogue.value.topics.forEach((item) => loadTopic(item.id))
 })
-onMounted(initialise)
+onMounted(() => {
+  if (!requestedTopicId(route.query) && router.hasRoute('selection-subjects')) {
+    router.replace({ name: 'selection-subjects', query: { flow: 'study' } })
+  } else initialise()
+})
 onBeforeRouteLeave(() => {
   timer.pause('Your session was paused when you left Poké Lab. Resume when you return.')
 })
@@ -398,7 +403,20 @@ const roomPokemon = computed(() => {
         <KeepAlive v-else>
           <StudyFlashcards v-if="topic && currentResources && activeResource" :key="topic.id" :resource="currentResources.flashcards" :practice-resume="practiceResume">
             <template #room="{ review, rate, flip, restart, snapshot }">
-              <section class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
+              <template v-if="topic && currentResources">
+              <KeepAlive>
+                <StudyClassroom v-if="mode === 'learn' && enteredLab">
+                  <nav class="classroom-controls study-mode-nav" aria-label="Learning modes">
+                    <button aria-pressed="true" @click="setMode('learn')">Learn</button>
+                    <button aria-pressed="false" @click="setMode('flashcards')">Flashcards</button>
+                    <span role="timer" aria-label="Time remaining">{{ timer.display.value }}</span>
+                    <button @click="toggleTimer">{{ timerLabel }}</button>
+                    <button :disabled="arenaState.active || practiceBusy" @click="goToArena">Go to Poké Arena</button>
+                  </nav>
+                  <StudyLearn :topic="topic" :resource="currentResources.lesson" :review-concept-ids="reviewConceptIds" :show-overview="route.query.review === 'topic'" :arena-busy="arenaState.active" @progress="updateProgress" @complete="completeTopic" @mode="setMode" @retry="retryMode" @arena="goToArena" />
+                </StudyClassroom>
+              </KeepAlive>
+              <section v-show="mode !== 'learn' || !enteredLab" class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
                 <TownBackground scene="lab" :paused="!enteredLab" @image-error="backgroundFailed = true" />
                 <div class="timer-frame" aria-hidden="true"></div>
                 <section class="lab-screen prompt-screen timer-screen study-timer" aria-label="Study Block Timer">
@@ -419,9 +437,7 @@ const roomPokemon = computed(() => {
                 </nav>
                 <section class="lab-screen answer-screen main-study" aria-label="Learning content" tabindex="0">
                   <p class="screen-eyebrow study-topic-label">{{ displayTitle(subject?.name) }} · {{ displayTitle(topic.name) }}</p>
-                  <KeepAlive>
-                    <StudyLearn v-if="mode === 'learn'" :topic="topic" :resource="currentResources.lesson" :review-concept-ids="reviewConceptIds" :show-overview="route.query.review === 'topic'" :arena-busy="arenaState.active" @progress="updateProgress" @complete="completeTopic" @mode="setMode" @retry="retryMode" @arena="goToArena" />
-                  </KeepAlive>
+
                   <div v-if="mode === 'flashcards'" class="study-flashcards">
                     <p v-if="currentResources.flashcards.loading" role="status">Loading flashcards…</p>
                     <div v-else-if="currentResources.flashcards.error" class="screen-message" role="alert">
@@ -484,6 +500,7 @@ const roomPokemon = computed(() => {
                 <span v-else>Companion preview</span>
                 <p v-if="!savedInBrowser" role="status">Progress can only be kept for this visit because browser storage is unavailable.</p>
               </footer>
+              </template>
             </template>
           </StudyFlashcards>
           <section v-else class="lab-stage selection-blur" aria-hidden="true"><TownBackground scene="lab" paused /></section>

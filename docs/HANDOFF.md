@@ -1,0 +1,17 @@
+# StudyDex handoff — Arena merge and Mathematics checkpoint
+
+Updated 4 November 2026 (Asia/Singapore). Read `docs/MERGE_ARENA_MATH.md` for the full scope, files, conflict resolutions and test evidence.
+
+Active checkout: `/Users/javanchua/Documents/SMU/IS216 WAD2/Group Project/StudyDex`, branch `integration/user-registration`. The resolved merge was safely transferred here from the temporary worktree on 3 November 2026; the temporary checkout is now detached and retains its staged snapshot. Original target HEAD is f07328e. Backup `backup/integration-before-latest-arena-2026-11-03` preserves it. Incoming design tip is 4edbee6. The merge is resolved/staged but intentionally **uncommitted and unpushed**. Do not switch, reset, abort, commit or push it without the user's direction. The original StudyDex folder now contains the pending integration merge. All 35 pre-existing untracked audit/note files were preserved byte-for-byte; the older handoff is `docs/HANDOFF.before-arena-merge-2026-11-03.md`. A transfer backup and binary patch are at `/private/tmp/studydex-transfer-20261103-_spp6yqx`. No source changes were made during transfer: the complete restored index matched the tested index exactly.
+
+Math is enabled for saved profile levels using real catalogue topics. New selection/mode screens are subject-neutral; Math question previews use the actual bank, not demo keys. Keep explicit public field lists and private answer-key protection. No SQL or database changes in this task.
+
+Four conflicts were resolved around the integration's learning engine, auth/router, Arena previews and shared Lab state. New classroom art wraps the existing roadmap/plant Learn engine. Shared timer, Learn/Flashcards state, optional boss practice without punishment, canonical topic_id and legacy topic handling are retained. Existing null-topic cached-slot errors are guarded. Incoming automatic boss/loss resets and demo grading were not carried over.
+
+Verified: 246 unit cases/26 files pass, two fixture Chrome journeys pass (P1 mobile/P6 desktop), production build passes, scoped lint passes. Full lint retains three pre-existing Oxlint/four ESLint errors. Large dashboard/chart chunks remain. Existing lockfile dependencies installed without new packages/versions. No real student login, live RLS, full old browser suite, Safari/Firefox or long real-content visual testing. Fixture configs avoid local environment files and all real database writes.
+
+Next: user reviews Math/Science/long lessons in this original project folder; adapt legacy browser scenarios for new root selection; resolve existing lint debt separately; commit/transfer/push only after explicit approval. Secure grading, saved attempts/rewards and database privilege hardening remain separately approved backend work. Every future approval should briefly explain what Codex will perform.
+
+## Authorized local checkpoint — 4 November 2026
+
+The user authorized saving the current integration changes in a local commit before beginning rewards work. This checkpoint completes the resolved Arena merge and Mathematics selection work described above; the earlier pending/uncommitted wording records the pre-checkpoint history. No push is authorized. Untracked audit, instruction and prior review files remain outside this application commit. Rewards will be prepared separately; no database operations or permission changes are authorized by this checkpoint. Validation evidence above is from 3 November; no new application changes have been made since that verification.

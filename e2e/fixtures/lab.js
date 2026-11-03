@@ -46,7 +46,7 @@ export const goals = [
 export const labUrl = '/study-decks?subject=science&topic_id=water-topic'
 export const timerKey = `studydex:focus:v1:${studentProfile.id}`
 
-export async function mockLab(page, { deferConcepts = false, buddyFailure = false, autoDismissWeather = true, questionBank = [] } = {}) {
+export async function mockLab(page, { deferConcepts = false, buddyFailure = false, autoDismissWeather = true, questionBank = [], profile = studentProfile, catalogueSubjects = [{ id: 'science', name: 'Science' }], catalogueTopics = [topic], lessonGoals = goals, lessonConcepts = concepts, cards = revisionCards } = {}) {
   if (autoDismissWeather) await page.addLocatorHandler(page.getByRole('dialog', { name: 'Choose weather location' }), async dialog => {
     await dialog.getByRole('button', { name: 'Not Now', exact: true }).click()
   })
@@ -108,12 +108,12 @@ export async function mockLab(page, { deferConcepts = false, buddyFailure = fals
         headers,
       })
     const tables = {
-      profiles: studentProfile,
-      subjects: [{ id: 'science', name: 'Science' }],
-      topics: [topic],
-      topic_learning_goals: goals,
-      topic_concepts: concepts,
-      flashcards: revisionCards.map((card) => ({ ...card, topic_id: topic.id })),
+      profiles: profile,
+      subjects: catalogueSubjects,
+      topics: catalogueTopics,
+      topic_learning_goals: lessonGoals,
+      topic_concepts: lessonConcepts,
+      flashcards: cards.map((card) => ({ ...card, topic_id: catalogueTopics[0]?.id })),
       user_pokemon: null,
       questions: questionBank.filter(question => `eq.${question.question_purpose}` === url.searchParams.get('question_purpose')),
       question_options: questionBank.flatMap(question => question.options || []),
