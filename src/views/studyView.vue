@@ -1,4 +1,8 @@
 <script setup>
+import ExpriencePrompt from '../components/common/expriencePrompt.vue'
+import { useExperiencePrompt } from '../composables/useExperiencePrompt'
+import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+
 import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
@@ -23,6 +27,10 @@ const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
 const selectedBuddyRecord = ref(null)
+const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async result => {
+  completedFocusSessions.value = await getRewardedTimerCount(profile.value.id)
+  selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
+})
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
@@ -118,7 +126,7 @@ async function openLearn() {
   learningNavigationBusy.value = true
   try {
     sessionStorage.setItem(learnSnapshotKey.value, JSON.stringify({
-      cardIds: cards.value.map(card => String(card.id)), queue: [...reviewQueue.value],
+      roundId:flashcardRoundId, cardIds: cards.value.map(card => String(card.id)), queue: [...reviewQueue.value],
       completed: completedCards.value, seconds: focusSeconds.value,
       answerVisible: answerVisible.value, finished: timerFinished.value,
     }))
@@ -142,6 +150,7 @@ function restoreLearnProgress() {
     if (!sameCards || !validQueue || !Number.isInteger(saved.completed) || saved.completed !== cards.value.length - saved.queue.length || !Number.isFinite(saved.seconds) || saved.seconds < 0 || saved.seconds > 1500) {
       ratingMessage.value = 'The deck changed or the saved visit was invalid. Starting a fresh review.'
     } else {
+      flashcardRoundId = saved.roundId || flashcardRoundId
       reviewQueue.value = saved.queue
       completedCards.value = saved.completed
       focusSeconds.value = saved.seconds
@@ -277,6 +286,7 @@ function returnToSelection() {
   router.push({ name:'selection-topics', query:{ flow:'study', subject:subject.value?.id } })
 }
 
+let flashcardRoundId = newExperienceId()
 const reviewQueue = ref([])
 const cardIndex = computed(() => reviewQueue.value[0] ?? -1)
 const answerVisible = ref(false)
@@ -286,38 +296,18 @@ const ratingMessage = ref('')
 const focusSeconds = ref(25 * 60)
 const timerRunning = ref(false)
 const timerFinished = ref(false)
-// Visual completion progress only. Server XP must be awarded by your XP service.
+// Rewarded focus sessions are counted by the Supabase XP ledger.
 const SESSION_REWARD_LIMIT = 4
 const completedFocusSessions = ref(0)
-const sessionProgressKey = computed(() => profile.value?.id
-  ? `studydex-focus-completions-v1:${profile.value.id}`
-  : null)
-function readSessionCount(key) {
-  try {
-    const count = Number(localStorage.getItem(key))
-    return Number.isFinite(count) ? Math.max(0, Math.min(SESSION_REWARD_LIMIT, Math.floor(count))) : 0
-  } catch { return 0 }
-}
-watch(sessionProgressKey, (key) => {
-  completedFocusSessions.value = key ? readSessionCount(key) : 0
-}, { immediate: true })
+watch(() => profile.value?.id, async (id, _, onCleanup) => {
+  let cancelled=false; onCleanup(()=>{cancelled=true})
+  if (!id) { completedFocusSessions.value=0; return }
+  try { const count=await getRewardedTimerCount(id); if(!cancelled) completedFocusSessions.value=count }
+  catch { /* Saving a reward will show an actionable error if SQL is missing. */ }
+}, {immediate:true})
 function recordFocusCompletion() {
-  const key = sessionProgressKey.value
-  if (!key) return
-  completedFocusSessions.value = Math.min(SESSION_REWARD_LIMIT,
-    Math.max(completedFocusSessions.value, readSessionCount(key)) + 1)
-  try { localStorage.setItem(key, String(completedFocusSessions.value)) } catch {
-    // Keep progress for this visit if browser storage is unavailable.
-  }
+  rewardExperience({ id:newExperienceId(), type:'timer' })
 }
-function syncFocusCompletions(event) {
-  if (event.key === sessionProgressKey.value || event.key === null) {
-    completedFocusSessions.value = sessionProgressKey.value ? readSessionCount(sessionProgressKey.value) : 0
-  }
-}
-onMounted(() => window.addEventListener('storage', syncFocusCompletions))
-onUnmounted(() => window.removeEventListener('storage', syncFocusCompletions))
-
 
 // Paused/idle/completed is always red, even when fewer than two minutes remain.
 const timerBorderColor = computed(() => !timerRunning.value ? '#ff4057' : focusSeconds.value <= 120 ? '#ffd43b' : '#34e782')
@@ -394,7 +384,8 @@ onUnmounted(() => document.removeEventListener('visibilitychange', resetRushOnVi
 async function startSurpriseBoss() {
   fastStreak = 0
   if (bossNavigating.value) return
-  const questions = makeQuestions(cards.value)
+  const availableQuestions = makeQuestions(cards.value)
+  const questions = availableQuestions.length ? Array.from({length:5}, (_,i)=>availableQuestions[i % availableQuestions.length]) : []
   if (!questions.length) return // Image-only/one-answer decks cannot form a fair MCQ.
   if (!router.hasRoute('surprise-boss')) {
     ratingMessage.value = 'Boss battle route is not installed yet.'
@@ -403,11 +394,12 @@ async function startSurpriseBoss() {
   pauseFocusTimer()
   const encounter = {
     id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
+    xpEventId:newExperienceId(),
     createdAt: Date.now(), owner: profile.value?.id, topic: topic.value?.id,
     topicName: topic.value?.name, questions, status: 'pending',
     index: 0, choice: null, score: 0, finished: false,
     returnQuery: { ...route.query, mode: 'flashcards' },
-    snapshot: { focusSeconds: focusSeconds.value, queue: [...reviewQueue.value], completed: completedCards.value,
+    snapshot: { roundId:flashcardRoundId, focusSeconds: focusSeconds.value, queue: [...reviewQueue.value], completed: completedCards.value,
       cardIds: cards.value.map(card => String(card.id)) },
   }
   if (!writeEncounter(encounter)) {
@@ -432,6 +424,7 @@ function restoreBossProgress() {
   const sameCards = JSON.stringify(cards.value.map(card => String(card.id))) === JSON.stringify(encounter.snapshot.cardIds)
   pauseFocusTimer()
   if (won && sameCards) {
+    flashcardRoundId = encounter.snapshot.roundId || flashcardRoundId
     reviewQueue.value = encounter.snapshot.queue.filter(index => Number.isInteger(index) && index >= 0 && index < cards.value.length)
     completedCards.value = encounter.snapshot.completed
     focusSeconds.value = Math.max(0, Number(encounter.snapshot.focusSeconds) || 0)
@@ -467,12 +460,14 @@ async function rateCard(rating) {
     ratingMessage.value = rating === 'again' ? 'Again — this card will return soon.' : 'Hard — this card will return later in the round.'
   }
   reviewQueue.value = next
+  if (!next.length && cards.value.length) rewardExperience({ id:flashcardRoundId, type:'flashcards' })
   answerVisible.value = false
   cardShownAt = performance.now()
   fastStreak = wasFast ? fastStreak + 1 : 0
   if (fastStreak >= FAST_CARD_STREAK) await startSurpriseBoss()
 }
 function restartCards() {
+  flashcardRoundId = newExperienceId()
   cardShownAt = performance.now()
   fastStreak = 0
   reviewQueue.value = cards.value.map((_, index) => index)
@@ -495,6 +490,7 @@ onUnmounted(() => { clearInterval(focusInterval) })
 watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
 </script>
 <template>
+  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
     <header class="study-header">

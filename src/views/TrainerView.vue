@@ -1,4 +1,5 @@
 <script setup>
+import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -166,120 +167,22 @@ async function selectTrainer(variant) {
 // These records are separate from the live avatar profile.
 // =====================================================
 
-const sampleProfiles = [
-  {
-    id: '00000000-0000-4000-8000-000000000101',
-    display_name: 'Jake',
-    school_level_id: null,
-    created_at: '2026-10-01T10:00:00+08:00',
-    avatar_choice: 'male'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000102',
-    display_name: 'Ash',
-    school_level_id: null,
-    created_at: '2026-10-02T10:00:00+08:00',
-    avatar_choice: 'female'
-  }
-]
-
-// Change to sampleProfiles[1].id to preview Ash's Pokémon.
-const currentUserId = ref(sampleProfiles[0].id)
-
-const pokemonCatalog = [
-  {
-    id: '00000000-0000-4000-8000-000000000201',
-    pokeapi_id: 172,
-    name: 'Pichu',
-    sprite_url:
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/172.png',
-    evolves_from_id: null,
-    created_at: '2026-10-01T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000202',
-    pokeapi_id: 4,
-    name: 'Charmander',
-    sprite_url:
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/4.png',
-    evolves_from_id: null,
-    created_at: '2026-10-01T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000203',
-    pokeapi_id: 7,
-    name: 'Squirtle',
-    sprite_url:
-      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/7.png',
-    evolves_from_id: null,
-    created_at: '2026-10-01T10:00:00+08:00'
-  }
-]
-
-const userPokemons = ref([
-  {
-    id: '00000000-0000-4000-8000-000000000301',
-    user_id: '00000000-0000-4000-8000-000000000101',
-    pokemon_id: '00000000-0000-4000-8000-000000000201',
-    xp: 90,
-    level: 1,
-    is_selected: true,
-    is_defeated: false,
-    obtained_at: '2026-10-01T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000302',
-    user_id: '00000000-0000-4000-8000-000000000101',
-    pokemon_id: '00000000-0000-4000-8000-000000000202',
-    xp: 60,
-    level: 1,
-    is_selected: false,
-    is_defeated: false,
-    obtained_at: '2026-10-03T10:00:00+08:00'
-  },
-  {
-    id: '00000000-0000-4000-8000-000000000303',
-    user_id: '00000000-0000-4000-8000-000000000102',
-    pokemon_id: '00000000-0000-4000-8000-000000000203',
-    xp: 30,
-    level: 1,
-    is_selected: true,
-    is_defeated: false,
-    obtained_at: '2026-10-02T10:00:00+08:00'
-  }
-])
-
-// =====================================================
-// FIND THE SAMPLE USER'S ACTIVE POKÉMON
-// =====================================================
-
-const activeBuddy = computed(() => {
-  const owned = userPokemons.value.find(record =>
-    record.user_id === currentUserId.value &&
-    record.is_selected
-  )
-
-  if (!owned) return null
-
-  const species = pokemonCatalog.find(
-    pokemon => pokemon.id === owned.pokemon_id
-  )
-
-  if (!species) return null
-
-  return {
-    ownedId: owned.id,
-    pokemon_id: species.id,
-
-    // The component uses the numeric PokéAPI ID.
-    id: species.pokeapi_id,
-    name: species.name,
-
-    xp: owned.xp,
-    level: owned.level,
-    isDefeated: owned.is_defeated,
-    static_img: species.sprite_url || ''
-  }
+const selectedBuddyRecord=ref(null)
+const buddyLoadError=ref('')
+async function refreshTrainerBuddy() {
+  if(!profile.value?.id) return
+  try { selectedBuddyRecord.value=await getSelectedStudyBuddy(profile.value.id); buddyLoadError.value='' }
+  catch { buddyLoadError.value='Your Pokémon could not load.' }
+}
+watch(()=>profile.value?.id, refreshTrainerBuddy)
+onMounted(()=>window.addEventListener('studydex:pokemon-xp',refreshTrainerBuddy))
+onUnmounted(()=>window.removeEventListener('studydex:pokemon-xp',refreshTrainerBuddy))
+const activeBuddy=computed(()=>{
+  const record=selectedBuddyRecord.value
+  if(!record?.pokemon) return null
+  return { ownedId:record.id,id:record.pokemon.name.toLowerCase().replace(/[.'’]/g,'').replace(/\s+/g,'-'),
+    name:record.pokemon.name,xp:record.xp??0,level:record.level??1,isDefeated:false,
+    static_img:resolveStudyImage(record.pokemon.sprite_url) }
 })
 
 // =====================================================

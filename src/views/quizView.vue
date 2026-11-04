@@ -1,4 +1,8 @@
 <script setup>
+import ExpriencePrompt from '../components/common/expriencePrompt.vue'
+import { useExperiencePrompt } from '../composables/useExperiencePrompt'
+import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { scienceTopics, demoBank } from '../data/scienceQuizData'
@@ -10,6 +14,9 @@ import { getSelectedStudyBuddy, getStudyCatalogue, resolveStudyImage, studyError
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 const profile = ref(null)
 const activeBuddy = ref(null)
+const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(activeBuddy, async () => {
+  activeBuddy.value=await getSelectedStudyBuddy(profile.value.id)
+})
 const activeBuddyMessage = ref('')
 const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
 const catalogue = ref({ subjects: [], topics: [] })
@@ -348,18 +355,20 @@ function groundArenaSprite(event, fighter) {
 onUnmounted(() => spriteController?.abort())
 
 
-// Local practice questions only. No scores, EXP or rewards are saved.
+// Local practice questions only. Pokémon XP rewards are saved through the Supabase reward function.
 const selectedDemoTopic = ref(null)
 const demoIndex = ref(0)
 const demoChoice = ref(null)
 const demoScore = ref(0)
 const demoFinished = ref(false)
+let quizAttemptId=newExperienceId()
 const attackSide = ref(null)
 let attackTimer
 const demoQuestions = computed(() => demoBank[selectedDemoTopic.value?.key] || [])
 const demoQuestion = computed(() => demoQuestions.value[demoIndex.value])
 function clearAttack() { clearTimeout(attackTimer); attackSide.value = null }
 function restartDemo() {
+  quizAttemptId=newExperienceId()
   clearAttack()
   demoIndex.value = 0
   demoChoice.value = null
@@ -376,9 +385,12 @@ function answerDemo(index) {
   attackTimer = setTimeout(() => { attackSide.value = null }, 1000)
 }
 function nextDemo() {
-  if (demoChoice.value === null) return
+  if (demoChoice.value === null || demoFinished.value) return
   clearAttack()
-  if (demoIndex.value + 1 >= demoQuestions.value.length) demoFinished.value = true
+  if (demoIndex.value + 1 >= demoQuestions.value.length) {
+    demoFinished.value=true
+    rewardExperience({id:quizAttemptId,type:'quiz',correct:demoScore.value,total:demoQuestions.value.length})
+  }
   else { demoIndex.value++; demoChoice.value = null }
 }
 onUnmounted(clearAttack)
@@ -400,6 +412,7 @@ watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen],
 
 </script>
 <template>
+  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
@@ -501,7 +514,7 @@ watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen],
           <template v-if="demoFinished">
             <span class="dialogue-kicker">ENCOUNTER COMPLETE</span>
             <p>Great practice, trainer! Ready for another challenge?</p>
-            <small>Demo practice · results are not saved.</small>
+            <small>Practice quiz · Pokémon XP saved to your account.</small>
           </template>
           <template v-else-if="demoChoice === null">
             <p>What will <strong>{{ fighters[0]?.name || 'your buddy' }}</strong> do?</p>

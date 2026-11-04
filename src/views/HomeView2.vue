@@ -859,10 +859,12 @@ async function refreshTrainerProfile() {
 onMounted(() => {
   refreshTrainerProfile()
   window.addEventListener('focus', refreshTrainerProfile)
+  window.addEventListener('studydex:pokemon-xp', refreshTrainerProfile)
 })
 onUnmounted(() => {
   trainerProfileActive = false
   window.removeEventListener('focus', refreshTrainerProfile)
+  window.removeEventListener('studydex:pokemon-xp', refreshTrainerProfile)
 })
 
 // Sample progress per Pokémon.
