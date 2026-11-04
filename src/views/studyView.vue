@@ -1326,8 +1326,8 @@ input:focus-visible {
 .poke-lab-page .study-navigation .home-link:disabled { opacity:.55; cursor:wait; }
 .poke-lab-page .study-navigation .home-link:focus-visible { outline:3px solid #ffe194; outline-offset:3px; }
 .poke-lab-page .study-header > .study-clock {
-  position:fixed; top:82px; right:16px; left:auto;
-  width:max-content; max-width:calc(100vw - 32px);
+  position:static; align-self:flex-start;
+  width:max-content; max-width:100%;
   transform:none; pointer-events:auto;
 }
 @media(min-width:1001px) {
@@ -1335,8 +1335,7 @@ input:focus-visible {
 }
 @media(max-width:600px) {
   .poke-lab-page .study-header > .study-clock {
-    top:76px; right:12px; max-width:calc(100vw - 24px);
-    transform:scale(.72); transform-origin:top right;
+    max-width:100%;
   }
 }
 /* A wider image box lets Mewtwo grow without stretching the artwork. */

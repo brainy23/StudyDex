@@ -624,14 +624,13 @@ onUnmounted(() => {
         <span class="title-eyebrow">STUDYDEX</span>
         <h1>Trainer Home</h1>
       </div>
+      <div class="trainer-clock">
+        <ClockWeather
+          :use-device-location="true"
+          @rain-change="rainActive = $event"
+        />
+      </div>
     </header>
-
-    <div class="trainer-clock">
-      <ClockWeather
-        :use-device-location="true"
-        @rain-change="rainActive = $event"
-      />
-    </div>
     </div>
 
     <p v-if="navigationMessage" class="page-message" role="status">
@@ -1098,16 +1097,13 @@ onUnmounted(() => {
 }
 
 .trainer-clock {
-  position: absolute;
-  top: 24px;
-  right: 24px;
+  position: relative;
   z-index: 10;
 }
 
 @media (max-width: 600px) {
   .trainer-clock {
-    top: 12px;
-    right: 12px;
+    max-width: calc(100vw - 24px);
   }
 }
 

@@ -922,15 +922,17 @@ input:focus-visible {
 
 /* Shared Studydex shell: identical font, navigation and clock on both pages. */
 .arena-hud { position: fixed; font-family: system-ui, sans-serif; }
+.arena-hud { display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-start; gap:10px; }
 .arena-hud .home-link { font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1.4; }
-.arena-hud .change-topic { margin-inline: auto; }
+.arena-hud .change-topic { align-self:flex-start; margin:0; }
 .arena-hud .quiz-clock-weather {
-  margin-left: auto;
+  align-self:flex-start;
+  margin-left:0;
   min-width: 0;
   pointer-events: auto;
 }
 @media (max-width: 600px) {
-  .arena-hud { flex-wrap: wrap; }
+  .arena-hud { flex-wrap:nowrap; }
   .arena-hud .quiz-clock-weather { max-width: 100%; }
 }
 .arena-hud button.home-link { border: 1px solid rgb(255 255 255 / 40%); border-radius: 14px; background: rgb(16 30 52 / 80%); padding: 10px 14px; color: white; }
