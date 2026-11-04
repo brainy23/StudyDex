@@ -754,21 +754,26 @@ onUnmounted(() => {
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 600px) {
+/* Scale smoothly below Bootstrap's lg breakpoint (992px). */
+@media (max-width: 991.98px) {
   .clock-weather {
-    flex-wrap: wrap;
-    gap: 8px;
-    padding: 9px 13px;
+    gap: clamp(6px, calc(3.143px + 0.893vw), 12px);
+    padding: clamp(6px, calc(3.143px + 0.893vw), 12px)
+      clamp(10px, calc(5.238px + 1.488vw), 20px);
   }
 
   .weather-icon,
   .weather-placeholder {
-    width: 32px;
-    height: 32px;
+    width: clamp(26px, calc(19.333px + 2.083vw), 40px);
+    height: clamp(26px, calc(19.333px + 2.083vw), 40px);
+  }
+
+  .weather-placeholder {
+    font-size: clamp(16px, calc(13.143px + 0.893vw), 22px);
   }
 
   .clock-time {
-    font-size: 19px;
+    font-size: clamp(16px, calc(12.667px + 1.042vw), 23px);
   }
 
 }
@@ -1058,7 +1063,33 @@ onUnmounted(() => {
 }
 .location-change-button:hover { background: #ffedb5; }
 .location-change-button:active { background: #ffe28b; }
-@media (max-width: 600px) {
-  .weather-location-badge { font-size: 10px; padding-left: 9px; }
+@media (max-width: 991.98px) {
+  .weather-location-badge {
+    gap: clamp(4px, calc(2.095px + 0.595vw), 8px);
+    margin-top: clamp(5px, calc(3.571px + 0.446vw), 8px);
+    padding: clamp(2px, calc(1.048px + 0.298vw), 4px)
+      clamp(3px, calc(2.048px + 0.298vw), 5px)
+      clamp(2px, calc(1.048px + 0.298vw), 4px)
+      clamp(7px, calc(5.095px + 0.595vw), 11px);
+    font-size: clamp(9px, calc(8.048px + 0.298vw), 11px);
+  }
+
+  .location-badge-status {
+    gap: clamp(3px, calc(1.571px + 0.446vw), 6px);
+  }
+
+  .location-badge-icon {
+    font-size: clamp(12px, calc(10.571px + 0.446vw), 15px);
+  }
+
+  .location-change-button {
+    width: clamp(24px, calc(20.19px + 1.19vw), 32px);
+    height: clamp(24px, calc(20.19px + 1.19vw), 32px);
+  }
+
+  .location-change-button svg {
+    width: clamp(14px, calc(12.095px + 0.595vw), 18px);
+    height: clamp(14px, calc(12.095px + 0.595vw), 18px);
+  }
 }
 </style>
