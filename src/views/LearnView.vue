@@ -280,10 +280,13 @@ async function backToFlashcards() {
 <template>
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab, 'is-learning': true }">
+    <nav class="study-mode-toggle" aria-label="Learning mode">
+      <button type="button" :disabled="!topic || learningNavigationBusy" @click="backToFlashcards">Flashcards</button>
+      <button type="button" class="is-current" aria-current="page" disabled>Learn</button>
+    </nav>
     <header class="study-header">
       <nav class="study-navigation" aria-label="Study navigation">
         <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-        <button class="home-link" :disabled="learningNavigationBusy" @click="backToFlashcards">‹ Back to flashcards</button>
         <button type="button" class="home-link" @click="returnToSelection">Topics</button>
       </nav>
       <div v-show="enteredLab" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
@@ -1088,5 +1091,66 @@ input:focus-visible {
   .poke-lab-page .study-navigation .home-link { padding:8px 12px; font-size:13px; }
 }
 
+
+
+/* Matching capsule navigation on both pages. */
+.poke-lab-page .study-mode-toggle {
+  position: fixed; z-index: 40;
+  top: max(12px, env(safe-area-inset-top));
+  left: 50%; transform: translateX(-50%);
+  display: grid; grid-template-columns: 1fr 1fr;
+  width: min(232px, calc(100vw - 32px)); height: 40px;
+  overflow: hidden; border: 2px solid #26354b; border-radius: 999px;
+  background: #fffdf5; box-shadow: 0 2px 0 #132139, 0 4px 9px #07162b30;
+  pointer-events: auto;
+}
+.poke-lab-page .study-mode-toggle button {
+  position: relative; display: grid; place-items: center;
+  min-width: 0; min-height: 0; margin: 0; padding: 0 14px;
+  border: 0; border-radius: 0; box-shadow: none;
+  background: linear-gradient(#fff, #e8e8df); color: #253550;
+  font: inherit; font-size: 12px; font-weight: 850;
+  line-height: 1.2; cursor: pointer; opacity: 1;
+  transform: none; text-shadow: none;
+}
+.poke-lab-page .study-mode-toggle button:first-child { padding-right: 20px; }
+.poke-lab-page .study-mode-toggle button:last-child { padding-left: 20px; }
+.poke-lab-page .study-mode-toggle::before {
+  content: ''; position: absolute; z-index: 2; top: 0; bottom: 0;
+  left: calc(50% - 2px); width: 4px; background: #26354b;
+  pointer-events: none;
+}
+.poke-lab-page .study-mode-toggle::after {
+  content: ''; position: absolute; z-index: 3; top: 50%; left: 50%;
+  width: 18px; height: 18px; transform: translate(-50%, -50%);
+  border: 3px solid #26354b; border-radius: 50%; background: #fffdf5;
+  box-shadow: inset 0 0 0 2px #d9e0e9; pointer-events: none;
+}
+.poke-lab-page .study-mode-toggle button.is-current {
+  background: linear-gradient(#ff5d67 0%, #ed1730 45%, #ce1029 100%);
+  color: white; cursor: default;
+}
+.poke-lab-page .study-mode-toggle button:not(.is-current):hover:not(:disabled) {
+  background: #fff; color: #142d4e;
+}
+.poke-lab-page .study-mode-toggle button:disabled:not(.is-current) { opacity: .55; cursor: wait; }
+.poke-lab-page .study-mode-toggle button:focus-visible {
+  outline: 3px solid #153f72; outline-offset: -5px;
+}
+/* Reserve space above the room so the switch cannot cover either board. */
+.poke-lab-page > .study-content {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+@media (max-width: 1000px) {
+  .poke-lab-page .study-header {
+    top: calc(80px + env(safe-area-inset-top, 0px));
+  }
+  .poke-lab-page .study-header > .study-clock {
+    top: calc(136px + env(safe-area-inset-top, 0px));
+  }
+  .poke-lab-page .inline-classroom { padding-top: 240px; }
+}
 
 </style>
