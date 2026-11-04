@@ -1,48 +1,55 @@
-
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { useOnboarding } from '../composables/useOnboarding'
+import { claimOnboardingStarter, onboardingDestination } from '../services/onboardingService'
 
-const starters = ref([])
-const loading = ref(true)
+const router = useRouter()
 const selectedPokemon = ref(null)
-
-const pokemonNames = ['charmander', 'bulbasaur', 'squirtle']
-
-onMounted(async () => {
-  try {
-    starters.value = await Promise.all(
-      pokemonNames.map(async (name) => {
-        const response = await fetch(
-          `https://pokeapi.co/api/v2/pokemon/${name}`
-        )
-
-        const data = await response.json()
-
-        return {
-          id: data.id,
-          name: data.name,
-          sprite:
-            data.sprites.versions['generation-v'][
-              'black-white'
-            ].animated.front_default ||
-            data.sprites.front_default,
-          artwork:
-            data.sprites.other['official-artwork'].front_default ||
-            data.sprites.front_default
-        }
-      })
-    )
-  } catch (error) {
-    console.error('Failed to load Pokémon:', error)
-  } finally {
-    loading.value = false
-  }
+const saving = ref(false)
+const claimError = ref('')
+const recovering = ref(false)
+const controller = new AbortController()
+const starters = ref([{ id: 4, name: 'charmander' }, { id: 1, name: 'bulbasaur' }, { id: 7, name: 'squirtle' }].map(pokemon => ({
+  ...pokemon,
+  sprite: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pokemon.id}.png`,
+  artwork: `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${pokemon.id}.png`,
+})))
+const { status, loading, error, refresh, isCurrent } = useOnboarding(async saved => {
+  if (saved.next_step === 'starter') return
+  await router.replace(saved.onboarding_complete
+    ? { name: recovering.value ? 'tutorial' : 'landing' }
+    : onboardingDestination(saved))
 })
-
+onMounted(() => {
+  const base = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
+  starters.value.forEach(async pokemon => {
+    try {
+      const response = await fetch(`${base}/pokemon/${pokemon.id}`, { signal: controller.signal })
+      if (!response.ok) return
+      const data = await response.json()
+      if (!controller.signal.aborted) pokemon.sprite = data.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default || data.sprites?.front_default || pokemon.sprite
+    } catch { /* Labels and static sprites keep the choice usable offline. */ }
+  })
+})
+onUnmounted(() => controller.abort())
 function selectPokemon(pokemon) {
-  selectedPokemon.value = pokemon.name
+  if (!loading.value && !saving.value && !error.value && !claimError.value) selectedPokemon.value = pokemon.id
 }
-
+async function confirmSelection() {
+  if (!selectedPokemon.value || loading.value || saving.value || error.value || claimError.value || !status.value) return
+  const owner = status.value.user_id
+  saving.value = true
+  recovering.value = true
+  try {
+    const saved = await claimOnboardingStarter(selectedPokemon.value, { expectedUserId: owner })
+    if (isCurrent(owner)) await router.replace(onboardingDestination(saved, { tutorial: true }))
+  } catch (cause) {
+    if (isCurrent(owner)) claimError.value = cause.message || 'We couldn’t confirm your starter. Check again.'
+  } finally { if (isCurrent(owner)) saving.value = false }
+}
+function checkAgain() { claimError.value = ''; void refresh() }
+function imageFallback(event) { event.target.onerror = null; event.target.src = '/selection/pokeball-purple.svg' }
 </script>
 
 <template>
@@ -51,17 +58,24 @@ function selectPokemon(pokemon) {
       Choose your starter Pokemon!
     </div>
 
+    <p v-if="error || claimError" class="setup-error" role="alert">{{ error || claimError }}
+      <button type="button" :disabled="saving" @click="checkAgain">Check again</button>
+    </p>
     <div class="starters">
       <div v-if="loading" class="loading">
         Loading starters...
       </div>
 
-      <div
+      <button
+        type="button"
+        :disabled="loading || saving || Boolean(error || claimError)"
+        :aria-pressed="selectedPokemon === pokemon.id"
+        :aria-label="pokemon.name"
         v-for="pokemon in starters"
         :key="pokemon.id"
         class="starter"
         :class="{
-          selected: selectedPokemon === pokemon.name
+          selected: selectedPokemon === pokemon.id
         }"
         :style="{
           '--pokemon-artwork': `url('${pokemon.artwork}')`
@@ -70,28 +84,33 @@ function selectPokemon(pokemon) {
       >
         <img
           :src="pokemon.sprite"
+          @error="imageFallback"
           :alt="pokemon.name"
           class="pokemon-sprite"
         />
 
         <h2>{{ pokemon.name }}</h2>
-      </div>
+      </button>
     </div>
 
     <!-- Confirm selection button -->
     <button
       class="confirm-button"
-      :disabled="!selectedPokemon || loading"
+      :disabled="!selectedPokemon || loading || saving || Boolean(error || claimError) || !status"
       @click="confirmSelection"
     >
-      I Choose You!
+      {{ saving ? 'Saving your starter…' : 'I Choose You!' }}
     </button>
   </main>
 </template>
 
 <style scoped>
+.starter { background: transparent; border: 0; color: inherit; font: inherit; }
+.starter:focus-visible, .confirm-button:focus-visible { outline: 3px solid white; outline-offset: 5px; }
+.setup-error { position: relative; z-index: 5; padding: 12px; background: white; color: #17324d; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
     main{
-        background-image: url('../../public/backgrounds/starter-bg.png');
+        background-image: url('/backgrounds/starter-bg.png');
         height: 100dvh;
     }
 

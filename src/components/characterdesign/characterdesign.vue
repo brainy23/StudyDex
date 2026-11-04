@@ -1,6 +1,10 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+defineOptions({ name: 'AvatarSelectionRoom' })
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { avatarOptions } from '../../data/avatarOptions'
+import { useOnboarding } from '../../composables/useOnboarding'
+import { saveOnboardingAvatar, onboardingDestination } from '../../services/onboardingService'
 
 const router = useRouter()
 const base = import.meta.env.BASE_URL
@@ -119,52 +123,44 @@ function celestialStyle(isMoon) {
 /*Character  */
 
 // image = picture in the list, head = profile badge picture, idleImage = 4-frame idle sheet
-const avatars = [
-  { id: 'female-classic', gender: 'female', image: `${base}avatars/girl_0.png`, head: `${base}heads/girl_0-head.png`, idleImage: `${base}avatars/female-idle.png` },
-  { id: 'male-classic',   gender: 'male',   image: `${base}avatars/boy_0.png`,  head: `${base}heads/boy_0-head.png`, idleImage: `${base}avatars/male-idle.png` },
-  { id: 'female-1', gender: 'female', image: `${base}avatars/girl_1.png`, head: `${base}heads/girl_1-head.png`, idleImage: `${base}avatars/girl_1-idle.png` },
-  { id: 'male-1',   gender: 'male',   image: `${base}avatars/boy_1.png`,  head: `${base}heads/boy_1-head.png`, idleImage: `${base}avatars/boy_1-idle.png` },
-  { id: 'female-2', gender: 'female', image: `${base}avatars/girl_2.png`, head: `${base}heads/girl_2-head.png`, idleImage: `${base}avatars/girl_2-idle.png` },
-  { id: 'male-2',   gender: 'male',   image: `${base}avatars/boy_2.png`,  head: `${base}heads/boy_2-head.png`, idleImage: `${base}avatars/boy_2-idle.png` },
-  { id: 'female-3', gender: 'female', image: `${base}avatars/girl_3.png`, head: `${base}heads/girl_3-head.png`, idleImage: `${base}avatars/girl_3-idle.png` },
-  { id: 'male-3',   gender: 'male',   image: `${base}avatars/boy_3.png`,  head: `${base}heads/boy_3-head.png`, idleImage: `${base}avatars/boy_3-idle.png` },
-  { id: 'female-4', gender: 'female', image: `${base}avatars/girl_4.png`, head: `${base}heads/girl_4-head.png`, idleImage: `${base}avatars/girl_4-idle.png` },
-  { id: 'male-4',   gender: 'male',   image: `${base}avatars/boy_4.png`,  head: `${base}heads/boy_4-head.png`, idleImage: `${base}avatars/boy_4-idle.png` },
-]
+const avatars = avatarOptions.map(option => ({ ...option, id: option.value }))
 
 const selectedId = ref(avatars[0].id)
 
 const selected = computed(() => avatars.find(a => a.id === selectedId.value))
 
 // Shown in the profile badge. Change this to user's username.
-const username = ref('Trainer')
+const username = 'Trainer'
+const saving = ref(false)
+const saveError = ref('')
+const { status, loading, error, refresh, isCurrent } = useOnboarding(async saved => {
+  if (saved.next_step !== 'avatar') {
+    await router.replace(saved.onboarding_complete ? { name: 'landing' } : onboardingDestination(saved))
+  } else if (avatars.some(item => item.id === saved.avatar_choice)) selectedId.value = saved.avatar_choice
+})
 
 // Load every idle sheet up front. If one can't load, show the still picture instead.
 const missingIdle = ref([])
 
-onMounted(() => {
-  avatars.forEach(a => {
-    const img = new Image()
-    img.onerror = () => {
-      missingIdle.value.push(a.id)
-      console.warn('Idle sheet not found:', a.idleImage)
-    }
-    img.src = a.idleImage
-  })
-})
+watch(() => selected.value.idleImage, (src, previous, onCleanup) => {
+  const id = selected.value.id
+  const image = new Image()
+  image.onerror = () => { missingIdle.value = [...new Set([...missingIdle.value, id])] }
+  image.src = src
+  onCleanup(() => { image.onerror = null })
+}, { immediate: true })
 
-function start() {
-  // Same key the trainer room reads from.
+async function start() {
+  if (loading.value || saving.value || error.value || !status.value) return
+  const owner = status.value.user_id
+  saving.value = true
+  saveError.value = ''
   try {
-    localStorage.setItem('studydex-trainer-profile', JSON.stringify({
-      gender: selected.value.gender,
-      variantId: selected.value.id,
-    }))
-  } catch {
-    // Keep going even if the browser can't save.
-  }
-
-  router.push('/') // change to your next page
+    const saved = await saveOnboardingAvatar(selectedId.value, { expectedUserId: owner })
+    if (isCurrent(owner)) await router.replace(onboardingDestination(saved, { tutorial: true }))
+  } catch (cause) {
+    if (isCurrent(owner)) saveError.value = cause.message || 'Your avatar could not be saved. Please try again.'
+  } finally { if (isCurrent(owner)) saving.value = false }
 }
 </script>
 
@@ -229,6 +225,9 @@ function start() {
     <!-- choosing panel -->
     <section class="choose-panel">
       <h1>Choose your avatar</h1>
+      <p v-if="loading" role="status">Loading your saved setup…</p>
+      <p v-else-if="error" role="alert">{{ error }} <button type="button" @click="refresh">Try again</button></p>
+      <p v-if="saveError" role="alert">{{ saveError }}</p>
 
       <div class="list">
         <button
@@ -236,14 +235,17 @@ function start() {
           :key="avatar.id"
           type="button"
           :class="['pick', { active: avatar.id === selectedId }]"
+          :aria-label="avatar.label"
+          :aria-pressed="avatar.id === selectedId"
+          :disabled="loading || saving || Boolean(error)"
           @click="selectedId = avatar.id"
         >
           <img :src="avatar.image" alt="" />
         </button>
       </div>
 
-      <button class="start-btn" type="button" @click="start">
-        Let's go!
+      <button class="start-btn" type="button" :disabled="loading || saving || Boolean(error) || !status" @click="start">
+        {{ saving ? 'Saving your avatar…' : "Let’s go!" }}
       </button>
     </section>
   </main>
@@ -485,4 +487,11 @@ h1 {
   .head-circle { width: 72px; height: 72px; border-width: 3px; outline-width: 3px; }
   .username { margin-top: -12px; font-size: 13px; padding: 2px 10px; }
 }
+@media (max-width: 720px) {
+  .choose-panel { top: auto; bottom: 12px; right: 12px; transform: none; width: calc(100% - 24px); max-height: 60dvh; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .trainer-page *, .trainer-page *::before, .trainer-page *::after { animation: none !important; transition: none !important; }
+}
+.pick:focus-visible, .start-btn:focus-visible { outline: 3px solid white; outline-offset: 3px; }
 </style>

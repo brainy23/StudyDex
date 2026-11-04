@@ -237,7 +237,6 @@ onUnmounted(() => {
                     type="radio"
                     name="avatar"
                     :value="option.value"
-                    required
                   />
                   <span class="avatar-frame"
                     ><img :src="option.image" :alt="option.imageAlt || `${option.label} avatar`"
@@ -245,6 +244,9 @@ onUnmounted(() => {
                   <span>{{ option.label }}</span>
                 </label>
               </div>
+              <p v-if="!avatarOptions.some(option => option.value === avatarChoice)">
+                Your current avatar stays until you choose a new style.
+              </p>
             </fieldset>
             <div class="form-actions">
               <button type="submit" :disabled="!profileDirty || savingProfile">

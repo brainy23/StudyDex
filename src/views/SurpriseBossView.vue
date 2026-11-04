@@ -10,7 +10,7 @@ import { getCurrentProfile } from '../services/profileService'
 import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import TownBackground from '@/components/common/TownBackground.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
-import { useTimeOfDay } from '@/composables/useTimeofDay'
+import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 
 const profile = ref(null)

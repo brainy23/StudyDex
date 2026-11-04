@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { getCurrentProfile } from '../services/profileService'
 import { updateCurrentAvatar } from '../services/accountService'
-import { avatarOptions } from '../data/avatarOptions'
+import { avatarOptions, findAvatar } from '../data/avatarOptions'
 
 import BackToHome from '../components/common/BackToHome.vue'
 
@@ -55,21 +55,18 @@ const trainerVariants = avatarOptions.map(option => ({
   id: option.value
 }))
 
-const selectedTrainer = computed(() =>
-  trainerVariants.find(
-    item => item.value === profile.value?.avatar_choice
-  ) ?? null
-)
+const selectedTrainer = computed(() => findAvatar(profile.value?.avatar_choice))
 
 const selectedVariantId = computed(() =>
-  selectedTrainer.value?.id ?? ''
+  selectedTrainer.value?.value ?? ''
 )
 
-const genderFilter = ref('male')
+const genderFilter = ref('all')
+const avatarGroups = [{ value: 'all', label: 'All styles' }, { value: 'female', label: 'Girls' }, { value: 'male', label: 'Boys' }]
 
 const visibleVariants = computed(() =>
   trainerVariants.filter(
-    item => item.value === genderFilter.value
+    item => genderFilter.value === 'all' || item.gender === genderFilter.value
   )
 )
 
@@ -115,7 +112,7 @@ async function loadTrainerProfile() {
     if (!avatarPageActive) return
 
     profile.value = saved
-    genderFilter.value = saved.avatar_choice
+    genderFilter.value = 'all'
   } catch (error) {
     if (avatarPageActive) {
       avatarLoadError.value =
@@ -665,7 +662,7 @@ onUnmounted(() => {
             <template v-else-if="profile">
               <div class="gender-options" aria-label="Trainer options">
                 <button
-                  v-for="option in avatarOptions"
+                  v-for="option in avatarGroups"
                   :key="option.value"
                   type="button"
                   :aria-pressed="genderFilter === option.value"

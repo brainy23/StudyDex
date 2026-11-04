@@ -1,5 +1,9 @@
 <script setup>
+defineOptions({ name: 'TrainerLandingPage' })
 import ProfileSummary from '../common/ProfileSummary.vue'
+import { useOnboarding } from '../../composables/useOnboarding'
+import { onboardingDestination } from '../../services/onboardingService'
+const { status, loading, error, refresh } = useOnboarding()
 // Each cloud: file, top (% from top), width (px), speed (seconds to cross), start (0-1)
 // Big clusters are slow, small clouds are fast.
 const clouds = [
@@ -39,9 +43,14 @@ const clouds = [
     <div class="front">
       <img src="/backgrounds/studydex_logo.png" alt="StudyDex" class="logo" />
       <h3>Learn. Evolve. Grow.</h3>
-      <ProfileSummary />
-      <RouterLink to="/home" class="enter-btn">Start</RouterLink>
-      <RouterLink to="/characterdesign" class="enter-btn">Start your journey</RouterLink>
+      <ProfileSummary v-if="status" :key="status.user_id" />
+      <p v-if="loading" role="status">Getting your journey ready…</p>
+      <div v-else-if="error" class="setup-error" role="alert">
+        <p>{{ error }}</p><button type="button" class="enter-btn" @click="refresh">Try again</button>
+      </div>
+      <RouterLink v-else-if="status" :to="onboardingDestination(status)" class="enter-btn">
+        {{ status.onboarding_complete ? 'Start' : 'Start your journey' }}
+      </RouterLink>
     </div>
   </div>
 </template>

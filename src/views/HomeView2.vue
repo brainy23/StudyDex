@@ -7,7 +7,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { signOutCurrentSession } from '../services/authService'
-import { avatarOptions } from '../data/avatarOptions'
+import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
@@ -867,7 +867,7 @@ const unopenedPackLabel = computed(() =>
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
 const profileMenuOpen = ref(false)
 const trainerAvatarImage = computed(() =>
-  avatarOptions.find(option => option.value === trainerProfile.value.avatar)?.image || ''
+  findAvatar(trainerProfile.value.avatar)?.image || ''
 )
 
 let trainerProfileLoading = false

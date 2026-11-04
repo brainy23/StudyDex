@@ -1,6 +1,6 @@
 import { getSupabase } from '../lib/supabase'
 import { PROFILE_FIELDS } from './profileService'
-import { avatarOptions } from '../data/avatarOptions'
+import { avatarOptions, findAvatar } from '../data/avatarOptions'
 
 async function requireUser(client) {
   const { data, error } = await client.auth.getUser()
@@ -41,7 +41,7 @@ export function validateProfileChanges({ displayName, schoolLevelId, avatarChoic
     return 'Enter a name between 1 and 80 characters.'
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(schoolLevelId))
     return 'Choose your Primary level.'
-  if (!avatarOptions.some((option) => option.value === avatarChoice))
+  if (!findAvatar(avatarChoice))
     return 'Choose an avatar option.'
   return ''
 }
