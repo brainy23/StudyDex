@@ -1,9 +1,13 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { readEncounter, writeEncounter } from '../composables/bossEncounter'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 const route = useRoute()
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
+const transitionSequence = pokemonTransition.state.sequence
+const transitionKey = `surprise-boss:${route.query.encounter}`
 const storedEncounter = readEncounter()
 const encounter = ref(storedEncounter?.id === route.query.encounter && storedEncounter?.status === 'pending' ? storedEncounter : null)
 import { getCurrentProfile } from '../services/profileService'
@@ -41,7 +45,23 @@ async function initialise() {
   }
 }
 onMounted(initialise)
-onUnmounted(() => { alive = false; generation++ })
+onUnmounted(() => {
+  alive = false
+  generation++
+  pokemonTransition.pageLeft(transitionKey, transitionSequence)
+})
+watch(loading, async isLoading => {
+  if (isLoading) return
+  // The existing loading watcher validates the encounter and restores questions.
+  await nextTick()
+  if (alive) pokemonTransition.pageReady(transitionKey, transitionSequence)
+})
+watch(() => pokemonTransition.state.outcome, outcome => {
+  if (outcome !== 'failed' || !loading.value || pokemonTransition.state.sequence !== transitionSequence) return
+  generation++
+  error.value = new Error(pokemonTransition.state.error || 'Could not load your boss battle. Please retry.')
+  loading.value = false
+})
 // Preview bar has its own layout row below the arena.
 const live = ref(true)
 const previewHour = ref(12)
@@ -719,6 +739,7 @@ watch(loading, () => {
     encounterError.value = 'No active encounter. Return to your flashcards to study.'
     return
   }
+  encounterError.value = ''
   selectedDemoTopic.value = { name: encounter.value.topicName }
   demoIndex.value = encounter.value.index || 0
   demoChoice.value = encounter.value.choice ?? null

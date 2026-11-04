@@ -1,13 +1,17 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
+let transitionSequence = 0
+let transitionKey = ''
 const flow = computed(() => route.query.flow === 'quiz' ? 'quiz' : 'study')
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
 const profile = ref(null)
@@ -18,6 +22,11 @@ let active = true
 let requestId = 0
 async function load() {
   const request = ++requestId
+  transitionSequence = pokemonTransition.state.sequence
+  const sequence = transitionSequence
+  const requestedFlow = flow.value
+  const key = `${requestedFlow}-subjects`
+  transitionKey = key
   loading.value = true
   error.value = ''
   try {
@@ -26,15 +35,36 @@ async function load() {
     profile.value = student
     catalogue.value = { subjects: [], topics: [] }
     if (student.school_level_id) {
-      const data = await (flow.value === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student)
+      const data = await (requestedFlow === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student)
       if (active && request === requestId) catalogue.value = data
     }
   } catch (cause) { if (active && request === requestId) error.value = studyErrorMessage(cause, 'Your subjects') }
-  finally { if (active && request === requestId) loading.value = false }
+  finally {
+    if (active && request === requestId) {
+      loading.value = false
+      await nextTick()
+      if (active && request === requestId) pokemonTransition.pageReady(key, sequence)
+    }
+  }
 }
 onMounted(load)
-onUnmounted(() => { active = false; requestId++ })
-watch(() => route.query.flow, load)
+onUnmounted(() => {
+  active = false
+  requestId++
+  pokemonTransition.pageLeft(transitionKey, transitionSequence)
+})
+watch(() => route.query.flow, () => {
+  pokemonTransition.pageLeft(transitionKey, transitionSequence)
+  load()
+})
+watch(() => pokemonTransition.state.outcome, outcome => {
+  if (outcome !== 'failed' || !loading.value ||
+      pokemonTransition.state.sequence !== transitionSequence) return
+  // Invalidate a stalled read so it cannot overwrite the retry/error state later.
+  requestId++
+  loading.value = false
+  error.value = pokemonTransition.state.error || 'Your subjects could not be loaded. Please try again.'
+})
 
 const lanes = computed(() => {
   const subjects = catalogue.value.subjects

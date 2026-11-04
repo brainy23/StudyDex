@@ -10,6 +10,7 @@ import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '
 import { signOutCurrentSession } from '../services/authService'
 import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
@@ -18,6 +19,8 @@ import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
+const buildingNavigationError = ref('')
 
 
 // tutorial
@@ -89,7 +92,7 @@ const buildingButtons = [
     icon: asset+ 'poke_arena.png',
     left: '21%',
     top: '50%',
-    path: '/quiz',
+    path: '/subjects?flow=quiz',
   },
   {
     id: 'laboratory',
@@ -98,7 +101,7 @@ const buildingButtons = [
     icon: asset+ 'poke_study.png',
     left: '54.5%',
     top: '49%',
-    path: '/study-decks',
+    path: '/subjects?flow=study',
   },
   {
     id: 'trainer',
@@ -111,8 +114,35 @@ const buildingButtons = [
   },
 ]
 
-function selectBuilding(building) {
-  router.push(building.path)
+async function selectBuilding(building) {
+  if (pokemonTransition.state.active) return
+  buildingNavigationError.value = ''
+  try {
+    if (building.id === 'laboratory' || building.id === 'arena') {
+      const flow = building.id === 'arena' ? 'quiz' : 'study'
+      await pokemonTransition.run({
+        source: 'Town',
+        destination: building.title,
+        title: flow === 'quiz' ? 'A Challenge Awaits!' : 'Ready to learn?',
+        description: flow === 'quiz' ? 'Your next quiz adventure is getting ready.' : 'Your next study adventure is getting ready.',
+        waitFor: `${flow}-subjects`,
+        durationMs: 2500,
+        task: async (signal) => {
+          const failure = await router.push(building.path)
+          if (signal.aborted) throw signal.reason
+          const target = router.currentRoute.value
+          if (failure || target.name !== 'selection-subjects' || target.query.flow !== flow) {
+            throw new Error(`Could not open ${building.title}. Please try again.`)
+          }
+        },
+      })
+    } else {
+      const failure = await router.push(building.path)
+      if (failure) throw new Error('Could not open this building. Please try again.')
+    }
+  } catch (error) {
+    if (error.name !== 'AbortError') buildingNavigationError.value = error.message || 'Could not open this building. Please try again.'
+  }
 }
 
 // Component outputs used by the town's interactions.
@@ -1257,6 +1287,7 @@ watch(
        STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
        ================================================= -->
   <div class="world-page">
+    <p v-if="buildingNavigationError" class="building-navigation-error" role="alert">{{ buildingNavigationError }}</p>
 
   <!-- tutorial -->
    <Tutorialguide v-if="showTutorial" @done="finishTutorial"/>
@@ -1878,6 +1909,19 @@ watch(
 </template>
 
 <style scoped>
+.building-navigation-error {
+  position: fixed;
+  z-index: 2000;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(90%, 480px);
+  padding: 12px 18px;
+  border-radius: 12px;
+  background: #fff3d1;
+  color: #633423;
+  text-align: center;
+}
 .world-page {
   position: relative;
   width: 100%;
