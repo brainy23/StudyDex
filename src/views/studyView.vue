@@ -18,11 +18,13 @@ import TownBackground from '@/components/common/TownBackground.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import StudyImage from '../components/study/StudyImage.vue'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 
 const route = useRoute()
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
@@ -409,9 +411,31 @@ async function startSurpriseBoss() {
   bossNavigating.value = true
   pauseFocusTimer()
   try {
-    const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
-    if (failure) { encounter.status = 'cancelled'; writeEncounter(encounter); ratingMessage.value = 'Battle navigation was cancelled.' }
-  } catch { encounter.status = 'cancelled'; writeEncounter(encounter); ratingMessage.value = 'Could not open the boss battle.' }
+    await pokemonTransition.run({
+      source: 'Poké Lab',
+      destination: 'Boss Battle',
+      title: 'A Boss Appears!',
+      description: 'A legendary Pokémon is ready to test your knowledge.',
+      durationMs: 2500,
+      waitFor: `surprise-boss:${encounter.id}`,
+      task: async (signal) => {
+        const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
+        if (signal.aborted) throw signal.reason
+        const target = router.currentRoute.value
+        if (failure || target.name !== 'surprise-boss' || target.query.encounter !== encounter.id) {
+          throw new Error('Battle navigation was cancelled. Please try again.')
+        }
+      },
+    })
+  } catch {
+    // Only cancel an encounter that failed to leave this flashcard view. After
+    // navigation, the battle owns the saved state and its error/retry interface.
+    if (alive) {
+      encounter.status = 'cancelled'
+      writeEncounter(encounter)
+      ratingMessage.value = 'Could not open the boss battle. Please try again.'
+    }
+  }
   finally { bossNavigating.value = false }
 }
 function restoreBossProgress() {
