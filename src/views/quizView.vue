@@ -1,8 +1,4 @@
 <script setup>
-import ExpriencePrompt from '../components/common/expriencePrompt.vue'
-import { useExperiencePrompt } from '../composables/useExperiencePrompt'
-import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
-
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 const route = useRoute()
@@ -14,9 +10,6 @@ import { getQuizTopicPreview } from '../services/quizPreviewService'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 const profile = ref(null)
 const activeBuddy = ref(null)
-const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(activeBuddy, async () => {
-  activeBuddy.value=await getSelectedStudyBuddy(profile.value.id)
-})
 const activeBuddyMessage = ref('')
 const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
 const loading = ref(true)
@@ -328,25 +321,6 @@ function resetPreview() {
   previewIndex.value = 0
   previewChoice.value = null
   previewFinished.value = false
-// Local practice questions only. Pokémon XP rewards are saved through the Supabase reward function.
-const selectedDemoTopic = ref(null)
-const demoIndex = ref(0)
-const demoChoice = ref(null)
-const demoScore = ref(0)
-const demoFinished = ref(false)
-let quizAttemptId=newExperienceId()
-const attackSide = ref(null)
-let attackTimer
-const demoQuestions = computed(() => demoBank[selectedDemoTopic.value?.key] || [])
-const demoQuestion = computed(() => demoQuestions.value[demoIndex.value])
-function clearAttack() { clearTimeout(attackTimer); attackSide.value = null }
-function restartDemo() {
-  quizAttemptId=newExperienceId()
-  clearAttack()
-  demoIndex.value = 0
-  demoChoice.value = null
-  demoScore.value = 0
-  demoFinished.value = false
 }
 function choosePreview(optionId) {
   if (previewChoice.value !== null || previewFinished.value ||
@@ -357,20 +331,10 @@ function nextPreview() {
   if (previewChoice.value === null) return
   if (previewIndex.value + 1 >= previewQuestions.value.length) previewFinished.value = true
   else { previewIndex.value++; previewChoice.value = null }
-function nextDemo() {
-  if (demoChoice.value === null || demoFinished.value) return
-  clearAttack()
-  if (demoIndex.value + 1 >= demoQuestions.value.length) {
-    demoFinished.value=true
-    rewardExperience({id:quizAttemptId,type:'quiz',correct:demoScore.value,total:demoQuestions.value.length})
-  }
-  else { demoIndex.value++; demoChoice.value = null }
 }
-
 
 </script>
 <template>
-  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
@@ -472,7 +436,7 @@ function nextDemo() {
           <template v-if="previewFinished">
             <span class="dialogue-kicker">PREVIEW COMPLETE</span>
             <p>Great practice, trainer! Ready for another challenge?</p>
-            <small>Practice quiz · Pokémon XP saved to your account.</small>
+            <small>Preview only · no grading or saved results.</small>
           </template>
           <template v-else-if="previewChoice === null">
             <p>Choose an option to explore this question.</p><small>Preview only · no grading or saved results.</small>

@@ -1,5 +1,5 @@
 <script setup>
-import ExpriencePrompt from '../components/common/expriencePrompt.vue'
+import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
 
@@ -490,7 +490,7 @@ onUnmounted(() => { clearInterval(focusInterval) })
 watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
 </script>
 <template>
-  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
+  <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
     <header class="study-header">
