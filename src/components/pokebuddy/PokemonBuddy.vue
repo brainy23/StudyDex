@@ -622,77 +622,19 @@ onBeforeUnmount(() => {
   color: #b42318;
 }
 
-/* Feedback is separate from the hover details hidden by the room page. */
-.buddy-feedback {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 8;
-  pointer-events: none;
-}
-.buddy-evolution-note {
-  display: block;
-  padding: 7px 14px;
-  border: 1px solid #eac66c;
-  border-radius: 999px;
-  background: #fff4ce;
-  color: #72531b;
-  font: 600 14px/1.3 'Fredoka', sans-serif;
-  white-space: nowrap;
-  box-shadow: 0 3px 12px #46371818;
-}
-.buddy-evolution-note.is-devolving {
-  background: #fff0e9;
-  border-color: #e7b5a3;
-  color: #9a5142;
-}
-.buddy-xp-float {
-  position: absolute;
-  top: 32%;
-  right: 0;
-  z-index: 9;
-  pointer-events: none;
-  padding: 5px 10px;
-  border: 1px solid #b5d9ba;
-  border-radius: 999px;
-  background: #f0fff1;
-  color: #2f7142;
-  font: 700 17px/1.3 'Fredoka', sans-serif;
-  white-space: nowrap;
-  box-shadow: 0 3px 10px #20362820;
-  animation: buddy-xp-rise 1.5s ease-out forwards;
-}
-.buddy-xp-float.is-loss {
-  background: #fff0ed;
-  border-color: #e4b8b0;
-  color: #ad4845;
-}
-@keyframes buddy-xp-rise {
-  0% { opacity: 0; transform: translateY(8px); }
-  15%, 55% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-42px); }
-}
-@keyframes buddy-xp-fade {
-  0%, 80% { opacity: 1; }
-  100% { opacity: 0; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .buddy-xp-float { animation-name: buddy-xp-fade; }
-}
-
-/* Pokémon */
+/* Pokémon container */
 
 .buddy-image-container {
   position: relative;
   isolation: isolate;
+  container-type: inline-size;
   display: flex;
   justify-content: center;
   align-items: center;
   width: 100%;
   height: 200px;
   flex-shrink: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .buddy-sprite {
@@ -700,7 +642,8 @@ onBeforeUnmount(() => {
   z-index: 2;
   width: auto;
   height: 100px;
-  max-width: 100%;
+  max-width: 80%;
+  max-height: 80%;
   object-fit: contain;
   image-rendering: pixelated;
   transform-origin: center;
@@ -712,7 +655,20 @@ onBeforeUnmount(() => {
   transform: rotate(90deg);
 }
 
-/* XP */
+.buddy-sprite.charging {
+  animation: buddy-charge 0.25s infinite alternate;
+}
+
+.buddy-sprite.swapping {
+  filter: brightness(0) invert(1);
+  transform: scale(1.2);
+}
+
+.buddy-sprite.revealing {
+  animation: buddy-reveal 0.6s ease-out;
+}
+
+/* XP progress */
 
 .buddy-xp {
   width: 100%;
@@ -722,8 +678,8 @@ onBeforeUnmount(() => {
 .xp-track {
   height: 18px;
   margin: 8px 0;
-  border-radius: 20px;
   overflow: hidden;
+  border-radius: 20px;
   background: #dedede;
 }
 
@@ -733,24 +689,82 @@ onBeforeUnmount(() => {
   transition: width 0.3s ease;
 }
 
-/* Evolution / devolution */
+/* Evolution / devolution label */
+
+.buddy-feedback {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  z-index: 8;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.buddy-evolution-note {
+  display: block;
+  padding: 7px 14px;
+  border: 1px solid #eac66c;
+  border-radius: 999px;
+  background: #fff4ce;
+  color: #72531b;
+  font: 600 14px/1.3 'Fredoka', sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 3px 12px #46371818;
+}
+
+.buddy-evolution-note.is-devolving {
+  border-color: #e7b5a3;
+  background: #fff0e9;
+  color: #9a5142;
+}
+
+/* Floating XP feedback */
+
+.buddy-xp-float {
+  position: absolute;
+  top: 32%;
+  right: 0;
+  z-index: 9;
+  padding: 5px 10px;
+  border: 1px solid #b5d9ba;
+  border-radius: 999px;
+  background: #f0fff1;
+  color: #2f7142;
+  font: 700 17px/1.3 'Fredoka', sans-serif;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 3px 10px #20362820;
+  animation: buddy-xp-rise 1.5s ease-out forwards;
+}
+
+.buddy-xp-float.is-loss {
+  border-color: #e4b8b0;
+  background: #fff0ed;
+  color: #ad4845;
+}
+
+/* Responsive evolution effects */
 
 .evolution-glow {
   position: absolute;
-  width: 170px;
-  height: 170px;
-  border-radius: 50%;
   z-index: 1;
+  /* width: min(75%, 300px); */
+  /* height: auto; */
+  /* aspect-ratio: 1; */
+  border-radius: 50%;
   pointer-events: none;
-
   background: radial-gradient(
     circle,
     rgb(250, 255, 180),
     #c1ffaade,
     transparent 70%
   );
+  animation: buddy-glow 0.5s infinite alternate;
 
-  animation: glow 0.5s infinite alternate;
+  width: 110%;
+  max-width: none;
+  height: auto;
+  aspect-ratio: 1;
 }
 
 .devolving .evolution-glow {
@@ -762,23 +776,11 @@ onBeforeUnmount(() => {
   );
 }
 
-.buddy-sprite.charging {
-  animation: flash 0.25s infinite alternate;
-}
-
-.buddy-sprite.swapping {
-  filter: brightness(0) invert(1);
-  transform: scale(1.2);
-}
-
-.buddy-sprite.revealing {
-  animation: reveal 0.6s ease-out;
-}
-
 .swap-flash {
   position: absolute;
-  inset: 0;
+  inset: 10%;
   z-index: 4;
+  border-radius: 50%;
   pointer-events: none;
   background: radial-gradient(circle, white, transparent 70%);
 }
@@ -794,24 +796,49 @@ onBeforeUnmount(() => {
   position: absolute;
   bottom: 20%;
   color: #c1ffaade;
-  animation: sparkle 1s infinite;
+  font-size: clamp(8px, 7cqi, 18px);
+  animation: buddy-sparkle 1s infinite;
 }
 
 .devolving .sparkles span {
   color: #f9acac;
 }
 
-.sparkles span:nth-child(1) { left: 15%; }
-.sparkles span:nth-child(2) { left: 30%; animation-delay: .2s; }
-.sparkles span:nth-child(3) { left: 45%; animation-delay: .4s; }
-.sparkles span:nth-child(4) { left: 60%; animation-delay: .1s; }
-.sparkles span:nth-child(5) { left: 75%; animation-delay: .3s; }
-.sparkles span:nth-child(6) { left: 85%; animation-delay: .5s; }
+.sparkles span:nth-child(1) {
+  left: 15%;
+}
 
-@keyframes glow {
+.sparkles span:nth-child(2) {
+  left: 30%;
+  animation-delay: 0.2s;
+}
+
+.sparkles span:nth-child(3) {
+  left: 45%;
+  animation-delay: 0.4s;
+}
+
+.sparkles span:nth-child(4) {
+  left: 60%;
+  animation-delay: 0.1s;
+}
+
+.sparkles span:nth-child(5) {
+  left: 75%;
+  animation-delay: 0.3s;
+}
+
+.sparkles span:nth-child(6) {
+  left: 85%;
+  animation-delay: 0.5s;
+}
+
+/* Animation keyframes */
+
+@keyframes buddy-glow {
   from {
-    transform: scale(.85);
-    opacity: .6;
+    transform: scale(0.85);
+    opacity: 0.6;
   }
 
   to {
@@ -820,7 +847,7 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes flash {
+@keyframes buddy-charge {
   from {
     filter: brightness(1);
     transform: scale(1);
@@ -832,10 +859,10 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes reveal {
+@keyframes buddy-reveal {
   from {
     filter: brightness(3);
-    transform: scale(.75);
+    transform: scale(0.75);
   }
 
   60% {
@@ -848,17 +875,62 @@ onBeforeUnmount(() => {
   }
 }
 
-@keyframes sparkle {
+@keyframes buddy-sparkle {
   from {
-    transform: translateY(0);
+    transform: translateY(0) scale(0.8);
     opacity: 1;
   }
 
   to {
-    transform: translateY(-100px);
+    transform: translateY(clamp(-100px, -45cqi, -24px))
+      scale(0.3);
     opacity: 0;
   }
 }
+
+@keyframes buddy-xp-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  15%,
+  55% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-42px);
+  }
+}
+
+@keyframes buddy-xp-fade {
+  0%,
+  80% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Smaller-screen feedback */
+
+@media (max-width: 600px) {
+  .buddy-evolution-note {
+    padding: 5px 10px;
+    font-size: 12px;
+  }
+
+  .buddy-xp-float {
+    padding: 4px 8px;
+    font-size: 14px;
+  }
+}
+
+/* Reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
   .buddy-sprite,
@@ -869,6 +941,10 @@ onBeforeUnmount(() => {
 
   .xp-fill {
     transition: none;
+  }
+
+  .buddy-xp-float {
+    animation-name: buddy-xp-fade;
   }
 }
 </style>

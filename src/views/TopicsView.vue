@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
-
 // Colour is controlled here; no subject-specific background or icon files.
 function isScienceSubject(name) {
   return /^science$/i.test(String(name || '').trim())
