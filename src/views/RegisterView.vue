@@ -3,7 +3,6 @@ import { ref, computed, onMounted,onUnmounted, watch } from 'vue'
 import { registerUser } from '../services/registrationService'
 import { getSupabase } from '../lib/supabase'
 import { useRouter } from 'vue-router'
-import { avatarOptions } from '../data/avatarOptions'
 import axios from 'axios'
 
 const POKEMON_API_URL = import.meta.env.VITE_POKE_API_URL
@@ -29,7 +28,6 @@ async function submitRegistration() {
       email: email_field.value,
       displayName: username_field.value,
       schoolLevel: level_selector.value,
-      avatarChoice: avatarChoice.value,
       password: password_field.value,
       confirmPassword: confirmPassword_field.value,
     })
@@ -50,7 +48,6 @@ const email_field = ref('')
 const username_field = ref('')
 const level_selector = ref('default')
 const confirmPassword_field = ref('')
-const avatarChoice = ref('')
 
 const checkPW = computed(() => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email_field.value.trim()))
 const checkUsername = computed(
@@ -75,8 +72,6 @@ const locked = computed(() => {
     case 3:
       return checkLevel.value
     case 4:
-      return !avatarOptions.some((option) => option.value === avatarChoice.value)
-    case 5:
       return !passed_password_check.value || checkIfPasswordsMismatch.value
     default:
       return true
@@ -105,9 +100,6 @@ const pikachuError = computed(() => {
       return 'Pika! Choose your Primary level first.'
 
     case 4:
-      return 'Pika! Choose an avatar for your adventure!'
-
-    case 5:
       if (!passed_password_check.value) {
         return 'Pika! Use at least 8 characters, including a letter and a number.'
       }
@@ -188,9 +180,6 @@ const pikachuMessage = computed(() => {
       return 'Which Primary level are you in?'
 
     case 4:
-      return 'Choose your trainer avatar! Pika!'
-
-    case 5:
       return passed_password_check.value
         ? 'Enter your password again to confirm it!'
         : 'Choose a password with at least 8 characters, a letter and a number.'
@@ -235,7 +224,7 @@ function handleNext() {
     return
   }
 
-  if (question_no.value < 5) {
+  if (question_no.value < 4) {
     question_no.value++
   } else {
     submitRegistration()
@@ -356,7 +345,7 @@ const showPassword = ref(false)
 const showConfirmPassword = ref(false)
 
 const passwordExposed = computed(() =>
-  question_no.value === 5 &&
+  question_no.value === 4 &&
   (showPassword.value || showConfirmPassword.value)
 )
 
@@ -463,14 +452,14 @@ watch(question_no, () => {
             <h2 class="form-title">Trainer Registration</h2>
             <span class="form-title-divider"></span>
             <!-- <div class="form-title-divider"></div> -->
-            <p class="step-counter">Step {{ question_no }} of 5</p>
+            <p class="step-counter">Step {{ question_no }} of 4</p>
           </div>
 
           <p class="question-prompt" v-if="question_no == 3">Which Primary level are you in?</p>
           <!-- Signup details -->
           <p class="question-prompt" v-if="question_no == 1">What's your email?</p>
           <p class="question-prompt" v-if="question_no == 2">What's your name?</p>
-          <p class="question-prompt" v-if="question_no == 5">Enter a Password</p>
+          <p class="question-prompt" v-if="question_no == 4">Enter a Password</p>
 
           <div class="input-container" v-if="question_no == 1">
             <input
@@ -519,35 +508,9 @@ watch(question_no, () => {
             </div> -->
           </div>
 
-          <fieldset v-if="question_no === 4" class="avatar-step">
-            <legend class="question-prompt">Choose your avatar</legend>
-            <div class="avatar-options">
-              <label
-                v-for="option in avatarOptions"
-                :key="option.value"
-                class="avatar-option"
-                :class="{ selected: avatarChoice === option.value }"
-              >
-                <input
-                  v-model="avatarChoice"
-                  type="radio"
-                  name="avatar"
-                  :value="option.value"
-                  required
-                />
-                <span v-if="option.image" class="avatar-image-frame">
-                  <img
-                    :class="{ 'ditto-avatar': option.value === 'prefer_not_to_say' }"
-                    :src="option.image"
-                    :alt="option.imageAlt || `${option.label} avatar`"
-                  />
-                </span>
-                <span class="avatar-label">{{ option.label }}</span>
-              </label>
-            </div>
-          </fieldset>
 
-          <div class="input-container" v-if="question_no == 5">
+
+          <div class="input-container" v-if="question_no == 4">
             <div class="password-wrapper">
               <input
                 :type="showPassword ? 'text' : 'password'"
@@ -591,7 +554,7 @@ watch(question_no, () => {
           <div
             class="input-container"
             style="margin-top: -30px"
-            v-if="question_no == 5 && passed_password_check"
+            v-if="question_no == 4 && passed_password_check"
           >
             <p class="question-prompt">Confirm Password</p>
             <div class="password-wrapper" style="margin-top: -20px">
@@ -642,7 +605,7 @@ watch(question_no, () => {
               {{
                 submitting
                   ? 'Creating account…'
-                  : question_no < 5
+                  : question_no < 4
                     ? 'Next >'
                     : 'Create account'
               }}

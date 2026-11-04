@@ -5,7 +5,6 @@ import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import Landing from '../components/landing/landing.vue'
 import Landinginfo from '../components/landing-info/landing-info.vue'
 import Characterdesign from '../components/characterdesign/characterdesign.vue'
-import Tutorialguide from '../components/tutorialguide/tutorialguide.vue'
 
 import RegisterView from '../views/RegisterView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -27,6 +26,7 @@ import AdminEducationDetails from '@/views/admin/AdminEducationDetails.vue'
 
 import { getSupabase } from '../lib/supabase'
 import { selectionRoutes } from './selectionRoutes'
+import { getOnboardingStatus } from '../services/onboardingService'
 
 export function createAppRouter(
   history = createWebHistory(import.meta.env.BASE_URL),
@@ -79,11 +79,13 @@ export function createAppRouter(
         path: '/characterdesign',
         name: 'characterdesign',
         component: Characterdesign,
+        meta: { requiresAuth: true },
       },
       {
         path: '/tutorialguide',
         name: 'tutorialguide',
-        component: Tutorialguide,
+        redirect: { name: 'tutorial' },
+        meta: { requiresAuth: true },
       },
       {
         path: '/home',
@@ -250,20 +252,21 @@ export function createAppRouter(
       }
     }
 
-    // Optional authentication bypass for local development only.
-    if (
-      import.meta.env.DEV &&
-      import.meta.env.VITE_SKIP_AUTH === 'true'
-    ) {
-      return true
-    }
-
     if (!to.meta.requiresAuth) return true
 
     try {
       const { data, error } = await getSupabase().auth.getSession()
 
-      if (!error && data.session) return true
+      if (!error && data.session) {
+        // Setup pages remain reachable for retry/recovery. Other protected pages
+        // cannot bypass the persisted first-time journey by entering a URL.
+        if (['landing', 'account', 'characterdesign', 'starter'].includes(to.name)) return true
+        try {
+          const setup = await getOnboardingStatus()
+          if (setup.onboarding_complete) return true
+        } catch { /* Landing presents a retry instead of inventing completion. */ }
+        return { name: 'landing' }
+      }
     } catch {
       // Protected pages require a valid session.
     }

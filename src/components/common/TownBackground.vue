@@ -1,6 +1,6 @@
 <script setup>
 import { computed, reactive, ref, toRef, watch } from 'vue'
-import { useTimeOfDay } from '@/composables/useTimeofDay'
+import { useTimeOfDay } from '@/composables/useTimeOfDay'
 
 const props = defineProps({
   scene: {

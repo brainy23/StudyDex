@@ -1,6 +1,6 @@
 <script setup>
 import axios from 'axios'
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import NavBar from '../common/NavBar.vue'
 import PokemonBuddy from './PokemonBuddy.vue'
 
@@ -66,6 +66,27 @@ const notice = ref('')
 const pageError = ref('')
 const lastReward = ref(0)
 const unallocatedXP = ref(0)
+const rewardDialog = ref(null)
+const rewardOpen = ref(false)
+const rewardPending = ref(false)
+const collectionExhausted = ref(false)
+const giftPokemon = ref(null)
+let pageDisposed = false
+
+async function openRewardPopup() {
+  rewardOpen.value = true
+  await nextTick()
+  if (!pageDisposed && rewardDialog.value && !rewardDialog.value.open) {
+    rewardDialog.value.showModal()
+  }
+}
+function closeRewardPopup() {
+  if (controlsLocked.value) return
+  rewardDialog.value?.close()
+  rewardOpen.value = false
+}
+onBeforeUnmount(() => { pageDisposed = true; rewardDialog.value?.close() })
+
 
 const controlsLocked = computed(() =>
   loadingImages.value ||
@@ -79,6 +100,13 @@ const xpRecipients = computed(() =>
     pokemon => pokemon.evolution_stage !== 'MAX'
   )
 )
+
+watch([unallocatedXP, controlsLocked], ([amount, locked]) => {
+  if (amount > 0 && !locked && rewardPending.value) {
+    rewardPending.value = false
+    openRewardPopup()
+  }
+})
 
 // =========================================
 // COLLECTION IMAGES
@@ -173,6 +201,9 @@ function savePokemonUpdate({ pokemon, changes }) {
 
 function keepOverflowXP({ amount }) {
   unallocatedXP.value += amount
+  rewardPending.value = true
+  // Open after the buddy's animation finishes.
+
 }
 
 // =========================================
@@ -243,6 +274,7 @@ async function transferXP(pokemon) {
   processingReward.value = true
 
   const amount = unallocatedXP.value
+  pageError.value = ''
 
   try {
     user.value.active_pokemon_species = pokemon.species
@@ -258,6 +290,9 @@ async function transferXP(pokemon) {
       // Any new overflow has already been added by keepOverflowXP().
       // Deduct only the amount we attempted to transfer.
       unallocatedXP.value -= amount
+      if (unallocatedXP.value === 0) notice.value = `Your remaining XP was transferred to ${pokemon.name}!`
+    } else {
+      pageError.value = 'XP could not be transferred. Your remaining XP is unchanged. Choose a Pokémon to retry.'
     }
   } finally {
     processingReward.value = false
@@ -279,6 +314,8 @@ async function addRandomPokemon(asGift = false) {
   addingPokemon.value = true
   pageError.value = ''
   notice.value = ''
+  giftPokemon.value = null
+  await openRewardPopup()
 
   let newPokemon = null
 
@@ -316,12 +353,15 @@ async function addRandomPokemon(asGift = false) {
         ...getImages(data)
       }
 
+      if (pageDisposed) return
       user.value.pokemons.push(newPokemon)
+      giftPokemon.value = newPokemon
       notice.value = `${name} joined your Pokédex! 🎉`
       break
     }
 
     if (!newPokemon) {
+      collectionExhausted.value = true
       notice.value =
         'No eligible unowned Pokémon remain. Any leftover XP is kept.'
     }
@@ -336,6 +376,7 @@ async function addRandomPokemon(asGift = false) {
   // If applying XP fails, the Pokémon and saved XP remain available.
   if (asGift && newPokemon) {
     await transferXP(newPokemon)
+    if (unallocatedXP.value === 0) notice.value = `${newPokemon.name} joined your Pokédex and received your leftover XP!`
   }
 }
 </script>
@@ -534,46 +575,48 @@ async function addRandomPokemon(asGift = false) {
           </div>
         </section>
 
-        <!-- LEFTOVER XP -->
-        <section v-if="unallocatedXP > 0" class="overflow-panel">
-          <h2>⭐ {{ unallocatedXP }} XP waiting to be transferred</h2>
+        <button v-if="unallocatedXP > 0" type="button" class="btn btn-warning"
+          :disabled="controlsLocked" @click="openRewardPopup">
+          View {{ unallocatedXP }} remaining XP 🎁
+        </button>
 
-          <template v-if="xpRecipients.length">
-            <p>
-              Choose a Pokémon to receive this XP.
-              It will become your active buddy.
-            </p>
-
-            <div class="button-row">
-              <button
-                v-for="pokemon in xpRecipients"
-                :key="pokemon.originalSpeciesId"
-                type="button"
-                class="btn btn-outline-dark"
-                :disabled="controlsLocked"
-                @click="transferXP(pokemon)"
-              >
-                Give XP to {{ pokemon.name }}
-              </button>
+        <Teleport to="body">
+          <dialog ref="rewardDialog" class="gift-dialog" aria-labelledby="gift-title"
+            @cancel.prevent="closeRewardPopup" @close="rewardOpen = false">
+            <button type="button" class="gift-close" aria-label="Close reward popup"
+              :disabled="controlsLocked" @click="closeRewardPopup">×</button>
+            <span class="gift-emblem" aria-hidden="true">🎁</span>
+            <p class="gift-brand">STUDYDEX · TRAINER REWARDS</p>
+            <h2 id="gift-title">{{ collectionExhausted ? 'Your Pokédex is complete!' : giftPokemon ? 'Meet your new buddy!' : 'Keep your journey growing' }}</h2>
+            <div role="status" aria-live="polite" :aria-busy="controlsLocked">
+              <img v-if="giftPokemon" class="gift-sprite" :src="giftPokemon.animated_img || giftPokemon.static_img" :alt="giftPokemon.name" />
+              <h3 v-if="giftPokemon">{{ giftPokemon.name }}</h3>
+              <p v-if="controlsLocked">{{ addingPokemon ? 'Finding your new Pokémon…' : 'Updating your buddy…' }}</p>
+              <p v-else-if="notice">{{ notice }}</p>
+              <p v-if="pageError" class="gift-error" role="alert">{{ pageError }}</p>
+              <div v-if="unallocatedXP > 0" class="gift-xp"><strong>{{ unallocatedXP }} XP</strong><span>waiting to be transferred</span></div>
             </div>
-          </template>
-
-          <template v-else>
-            <p>
-              All your Pokémon are MAX! Open a gift to receive a new buddy
-              and transfer your leftover XP.
-            </p>
-
-            <button
-              type="button"
-              class="btn btn-warning"
-              :disabled="controlsLocked"
-              @click="addRandomPokemon(true)"
-            >
-              {{ addingPokemon ? 'Opening…' : 'Open gift 🎁' }}
+            <template v-if="unallocatedXP > 0 && xpRecipients.length">
+              <p>Choose a Pokémon to receive the remaining XP.</p>
+              <div class="gift-choices">
+                <button v-for="pokemon in xpRecipients" :key="pokemon.originalSpeciesId"
+                  type="button" :disabled="controlsLocked" @click="transferXP(pokemon)">
+                  {{ pokemon.name }} →
+                </button>
+              </div>
+            </template>
+            <template v-else-if="unallocatedXP > 0 && !collectionExhausted">
+              <p>All your Pokémon are MAX! Open a gift for a new buddy and transfer your remaining XP.</p>
+              <button type="button" class="gift-action" :disabled="controlsLocked" @click="addRandomPokemon(true)">
+                {{ addingPokemon ? 'Opening…' : pageError ? 'Retry opening gift' : 'Open gift 🎁' }}
+              </button>
+            </template>
+            <p v-else-if="collectionExhausted">There are no eligible new Pokémon left. Your remaining XP stays available on this page.</p>
+            <button type="button" class="gift-action secondary" :disabled="controlsLocked" @click="closeRewardPopup">
+              {{ unallocatedXP > 0 ? 'Decide later' : 'Continue' }}
             </button>
-          </template>
-        </section>
+          </dialog>
+        </Teleport>
       </div>
     </div>
   </main>
@@ -799,4 +842,24 @@ button:disabled {
     padding: 16px;
   }
 }
+
+.gift-dialog { position: relative; width: min(440px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; margin: auto; padding: 28px; border: 2px solid #e7dcc0; border-radius: 26px; background: #fffdf6; color: #26365b; font: 16px/1.5 'Fredoka', sans-serif; text-align: center; box-shadow: 0 20px 70px #15234450; }
+.gift-dialog::backdrop { background: #15234499; backdrop-filter: blur(4px); }
+.gift-dialog * { box-sizing: border-box; }
+.gift-dialog h2 { font-size: 26px; margin: 8px 0 16px; }
+.gift-dialog h3 { font-size: 20px; }
+.gift-emblem { display: block; font-size: 42px; }
+.gift-brand { font-size: 12px; letter-spacing: 1px; color: #8b7c50; }
+.gift-close { position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: #f5f0e3; color: #26365b; font-size: 26px; cursor: pointer; }
+.gift-sprite { height: 88px; max-width: 100%; object-fit: contain; image-rendering: pixelated; }
+.gift-xp { display: flex; flex-direction: column; padding: 14px; margin: 14px 0; border-radius: 16px; background: #f0f7e9; color: #40754b; }
+.gift-xp strong { font-size: 30px; }
+.gift-choices { display: grid; gap: 8px; max-height: 220px; overflow: auto; }
+.gift-choices button, .gift-action { width: 100%; min-height: 44px; padding: 10px 16px; border: 1px solid #dfbd47; border-radius: 12px; background: #ffde59; color: #634f1f; font: inherit; cursor: pointer; }
+.gift-action { margin-top: 12px; }
+.gift-action.secondary { background: #fff; border-color: #e6dfcc; color: #64718a; }
+.gift-dialog button:disabled { opacity: .6; cursor: wait; }
+.gift-dialog button:focus-visible { outline: 3px solid #416d9d; outline-offset: 2px; }
+.gift-error { color: #b42318; }
+
 </style>

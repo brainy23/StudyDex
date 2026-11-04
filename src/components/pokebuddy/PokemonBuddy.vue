@@ -25,6 +25,8 @@ const isDevolving = ref(false)
 const animatedPokemon = ref(null)
 const message = ref('')
 const error = ref('')
+const xpFloat = ref(null)
+let xpFloatId = 0
 
 let disposed = false
 let finishWait = null
@@ -46,6 +48,11 @@ const isAnimating = computed(() => phase.value !== 'idle')
 
 const isMaxed = computed(() =>
   displayedPokemon.value?.evolution_stage === 'MAX'
+)
+
+// Keep stored level numeric; MAX is a presentation label only.
+const displayedLevel = computed(() =>
+  isMaxed.value ? 'MAX' : numericStage(displayedPokemon.value) + 1
 )
 
 const xpPercentage = computed(() =>
@@ -175,6 +182,7 @@ async function getNextForm(name, currentPokemon, direction) {
       0,
       numericStage(currentPokemon) + direction
     ),
+    level: Math.max(0, numericStage(currentPokemon) + direction) + 1,
     stageBeforeMax: undefined,
 
     animated_img:
@@ -191,7 +199,7 @@ async function getNextForm(name, currentPokemon, direction) {
 // =========================================
 
 async function prepareXPChange(pokemon, amount) {
-  let result = { ...pokemon }
+  let result = { ...pokemon, level: numericStage(pokemon) + 1 }
   let remainingXP = result.xp + amount
   let overflow = 0
 
@@ -360,6 +368,14 @@ async function changeXP(amount) {
     // Hold the old appearance while the parent saves the new data.
     animatedPokemon.value = { ...target }
 
+    // Visual feedback only; no additional XP or rewards are awarded here.
+    const visibleDelta = amount > 0
+      ? amount - plan.overflow
+      : Math.max(amount, -(numericStage(target) * MAX_XP + target.xp))
+    if (visibleDelta !== 0) {
+      xpFloat.value = { id: ++xpFloatId, amount: visibleDelta }
+    }
+
     emit('update-pokemon', {
       pokemon: target,
       changes: plan.result
@@ -452,6 +468,19 @@ onBeforeUnmount(() => {
     <h2>Battle Buddy</h2>
 
     <template v-if="activePokemon">
+      <div class="buddy-feedback" aria-live="polite" aria-atomic="true">
+        <span v-if="isAnimating" class="buddy-evolution-note" :class="{ 'is-devolving': isDevolving }">
+          {{ isDevolving ? 'Devolving…' : 'Evolving…' }}
+        </span>
+      </div>
+      <span
+        v-if="xpFloat"
+        :key="xpFloat.id"
+        class="buddy-xp-float"
+        :class="{ 'is-loss': xpFloat.amount < 0 }"
+        aria-hidden="true"
+        @animationend="xpFloat = null"
+      >{{ xpFloat.amount > 0 ? '+' : '−' }}{{ Math.abs(xpFloat.amount) }} XP</span>
       <div
         class="buddy-image-container"
         :class="{ devolving: isDevolving }"
@@ -496,8 +525,8 @@ onBeforeUnmount(() => {
       </div>
 
       <h3>{{ displayedPokemon?.name }}</h3>
-      <p v-if="displayedPokemon.level != null" class="buddy-level">
-        Lv. {{ displayedPokemon.level }}
+      <p class="buddy-level">
+        {{ isMaxed ? 'Level MAX' : `Lv. ${displayedLevel}` }}
       </p>
 
       <p
@@ -536,11 +565,7 @@ onBeforeUnmount(() => {
         </div>
 
         <p>
-          {{
-            isMaxed
-              ? 'MAX'
-              : `${displayedPokemon?.xp ?? 0} / ${MAX_XP} XP`
-          }}
+          {{ displayedPokemon?.xp ?? 0 }} / {{ MAX_XP }} XP
         </p>
       </div>
     </template>
@@ -553,6 +578,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .pokemon-buddy {
+  position: relative;
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -594,6 +620,65 @@ onBeforeUnmount(() => {
 
 .buddy-error {
   color: #b42318;
+}
+
+/* Feedback is separate from the hover details hidden by the room page. */
+.buddy-feedback {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 8;
+  pointer-events: none;
+}
+.buddy-evolution-note {
+  display: block;
+  padding: 7px 14px;
+  border: 1px solid #eac66c;
+  border-radius: 999px;
+  background: #fff4ce;
+  color: #72531b;
+  font: 600 14px/1.3 'Fredoka', sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 3px 12px #46371818;
+}
+.buddy-evolution-note.is-devolving {
+  background: #fff0e9;
+  border-color: #e7b5a3;
+  color: #9a5142;
+}
+.buddy-xp-float {
+  position: absolute;
+  top: 32%;
+  right: 0;
+  z-index: 9;
+  pointer-events: none;
+  padding: 5px 10px;
+  border: 1px solid #b5d9ba;
+  border-radius: 999px;
+  background: #f0fff1;
+  color: #2f7142;
+  font: 700 17px/1.3 'Fredoka', sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 3px 10px #20362820;
+  animation: buddy-xp-rise 1.5s ease-out forwards;
+}
+.buddy-xp-float.is-loss {
+  background: #fff0ed;
+  border-color: #e4b8b0;
+  color: #ad4845;
+}
+@keyframes buddy-xp-rise {
+  0% { opacity: 0; transform: translateY(8px); }
+  15%, 55% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-42px); }
+}
+@keyframes buddy-xp-fade {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .buddy-xp-float { animation-name: buddy-xp-fade; }
 }
 
 /* Pokémon */

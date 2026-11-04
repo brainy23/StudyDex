@@ -8,7 +8,7 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { signOutCurrentSession } from '../services/authService'
-import { avatarOptions } from '../data/avatarOptions'
+import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
@@ -819,7 +819,7 @@ const unopenedPackLabel = computed(() =>
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
 const profileMenuOpen = ref(false)
 const trainerAvatarImage = computed(() =>
-  avatarOptions.find(option => option.value === trainerProfile.value.avatar)?.image || ''
+  findAvatar(trainerProfile.value.avatar)?.image || ''
 )
 
 let trainerProfileLoading = false
@@ -1264,13 +1264,19 @@ watch(
    <Tutorialguide v-if="showTutorial" @done="finishTutorial"/>
 
     <!-- STUDYDEX LOGO AND CLOCK -->
-  <header class="sd-hud">
+    <header class="sd-hud">
     <img
       class="sd-logo"
       :src="asset + 'studydex-logo.png'"
       alt="StudyDex"
     />
 
+    <div class="sd-clock-weather">
+      <ClockWeather
+        :use-device-location="true"
+        @rain-change="rainActive = $event"
+      />
+    </div>
   </header>
 
   <!-- Click outside to dismiss the profile menu -->
@@ -1357,14 +1363,6 @@ watch(
         </div>
       </div>
     </div>
-
-    <div class="trainer-clock-weather">
-      <ClockWeather
-        :use-device-location="true"
-        @rain-change="rainActive = $event"
-      />
-    </div>
-
     <!-- PROFILE OPTIONS -->
     <Transition name="trainer-menu">
       <div
@@ -1918,11 +1916,11 @@ watch(
 
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: calc(10 * var(--control-unit));
 
-  padding: 10px 14px 10px 10px;
+  padding: calc(10 * var(--control-unit)) calc(14 * var(--control-unit)) calc(10 * var(--control-unit)) calc(10 * var(--control-unit));
   border: 2px solid white;
-  border-radius: 20px;
+  border-radius: calc(20 * var(--control-unit));
 
   background: rgba(255, 253, 247, 0.97);
   color: #26365b;
@@ -1946,18 +1944,18 @@ watch(
   justify-content: center;
   flex-shrink: 0;
 
-  width: 40px;
-  height: 40px;
+  width: calc(40 * var(--control-unit));
+  height: calc(40 * var(--control-unit));
 
   background: linear-gradient(135deg, #ffe98a, #ffdb59);
-  border-radius: 13px;
+  border-radius: calc(13 * var(--control-unit));
 
   overflow: hidden;
 }
 
 .building-icon-img {
-  width: 30px;
-  height: 30px;
+  width: calc(30 * var(--control-unit));
+  height: calc(30 * var(--control-unit));
 
   object-fit: contain;
   display: block;
@@ -1966,18 +1964,18 @@ watch(
 .building-button-text {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: calc(3 * var(--control-unit));
 }
 
 .building-button-title {
-  font-size: 14px;
+  font-size: calc(14 * var(--control-unit));
   font-weight: 800;
   line-height: 1.2;
 }
 
 .building-button-subtitle {
   color: #647394;
-  font-size: 10px;
+  font-size: calc(10 * var(--control-unit));
   font-weight: 600;
   line-height: 1.2;
 }
@@ -2003,23 +2001,6 @@ watch(
 }
 
 @media (max-width: 600px) {
-  .building-button {
-    gap: 5px;
-    padding: 6px;
-    border-radius: 13px;
-  }
-
-  .building-button-icon {
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
-    font-size: 17px;
-  }
-
-  .building-button-title {
-    font-size: 10px;
-  }
-
   .building-button-subtitle {
     display: none;
   }
@@ -2197,7 +2178,7 @@ watch(
 
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 
   pointer-events: none;
@@ -2221,15 +2202,15 @@ watch(
   display: grid;
   grid-template-columns: 1fr 1fr 1.1fr 1fr 1fr;
   align-items: center;
-  gap: 8px;
+  gap: calc(8 * var(--control-unit));
 
-  width: min(480px, calc(100% - 24px));
-  height: 94px;
-  padding: 10px 14px;
+  width: min(calc(480 * var(--control-unit)), calc(100% - 24px));
+  height: calc(94 * var(--control-unit));
+  padding: calc(10 * var(--control-unit)) calc(14 * var(--control-unit));
 
   border: 2px solid rgba(207, 234, 255, 0.78);
-  border-radius: 30px;
-  font-size: 20px;
+  border-radius: calc(30 * var(--control-unit));
+  font-size: calc(20 * var(--control-unit));
 
   background: linear-gradient(
     180deg,
@@ -2250,17 +2231,17 @@ watch(
   position: relative;
   min-width: 0;
   width: 100%;
-  height: 70px;
-  padding: 5px 2px;
+  height: calc(70 * var(--control-unit));
+  padding: calc(5 * var(--control-unit)) calc(2 * var(--control-unit));
 
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: calc(5 * var(--control-unit));
 
   border: 1px solid transparent;
-  border-radius: 19px;
+  border-radius: calc(19 * var(--control-unit));
   background: transparent;
 
   color: #fff;
@@ -2275,7 +2256,7 @@ watch(
 }
 
 .sd-nav-label {
-  font-size: 13px;
+  font-size: calc(13 * var(--control-unit));
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
@@ -2285,9 +2266,9 @@ watch(
 .sd-icon-tile {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 38px;
-  border-radius: 12px;
+  width: calc(40 * var(--control-unit));
+  height: calc(38 * var(--control-unit));
+  border-radius: calc(12 * var(--control-unit));
 
   border: 1px solid rgba(255, 255, 255, 0.65);
   box-shadow:
@@ -2296,8 +2277,8 @@ watch(
 }
 
 .sd-icon-tile svg {
-  width: 29px;
-  height: 29px;
+  width: calc(29 * var(--control-unit));
+  height: calc(29 * var(--control-unit));
   fill: none;
   stroke: #263d63;
   stroke-width: 1.8;
@@ -2325,10 +2306,10 @@ watch(
   justify-self: center;
   align-self: center;
 
-  width: 88px;
-  height: 88px;
-  margin-top: -22px;
-  gap: 4px;
+  width: calc(88 * var(--control-unit));
+  height: calc(88 * var(--control-unit));
+  margin-top: calc(-22 * var(--control-unit));
+  gap: calc(4 * var(--control-unit));
 
   border: 3px solid #fff0ae;
   border-radius: 50%;
@@ -2350,8 +2331,8 @@ watch(
 .sd-pokeball {
   position: relative;
   display: block;
-  width: 42px;
-  height: 42px;
+  width: calc(42 * var(--control-unit));
+  height: calc(42 * var(--control-unit));
   flex-shrink: 0;
   overflow: hidden;
 
@@ -2378,8 +2359,8 @@ watch(
   left: 50%;
   transform: translate(-50%, -50%);
 
-  width: 14px;
-  height: 14px;
+  width: calc(14 * var(--control-unit));
+  height: calc(14 * var(--control-unit));
   border: 3px solid #263d63;
   border-radius: 50%;
   background: #fff;
@@ -2441,52 +2422,6 @@ watch(
     width: 145px;
   }
 
-  .sd-navbar {
-    height: 80px;
-    padding: 8px;
-    gap: 3px;
-    border-radius: 24px;
-    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .sd-nav-button {
-    height: 60px;
-    gap: 4px;
-    border-radius: 14px;
-  }
-
-  .sd-nav-label {
-    font-size: 11px;
-  }
-
-  .sd-icon-tile {
-    width: 33px;
-    height: 32px;
-    border-radius: 10px;
-  }
-
-  .sd-icon-tile svg {
-    width: 25px;
-    height: 25px;
-  }
-
-  .sd-town-button {
-    width: 68px;
-    height: 68px;
-    margin-top: -18px;
-    border-radius: 50%;
-    gap: 3px;
-  }
-
-  .sd-pokeball {
-    width: 33px;
-    height: 33px;
-  }
-
-  .sd-pokeball::after {
-    width: 12px;
-    height: 12px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2825,16 +2760,14 @@ watch(
     system-ui,
     sans-serif;
 }
-
-.trainer-clock-weather {
+.sd-clock-weather {
   display: flex;
-  justify-content: flex-end;
-  width: 100%;
+  justify-content: flex-start;
   pointer-events: auto;
 }
 
-.trainer-clock-weather :deep(.clock-weather-widget) {
-  align-items: flex-end;
+.sd-clock-weather :deep(.clock-weather-widget) {
+  align-items: flex-start;
 }
 
 .trainer-hud,

@@ -1,4 +1,5 @@
 import { getSupabase } from '../lib/supabase'
+import { filterStudentCatalogue } from '../utils/studyCatalogue'
 
 // Explicit field lists deliberately exclude question_answers and grading data.
 const TOPIC_FIELDS = 'id, level_id, subject_id, name, description, topic_order'
@@ -37,6 +38,10 @@ export async function getStudyCatalogue(levelId) {
     ),
   ])
   return { subjects, topics }
+}
+
+export async function getStudentStudyCatalogue(profile) {
+  return filterStudentCatalogue(await getStudyCatalogue(profile?.school_level_id), profile)
 }
 
 export async function getStudyQuestions(topicId, purpose) {

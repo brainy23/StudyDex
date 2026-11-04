@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
-  getStudyCatalogue,
+  getStudentStudyCatalogue,
   getSelectedStudyBuddy,
   resolveStudyImage,
   getTopicLesson,
@@ -48,47 +48,47 @@ async function initialise() {
   loading.value = true
   error.value = null
   profile.value = null
+  activeBuddyRecord.value = null
+  classroomPokemon.value = null
+  learnerFailed.value = false
   catalogue.value = { subjects: [], topics: [] }
   Object.keys(resources).forEach((id) => delete resources[id])
   try {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
-    const [data, selectedBuddy] = await Promise.all([
-      student.school_level_id
-        ? getStudyCatalogue(student.school_level_id)
-        : Promise.resolve(null),
-      getSelectedStudyBuddy(student.id).catch(() => null),
-    ])
-    if (!alive || request !== generation) return
-    if (data) catalogue.value = data
-    activeBuddyRecord.value = selectedBuddy
-    classroomPokemon.value = null
-
-    const name = selectedBuddy?.pokemon?.name
-    if (name) {
-      const controller = new AbortController()
-      activeBuddyController = controller
-      const timeout = setTimeout(() => controller.abort(), 12000)
-      try {
-        const apiName = name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
-        const response = await fetch(`${POKE_API_BASE}/pokemon/${apiName}/`, {
-          signal: controller.signal,
-        })
-        if (!response.ok) throw new Error('Active Pokémon unavailable')
-        const pokemon = await response.json()
-        if (alive && request === generation) classroomPokemon.value = pokemon
-      } catch {
-        // Keep the saved sprite as the fallback when PokéAPI is unavailable.
-      } finally {
-        clearTimeout(timeout)
-      }
+    if (student.school_level_id) {
+      const data = await getStudentStudyCatalogue(student)
+      if (!alive || request !== generation) return
+      catalogue.value = data
     }
+    // Lessons remain readable while the decorative buddy loads or fails.
+    void loadLearnBuddy(student.id, request)
   } catch (cause) {
     if (alive && request === generation) error.value = cause
   } finally {
     if (alive && request === generation) loading.value = false
   }
+}
+
+async function loadLearnBuddy(userId, request) {
+  try {
+    const selectedBuddy = await getSelectedStudyBuddy(userId)
+    if (!alive || request !== generation) return
+    activeBuddyRecord.value = selectedBuddy
+    const name = selectedBuddy?.pokemon?.name
+    if (!name) return
+    const controller = new AbortController()
+    activeBuddyController = controller
+    const timeout = setTimeout(() => controller.abort(), 12000)
+    try {
+      const apiName = name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
+      const response = await fetch(`${POKE_API_BASE}/pokemon/${apiName}/`, { signal: controller.signal })
+      if (!response.ok) return
+      const pokemon = await response.json()
+      if (alive && request === generation) classroomPokemon.value = pokemon
+    } finally { clearTimeout(timeout) }
+  } catch { /* The saved sprite is optional; lessons are independent of it. */ }
 }
 
 async function loadResource(topicId, name) {
@@ -956,7 +956,7 @@ input:focus-visible {
 .poke-lab-page .inline-whiteboard h1 { font-size:clamp(22px,2cqw,36px); color:#24364c; margin:0 0 16px; }
 .poke-lab-page .inline-whiteboard h2 { font-size:1.2em; color:#24364c; }
 .poke-lab-page .inline-whiteboard h3 { font-size:1em; color:#24364c; }
-.learn-copy { white-space:pre-line; color:#24364c; }
+.learn-copy { white-space:pre-wrap; color:#24364c; }
 .learn-eyebrow { font-size:.7em; letter-spacing:.12em; font-weight:800; color:#886a35; }
 .inline-concept { border-top:1px solid #d8cba9; padding:18px 0; }
 .inline-example,.learn-goals { background:#f1eddf; border-radius:12px; padding:12px 16px; }
@@ -1066,8 +1066,8 @@ input:focus-visible {
 .poke-lab-page .study-navigation .home-link:disabled { opacity:.55; cursor:wait; }
 .poke-lab-page .study-navigation .home-link:focus-visible { outline:3px solid #ffe194; outline-offset:3px; }
 .poke-lab-page .study-header > .study-clock {
-  position:fixed; top:82px; right:16px; left:auto;
-  width:max-content; max-width:calc(100vw - 32px);
+  position:static; align-self:flex-start;
+  width:max-content; max-width:100%;
   transform:none; pointer-events:auto;
 }
 @media(min-width:1001px) {
@@ -1075,8 +1075,7 @@ input:focus-visible {
 }
 @media(max-width:600px) {
   .poke-lab-page .study-header > .study-clock {
-    top:76px; right:12px; max-width:calc(100vw - 24px);
-    transform:scale(.72); transform-origin:top right;
+    max-width:100%;
   }
 }
 /* A wider image box lets Mewtwo grow without stretching the artwork. */

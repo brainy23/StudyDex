@@ -1,57 +1,50 @@
 <script setup>
-import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 
 import { getCurrentProfile } from '../services/profileService'
 import { updateCurrentAvatar } from '../services/accountService'
-import { avatarOptions } from '../data/avatarOptions'
+import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
+import { avatarOptions, findAvatar } from '../data/avatarOptions'
 
-import ExpriencePrompt from '../components/common/expriencePrompt.vue'
-
+// Keep the existing <xpPrompt> tag in TrainerHouse's template.
+// It now renders the new XP → final evolution → gift component.
+import xpPrompt from '../components/common/xpPrompt.vue'
 import BackToHome from '../components/common/BackToHome.vue'
-
 import StudydexBubbleNav from '../components/common/StudydexBubbleNav.vue'
-
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
 // =====================================================
-// CONFIGURATION AND PAGE IMAGES
+// GENERAL CONFIGURATION
 // =====================================================
 
-
 const router = useRouter()
-const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
+const POKE_API_URL = (
+  import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2'
+).replace(/\/+$/, '')
 
-// Weather is fetched inside ClockWeather; this only forwards its output.
 const rainActive = ref(false)
-
 const failedImages = ref([])
 
 function reportImageError(event) {
-  const path = new URL(event.target.src).pathname
-
-  if (!failedImages.value.includes(path)) {
-    failedImages.value.push(path)
-  }
+  const path = event.target?.src || 'Unknown image'
+  if (!failedImages.value.includes(path)) failedImages.value.push(path)
 }
 
 // =====================================================
-// TRAINER AVATAR — AUTHENTICATED PROFILE
+// TRAINER PROFILE AND WARDROBE
 // =====================================================
 
 const profile = ref(null)
-
 const avatarLoading = ref(false)
 const avatarSaving = ref(false)
 const avatarLoadError = ref('')
-
 const saveError = ref('')
 const saveMessage = ref('')
 
-let avatarPageActive = true
+let pageActive = true
 
 const trainerVariants = avatarOptions.map(option => ({
   ...option,
@@ -59,52 +52,161 @@ const trainerVariants = avatarOptions.map(option => ({
 }))
 
 const selectedTrainer = computed(() =>
-  trainerVariants.find(
-    item => item.value === profile.value?.avatar_choice
-  ) ?? null
+  findAvatar(profile.value?.avatar_choice)
 )
 
-const selectedVariantId = computed(() =>
-  selectedTrainer.value?.id ?? ''
-)
+const selectedVariantId = computed(() => selectedTrainer.value?.value ?? '')
+const genderFilter = ref('all')
 
-const genderFilter = ref('male')
+const avatarGroups = [
+  { value: 'all', label: 'All styles' },
+  { value: 'female', label: 'Girls' },
+  { value: 'male', label: 'Boys' }
+]
 
 const visibleVariants = computed(() =>
   trainerVariants.filter(
-    item => item.value === genderFilter.value
+    item => genderFilter.value === 'all' || item.gender === genderFilter.value
   )
 )
 
-// Use the original avatar while its idle image is unavailable.
 const loadedIdle = ref('')
 
 watch(
   () => selectedTrainer.value?.idleImage,
-  (src, previous, onCleanup) => {
+  (src, _previous, onCleanup) => {
     loadedIdle.value = ''
-
     if (!src) return
 
     const image = new Image()
+    let cancelled = false
 
     image.onload = () => {
-      loadedIdle.value = src
+      if (!cancelled) loadedIdle.value = src
     }
-
     image.onerror = () => {
-      loadedIdle.value = ''
+      if (!cancelled) loadedIdle.value = ''
     }
-
     onCleanup(() => {
+      cancelled = true
       image.onload = null
       image.onerror = null
     })
-
     image.src = src
   },
   { immediate: true }
 )
+
+// =====================================================
+// POKÉMON STATE AND EXPERIENCE PROMPT
+// =====================================================
+
+// The buttons and generated gifts below are DEV PREVIEWS only.
+// Do not treat changes here as persisted XP or newly owned Pokémon.
+const showXpTestButtons = import.meta.env.DEV
+
+const selectedBuddyRecord = ref(null)
+const buddyLoadError = ref('')
+const buddyLoading = ref(false)
+const buddyError = ref('')
+const buddySprite = ref('')
+
+const pokemonBuddyRef = ref(null)
+const previewXp = ref(null)
+const previewPokemon = ref(null)
+const experienceResult = ref(null)
+
+// Keeps the two existing :disabled="!!xpTestResult" bindings working.
+// You can rename those bindings to "!!experienceResult" later.
+const xpTestResult = experienceResult
+
+let pendingPokemonChanges = null
+const unallocatedXP = ref(0)
+const previewGiftIds = new Set()
+let giftRequestController = null
+
+const activeBuddy = computed(() => {
+  const record = selectedBuddyRecord.value
+  if (!record?.pokemon) return null
+
+  const saved = {
+    ownedId: record.id,
+    pokemon_id: record.pokemon.id,
+    id: record.pokemon.name
+      .toLowerCase()
+      .replace(/[.'’]/g, '')
+      .replace(/\s+/g, '-'),
+    name: record.pokemon.name,
+    xp: record.xp ?? 0,
+    level: record.level ?? 1,
+    isDefeated: false,
+    evolution_stage: record.evolution_stage ?? 0,
+    originalSpeciesId: record.originalSpeciesId ?? record.original_species_id,
+    static_img: resolveStudyImage(record.pokemon.sprite_url)
+  }
+
+  const preview = previewPokemon.value?.ownedId === record.id
+    ? previewPokemon.value
+    : null
+
+  return preview
+    ? {
+        ...saved,
+        ...preview,
+        ownedId: record.id,
+        static_img: preview.static_img || saved.static_img
+      }
+    : saved
+})
+
+const roomPokemon = computed(() => {
+  if (!activeBuddy.value) return null
+
+  return {
+    ...activeBuddy.value,
+    animated_img: activeBuddy.value.animated_img || buddySprite.value,
+    evolution_stage: activeBuddy.value.evolution_stage ?? 0,
+    stageBeforeMax: activeBuddy.value.stageBeforeMax
+  }
+})
+
+watch(
+  () => selectedBuddyRecord.value?.id,
+  () => {
+    previewXp.value = null
+    previewPokemon.value = null
+    experienceResult.value = null
+    unallocatedXP.value = 0
+    pendingPokemonChanges = null
+  }
+)
+
+// Read a saved buddy once rather than fetching it independently twice.
+async function refreshTrainerBuddy(userId = profile.value?.id) {
+  if (!userId) return
+
+  buddyLoading.value = true
+  buddyLoadError.value = ''
+
+  try {
+    const record = await getSelectedStudyBuddy(userId)
+    if (!pageActive || profile.value?.id !== userId) return
+
+    selectedBuddyRecord.value = record
+    buddyError.value = ''
+
+    // A genuine saved XP update supersedes all local test previews.
+    previewXp.value = null
+    previewPokemon.value = null
+    pendingPokemonChanges = null
+  } catch (error) {
+    if (!pageActive) return
+    buddyLoadError.value = error?.message || 'Your Pokémon could not load.'
+    buddyError.value = buddyLoadError.value
+  } finally {
+    if (pageActive) buddyLoading.value = false
+  }
+}
 
 async function loadTrainerProfile() {
   if (avatarLoading.value || avatarSaving.value) return
@@ -114,21 +216,18 @@ async function loadTrainerProfile() {
 
   try {
     const saved = await getCurrentProfile()
-
-    if (!avatarPageActive) return
+    if (!pageActive) return
 
     profile.value = saved
-    genderFilter.value = saved.avatar_choice
+    genderFilter.value = 'all'
+    await refreshTrainerBuddy(saved.id)
   } catch (error) {
-    if (avatarPageActive) {
+    if (pageActive) {
       avatarLoadError.value =
-        error.message ||
-        'Your avatar could not load. Please try again.'
+        error?.message || 'Your avatar could not load. Please try again.'
     }
   } finally {
-    if (avatarPageActive) {
-      avatarLoading.value = false
-    }
+    if (pageActive) avatarLoading.value = false
   }
 }
 
@@ -146,84 +245,29 @@ async function selectTrainer(variant) {
 
   try {
     const saved = await updateCurrentAvatar(variant.value)
-
-    if (!avatarPageActive) return
+    if (!pageActive) return
 
     profile.value = saved
     saveMessage.value = 'Avatar saved to your profile.'
   } catch (error) {
-    if (avatarPageActive) {
+    if (pageActive) {
       saveError.value =
-        error.message ||
-        'Your avatar could not be saved. Please try again.'
+        error?.message || 'Your avatar could not be saved. Please try again.'
     }
   } finally {
-    if (avatarPageActive) {
-      avatarSaving.value = false
-    }
+    if (pageActive) avatarSaving.value = false
   }
 }
 
 // =====================================================
-// POKÉMON — SAVED SELECTED BUDDY
+// POKÉMON SPRITES
 // =====================================================
-
-// Temporary visual testing only. Saved Pokémon XP is never changed.
-const showXpTestButtons = import.meta.env.DEV
-const previewXp = ref(null)
-const xpTestResult = ref(null)
-function testPokemonXp(delta) {
-  if (!showXpTestButtons || !selectedBuddyRecord.value || xpTestResult.value) return
-  const before = Number(previewXp.value ?? selectedBuddyRecord.value.xp ?? 0)
-  const after = Math.max(0, before + delta)
-  previewXp.value = after
-  xpTestResult.value = {
-    title: 'XP badge test',
-    pokemonName: selectedBuddyRecord.value.pokemon?.name || 'Your Pokémon',
-    delta,
-    appliedDelta: after - before,
-    xp: after,
-    saving: false,
-    error: '',
-    duplicate: false
-  }
-}
-const selectedBuddyRecord=ref(null)
-watch(() => selectedBuddyRecord.value?.id, () => {
-  previewXp.value = null
-  xpTestResult.value = null
-})
-const buddyLoadError=ref('')
-async function refreshTrainerBuddy() {
-  if(!profile.value?.id) return
-  try { selectedBuddyRecord.value=await getSelectedStudyBuddy(profile.value.id); buddyLoadError.value='' }
-  catch { buddyLoadError.value='Your Pokémon could not load.' }
-}
-watch(()=>profile.value?.id, refreshTrainerBuddy)
-onMounted(()=>window.addEventListener('studydex:pokemon-xp',refreshTrainerBuddy))
-onUnmounted(()=>window.removeEventListener('studydex:pokemon-xp',refreshTrainerBuddy))
-const activeBuddy=computed(()=>{
-  const record=selectedBuddyRecord.value
-  if(!record?.pokemon) return null
-  return { ownedId:record.id,id:record.pokemon.name.toLowerCase().replace(/[.'’]/g,'').replace(/\s+/g,'-'),
-    name:record.pokemon.name,xp:previewXp.value ?? record.xp ?? 0,level:record.level??1,isDefeated:false,
-    static_img:resolveStudyImage(record.pokemon.sprite_url) }
-})
-
-// =====================================================
-// FETCH THE BUDDY IMAGE
-// Cached for this page visit.
-// =====================================================
-
-const buddySprite = ref('')
-const buddyLoading = ref(false)
-const buddyError = ref('')
 
 const spriteCache = new Map()
 
 watch(
   () => activeBuddy.value?.id,
-  async (id, previousId, onCleanup) => {
+  async (id, _oldId, onCleanup) => {
     const controller = new AbortController()
     let cancelled = false
 
@@ -232,79 +276,262 @@ watch(
       controller.abort()
     })
 
-    buddySprite.value = ''
     buddyError.value = ''
-    buddyLoading.value = false
 
-    if (!id) return
+    if (!id) {
+      buddySprite.value = ''
+      return
+    }
 
-    const fallback = activeBuddy.value.static_img
-    buddyLoading.value = true
+    const fallback = activeBuddy.value?.static_img || ''
+    // Keep a visible sprite while an evolved form's GIF is loading.
+    // This also avoids unnecessary PokemonBuddy remounts.
+    buddySprite.value = spriteCache.get(id) || fallback || buddySprite.value
 
     try {
       let sprite = spriteCache.get(id)
 
       if (!sprite) {
-        const response = await fetch(
-          `${POKE_API_URL}/pokemon/${id}/`,
-          { signal: controller.signal }
-        )
+        const response = await fetch(`${POKE_API_URL}/pokemon/${id}/`, {
+          signal: controller.signal
+        })
 
-        if (!response.ok) {
-          throw new Error('Could not load Pokémon')
-        }
+        if (!response.ok) throw new Error('Could not load Pokémon')
 
         const data = await response.json()
-
         sprite =
           data.sprites?.versions?.['generation-v']?.['black-white']
             ?.animated?.front_default ||
           data.sprites?.front_default ||
           fallback
 
-        if (sprite) {
-          spriteCache.set(id, sprite)
-        }
+        if (sprite) spriteCache.set(id, sprite)
       }
 
-      if (cancelled) return
-
-      buddySprite.value = sprite || ''
-
-      if (!buddySprite.value) {
-        buddyError.value = 'No sprite available.'
-      }
+      if (!cancelled) buddySprite.value = sprite || fallback
     } catch (error) {
       if (cancelled || error.name === 'AbortError') return
-
       buddySprite.value = fallback
-
-      if (!fallback) {
-        buddyError.value = 'Your buddy could not load.'
-      }
-    } finally {
-      if (!cancelled) {
-        buddyLoading.value = false
-      }
+      if (!fallback) buddyError.value = 'Your buddy could not load.'
     }
   },
   { immediate: true }
 )
 
-// The single object passed to PokemonBuddy.
-// All sample species above are their initial forms.
-const roomPokemon = computed(() => {
-  if (!activeBuddy.value) return null
+// =====================================================
+// RECEIVE EVOLUTION / XP EVENTS FROM POKEMONBUDDY
+// =====================================================
 
-  return {
-    ...activeBuddy.value,
-    animated_img: buddySprite.value,
-    evolution_stage: 0
+function receivePokemonUpdate({ pokemon, changes } = {}) {
+  // The child emits the current owned Pokémon and changes; don't update
+  // the database from the visual testing controls.
+  if (!changes || !selectedBuddyRecord.value) return
+
+  if (
+    pokemon?.ownedId != null &&
+    pokemon.ownedId !== selectedBuddyRecord.value.id
+  ) return
+
+  pendingPokemonChanges = { ...changes }
+}
+
+function receiveXpOverflow({ amount } = {}) {
+  const value = Number(amount)
+  if (Number.isFinite(value) && value > 0) {
+    unallocatedXP.value += value
   }
-})
+}
+
+async function testPokemonXp(delta) {
+  if (
+    !showXpTestButtons ||
+    !selectedBuddyRecord.value ||
+    experienceResult.value
+  ) return
+
+  const component = pokemonBuddyRef.value
+  if (!component || component.busy) return
+
+  const previousPokemon = roomPokemon.value
+  const previousStage = previousPokemon?.evolution_stage
+  const previousName = previousPokemon?.name
+
+  pendingPokemonChanges = null
+
+  try {
+    const result = delta > 0
+      ? await component.addXP(delta)
+      : await component.subtractXP(Math.abs(delta))
+
+    const changes = pendingPokemonChanges
+    pendingPokemonChanges = null
+
+    if (!result?.accepted || !changes) return
+
+    const nextStage = changes.evolution_stage ?? result.evolution_stage
+    const reachedMaxEvolution =
+      previousStage !== 'MAX' && nextStage === 'MAX'
+
+    previewPokemon.value = {
+      ...previousPokemon,
+      ...changes,
+      ownedId: selectedBuddyRecord.value.id
+    }
+    previewXp.value = changes.xp ?? previousPokemon?.xp ?? 0
+
+    experienceResult.value = {
+      title: changes.name !== previousName
+        ? 'Pokémon evolution!'
+        : 'XP reward!',
+      pokemonName: changes.name || previousName || 'Your Pokémon',
+      delta,
+      appliedDelta: Number.isFinite(result.appliedDelta)
+        ? result.appliedDelta
+        : delta,
+      xp: previewXp.value,
+      saving: false,
+      error: '',
+      duplicate: false,
+      reachedMaxEvolution,
+      giftOpening: false,
+      giftError: '',
+      giftPokemon: null,
+      unallocatedXP: unallocatedXP.value
+    }
+  } catch (error) {
+    pendingPokemonChanges = null
+    experienceResult.value = {
+      title: 'XP update failed',
+      pokemonName: previousName || 'Your Pokémon',
+      delta,
+      appliedDelta: 0,
+      xp: previousPokemon?.xp ?? 0,
+      saving: false,
+      error: error?.message || 'Unable to update the Pokémon preview.',
+      duplicate: false,
+      reachedMaxEvolution: false,
+      retry: () => {
+        experienceResult.value = null
+        void testPokemonXp(delta)
+      }
+    }
+  }
+}
 
 // =====================================================
-// WARDROBE PANEL
+// GIFT REVEAL — PREVIEW ONLY
+// =====================================================
+
+// The sample PokeBuddy awards an unowned, unevolved Gen 1 species (excluding
+// Ditto). TrainerHouse currently loads only ONE saved Pokémon, not the full
+// collection, so this preview cannot guarantee a species is genuinely unowned.
+// A production gift MUST be checked and saved by your backend.
+async function handleOpenGift() {
+  const current = experienceResult.value
+  if (
+    !current?.reachedMaxEvolution ||
+    current.giftOpening ||
+    current.giftPokemon
+  ) return
+
+  if (!showXpTestButtons) {
+    experienceResult.value = {
+      ...current,
+      giftError: 'Gift creation is not yet connected to the saved Pokémon service.'
+    }
+    return
+  }
+
+  const controller = new AbortController()
+  giftRequestController = controller
+
+  experienceResult.value = {
+    ...current,
+    giftOpening: true,
+    giftError: ''
+  }
+
+  try {
+    const candidates = Array.from({ length: 151 }, (_, i) => i + 1)
+      .filter(id => id !== 132 && !previewGiftIds.has(id))
+
+    // Fisher–Yates shuffle so the reward is random.
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1))
+      ;[candidates[i], candidates[j]] = [candidates[j], candidates[i]]
+    }
+
+    // Exclude the active species if its numeric PokéAPI ID is available.
+    const ownedId = Number(selectedBuddyRecord.value?.pokemon?.pokeapi_id)
+
+    let gift = null
+
+    for (const id of candidates) {
+      if (id === ownedId) continue
+
+      const speciesResponse = await fetch(
+        `${POKE_API_URL}/pokemon-species/${id}/`,
+        { signal: controller.signal }
+      )
+      if (!speciesResponse.ok) throw new Error('Pokémon species could not load.')
+
+      const species = await speciesResponse.json()
+      if (species.evolves_from_species !== null) continue
+
+      const pokemonResponse = await fetch(
+        `${POKE_API_URL}/pokemon/${id}/`,
+        { signal: controller.signal }
+      )
+      if (!pokemonResponse.ok) throw new Error('Pokémon sprite could not load.')
+
+      const data = await pokemonResponse.json()
+      const staticImage = data.sprites?.front_default || ''
+      const name = data.name
+        .split('-')
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ')
+
+      gift = {
+        id: data.id,
+        originalSpeciesId: data.id,
+        name,
+        species: name,
+        evolution_stage: 0,
+        xp: 0,
+        static_img: staticImage,
+        animated_img:
+          data.sprites?.versions?.['generation-v']?.['black-white']
+            ?.animated?.front_default || staticImage
+      }
+      break
+    }
+
+    if (!gift) throw new Error('No eligible preview Pokémon were found.')
+    if (!pageActive || controller.signal.aborted) return
+
+    previewGiftIds.add(gift.originalSpeciesId)
+    experienceResult.value = {
+      ...experienceResult.value,
+      giftOpening: false,
+      giftError: '',
+      giftPokemon: gift
+    }
+  } catch (error) {
+    if (controller.signal.aborted || !pageActive) return
+    experienceResult.value = {
+      ...experienceResult.value,
+      giftOpening: false,
+      giftError: error?.message || 'Could not open the preview gift.'
+    }
+  } finally {
+    if (giftRequestController === controller) {
+      giftRequestController = null
+    }
+  }
+}
+
+// =====================================================
+// WARDROBE AND ROOM NAVIGATION
 // =====================================================
 
 const openPanel = ref(null)
@@ -317,15 +544,8 @@ function togglePanel(panel) {
 function closePanel() {
   const previousPanel = openPanel.value
   openPanel.value = null
-
-  if (previousPanel === 'wardrobe') {
-    wardrobeButton.value?.focus()
-  }
+  if (previousPanel === 'wardrobe') wardrobeButton.value?.focus()
 }
-
-// =====================================================
-// ROOM LINKS AND CLICKABLE AREAS
-// =====================================================
 
 const roomLinks = [
   {
@@ -346,8 +566,7 @@ const roomLinks = [
     top: '49.6%',
     width: '11.3%',
     height: '11.2%',
-    outline:
-      'M 2 8 Q 1 3 5 3 L 58 0 Q 61 0 62 4 L 70 66 L 98 79 Q 100 81 96 84 L 40 98 L 14 88 Z'
+    outline: 'M 2 8 Q 1 3 5 3 L 58 0 Q 61 0 62 4 L 70 66 L 98 79 Q 100 81 96 84 L 40 98 L 14 88 Z'
   },
   {
     id: 'pokepacks',
@@ -357,23 +576,17 @@ const roomLinks = [
     top: '68.7%',
     width: '11.5%',
     height: '20%',
-    outline:
-      'M 43 11 Q 41 0 52 0 Q 63 0 64 11 L 77 12 Q 88 15 91 35 L 96 56 L 99 84 Q 99 93 89 95 L 62 99 L 11 92 Q 2 91 2 80 L 3 68 L 9 57 L 12 34 Q 14 14 26 12 Z'
+    outline: 'M 43 11 Q 41 0 52 0 Q 63 0 64 11 L 77 12 Q 88 15 91 35 L 96 56 L 99 84 Q 99 93 89 95 L 62 99 L 11 92 Q 2 91 2 80 L 3 68 L 9 57 L 12 34 Q 14 14 26 12 Z'
   }
 ]
 
-// Coordinates match the 1672 × 941 room artwork.
 const wardrobeArea = {
   left: `${(1400 + 272 / 2) / 1672 * 100}%`,
   top: `${(90 + 560 / 2) / 941 * 100}%`,
   width: `${272 / 1672 * 100}%`,
   height: `${560 / 941 * 100}%`,
-
-  outline:
-    'M 1462 589 L 1404 577 L 1404 555 L 1408 551 L 1408 181 L 1401 176 L 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634',
-
-  hitArea:
-    'M 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634 L 1596 592 L 1580 577 L 1550 574 Q 1545 554 1526 555 Q 1507 556 1506 574 L 1474 574 L 1462 589 L 1404 577 Z'
+  outline: 'M 1462 589 L 1404 577 L 1404 555 L 1408 551 L 1408 181 L 1401 176 L 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634',
+  hitArea: 'M 1401 159 L 1638 92 L 1668 102 L 1668 633 L 1643 643 L 1610 634 L 1596 592 L 1580 577 L 1550 574 Q 1545 554 1526 555 Q 1507 556 1506 574 L 1474 574 L 1462 589 L 1404 577 Z'
 }
 
 const exitDoorStyle = {
@@ -382,10 +595,6 @@ const exitDoorStyle = {
   width: `${80 / 1672 * 100}%`,
   height: `${273 / 941 * 100}%`
 }
-
-// =====================================================
-// NAVIGATION
-// =====================================================
 
 const navigationMessage = ref('')
 
@@ -396,33 +605,30 @@ function openRoomPage(link) {
   }
 
   navigationMessage.value = ''
-
   router.push(link.path).catch(() => {
-    navigationMessage.value =
-      `Could not open ${link.label}. Please try again.`
+    navigationMessage.value = `Could not open ${link.label}. Please try again.`
   })
 }
+
 // =====================================================
 // LIFECYCLE
 // =====================================================
 
-onMounted(() => {
-  // Load trainer profile
-  loadTrainerProfile()
+function handleSavedXpEvent() {
+  void refreshTrainerBuddy()
+}
 
-  window.addEventListener(
-    'focus',
-    loadTrainerProfile
-  )
+onMounted(() => {
+  void loadTrainerProfile()
+  window.addEventListener('focus', loadTrainerProfile)
+  window.addEventListener('studydex:pokemon-xp', handleSavedXpEvent)
 })
 
 onUnmounted(() => {
-  avatarPageActive = false
-
-  window.removeEventListener(
-    'focus',
-    loadTrainerProfile
-  )
+  pageActive = false
+  giftRequestController?.abort()
+  window.removeEventListener('focus', loadTrainerProfile)
+  window.removeEventListener('studydex:pokemon-xp', handleSavedXpEvent)
 })
 </script>
 
@@ -443,7 +649,13 @@ onUnmounted(() => {
       </div>
       <p v-if="buddyLoadError" role="alert">{{ buddyLoadError }}</p>
     </section>
-    <ExpriencePrompt :result="xpTestResult" @close="xpTestResult = null" />
+
+    <xpPrompt
+      :result="experienceResult"
+      @close="experienceResult = null"
+      @open-gift="handleOpenGift"
+    />
+
 
 
     <StudydexBubbleNav current="bag" />
@@ -495,10 +707,12 @@ onUnmounted(() => {
             </span>
 
             <PokemonBuddy
+              ref="pokemonBuddyRef"
               v-else-if="roomPokemon && buddySprite"
               :key="roomPokemon.ownedId || roomPokemon.id"
               class="room-pokemon"
               :active-pokemon="roomPokemon"
+              @update-pokemon="receivePokemonUpdate"
             />
 
             <span v-else class="scene-message">
@@ -609,7 +823,7 @@ onUnmounted(() => {
             <template v-else-if="profile">
               <div class="gender-options" aria-label="Trainer options">
                 <button
-                  v-for="option in avatarOptions"
+                  v-for="option in avatarGroups"
                   :key="option.value"
                   type="button"
                   :aria-pressed="genderFilter === option.value"
@@ -658,14 +872,13 @@ onUnmounted(() => {
         <span class="title-eyebrow">STUDYDEX</span>
         <h1>Trainer Home</h1>
       </div>
+      <div class="trainer-clock">
+        <ClockWeather
+          :use-device-location="true"
+          @rain-change="rainActive = $event"
+        />
+      </div>
     </header>
-
-    <div class="trainer-clock">
-      <ClockWeather
-        :use-device-location="true"
-        @rain-change="rainActive = $event"
-      />
-    </div>
     </div>
 
     <p v-if="navigationMessage" class="page-message" role="status">
@@ -1148,16 +1361,13 @@ onUnmounted(() => {
 }
 
 .trainer-clock {
-  position: absolute;
-  top: 24px;
-  right: 24px;
+  position: relative;
   z-index: 10;
 }
 
 @media (max-width: 600px) {
   .trainer-clock {
-    top: 12px;
-    right: 12px;
+    max-width: calc(100vw - 24px);
   }
 }
 

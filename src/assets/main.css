@@ -7,8 +7,40 @@
 body {
   margin: 0;
   font-family: 'Fredoka';
+  font-size: 1rem;
 }
 
 #app {
   min-height: 100vh;
+}
+
+:root {
+  /* Fluid base sizing: 14px at 320px, reaching 16px at Bootstrap lg. */
+  font-size: clamp(14px, calc(13.05px + 0.2976vw), 16px);
+  --responsive-ui-scale: clamp(0.75, calc(0.631 + 0.0372vw), 1);
+  /* Control sizing: 75% at 320px, full size at 992px and above. */
+  --control-unit: clamp(0.75px, calc(0.631px + 0.0372vw), 1px);
+  /* Shrink between 320px and Bootstrap's lg breakpoint (992px). */
+  --icon-sm: clamp(16px, calc(12.19px + 1.19vw), 24px);
+  --icon-md: clamp(24px, calc(16.38px + 2.38vw), 40px);
+  --icon-lg: clamp(32px, calc(16.76px + 4.76vw), 64px);
+}
+
+.app-icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.weather-icon {
+  width: var(--icon-md);
+  height: var(--icon-md);
+}
+
+@media (max-width: 991.98px) {
+  #app svg,
+  #app [class*="-icon"] {
+    zoom: var(--responsive-ui-scale);
+  }
 }

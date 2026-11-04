@@ -1,13 +1,14 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { getCurrentProfile } from '../../services/profileService'
-import { avatarOptions } from '../../data/avatarOptions'
+import { findAvatar } from '../../data/avatarOptions'
 
 const profile = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
+let active = true
 const avatar = computed(() =>
-  avatarOptions.find((option) => option.value === profile.value?.avatar_choice),
+  findAvatar(profile.value?.avatar_choice),
 )
 
 async function loadProfile() {
@@ -15,7 +16,8 @@ async function loadProfile() {
   loading.value = true
   errorMessage.value = ''
   try {
-    profile.value = await getCurrentProfile()
+    const saved = await getCurrentProfile()
+    if (active) profile.value = saved
   } catch {
     errorMessage.value = 'We couldn’t load your profile. Please try again.'
   } finally {
@@ -27,7 +29,7 @@ onMounted(() => {
   loadProfile()
   window.addEventListener('focus', loadProfile)
 })
-onUnmounted(() => window.removeEventListener('focus', loadProfile))
+onUnmounted(() => { active = false; window.removeEventListener('focus', loadProfile) })
 </script>
 
 <template>

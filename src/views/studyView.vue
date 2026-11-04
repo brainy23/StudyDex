@@ -1,5 +1,5 @@
 <script setup>
-import ExpriencePrompt from '../components/common/expriencePrompt.vue'
+import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
 
@@ -8,7 +8,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
-  getStudyCatalogue,
+  getStudentStudyCatalogue,
   getTopicFlashcards,
   getSelectedStudyBuddy,
   resolveStudyImage,
@@ -69,7 +69,7 @@ async function initialise() {
     topicCompletion.bindStudent(student.id, student.school_level_id)
     const [data, selectedBuddy] = await Promise.all([
       student.school_level_id
-        ? getStudyCatalogue(student.school_level_id)
+        ? getStudentStudyCatalogue(student)
         : Promise.resolve(null),
       getSelectedStudyBuddy(student.id).catch(() => null),
     ])
@@ -490,7 +490,7 @@ onUnmounted(() => { clearInterval(focusInterval) })
 watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
 </script>
 <template>
-  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
+  <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
@@ -1328,8 +1328,8 @@ input:focus-visible {
 .poke-lab-page .study-navigation .home-link:disabled { opacity:.55; cursor:wait; }
 .poke-lab-page .study-navigation .home-link:focus-visible { outline:3px solid #ffe194; outline-offset:3px; }
 .poke-lab-page .study-header > .study-clock {
-  position:fixed; top:82px; right:16px; left:auto;
-  width:max-content; max-width:calc(100vw - 32px);
+  position:static; align-self:flex-start;
+  width:max-content; max-width:100%;
   transform:none; pointer-events:auto;
 }
 @media(min-width:1001px) {
@@ -1337,8 +1337,7 @@ input:focus-visible {
 }
 @media(max-width:600px) {
   .poke-lab-page .study-header > .study-clock {
-    top:76px; right:12px; max-width:calc(100vw - 24px);
-    transform:scale(.72); transform-origin:top right;
+    max-width:100%;
   }
 }
 /* A wider image box lets Mewtwo grow without stretching the artwork. */
