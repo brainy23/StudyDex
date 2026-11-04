@@ -903,7 +903,7 @@ const chartOptions = computed(() => ({
       hideOverlappingLabels: true,
       style: {
         colors: '#7a8295',
-        fontSize: '10px',
+        fontSize: '14px',
       },
     },
     axisBorder: { show: false },
@@ -1613,6 +1613,7 @@ onUnmounted(() => {
   min-height: 100dvh;
   width: 100%;
   padding: 24px;
+  font-size: 16px;
 
   background: #fcfaf3;
   color: #172c50;
@@ -2751,5 +2752,56 @@ summary:focus-visible,
     max-width: 300px;
     align-self: center;
   }
+}
+
+/* Dashboard readability */
+.trainer-dashboard {
+  font-size: 16px;
+}
+
+.welcome-title h1 {
+  font-size: clamp(28px, 3vw, 36px);
+}
+
+.welcome-message,
+.study-note,
+.stat-description,
+.topic-name,
+.topic-status,
+.topic-score,
+.topic-details,
+.attempt-row,
+.chart-note,
+.progress-table,
+.button,
+.period-select {
+  font-size: 16px;
+}
+
+.eyebrow,
+.last-login,
+.stat-label,
+.level-badge,
+.completion-heading,
+.history-date,
+.attempt-date,
+.type-badge {
+  font-size: 14px;
+}
+
+.panel-heading h2,
+.topic-detail-heading h3 {
+  font-size: 24px;
+}
+
+.stat-value {
+  font-size: 36px;
+}
+
+.welcome-message,
+.study-note,
+.stat-description,
+.chart-note {
+  line-height: 1.6;
 }
 </style>
