@@ -1158,9 +1158,12 @@ input:focus-visible {
     left: 8.9%; top: 43.95%; width: 15.5%; height: 14.3%;
     padding: .45cqw .3cqw; box-sizing: border-box; gap: .2cqw;
     justify-content: center; align-items: center;
+    background: linear-gradient(135deg, #153d73 0%, #09234c 100%);
   }
   .study-content .lab-stage .timer-frame {
     left: 8.55%; top: 43.5%; width: 16.2%; height: 15.25%; box-sizing: border-box;
+    background: linear-gradient(135deg, #153d73 0%, #09234c 100%);
+    border-radius: 5%;
   }
   .study-content .lab-stage .answer-screen { left: 32.1%; top: 22%; width: 35.8%; height: 30.8%; box-sizing: border-box; }
   .study-content .lab-stage .lab-console { left: 33.2%; top: 82.1%; width: 33.6%; height: 12.2%; }
