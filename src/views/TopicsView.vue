@@ -2,13 +2,12 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
-import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
-import { getSubjectTheme } from '../data/subjectThemes'
-import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 // Colour is controlled here; no subject-specific background or icon files.
 function isScienceSubject(name) {
   return /^science$/i.test(String(name || '').trim())
 }
+import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
