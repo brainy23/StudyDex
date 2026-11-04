@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test'
 import { mockOnboarding } from './onboarding-fixture'
 
 // Synthetic public content only. No answer keys or student credentials.
-async function contentFixture(page, level) {
+async function contentFixture(page, level, savedBuddy = null) {
   const fixture = await mockOnboarding(page, { avatarConfirmed: true, starterClaimed: true })
   const levelId = (number) => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`
   fixture.state.schoolLevel = { id: levelId(level), level_number: level, name: `Primary ${level}` }
@@ -52,6 +52,9 @@ async function contentFixture(page, level) {
     if (request.method() !== 'GET') writes.push(table)
     if (url.pathname.includes('/rpc/') || table === 'profiles') return route.fallback()
     const headers = { 'access-control-allow-origin': '*' }
+    if (table === 'user_pokemon' && savedBuddy) {
+      return route.fulfill({ headers, json: savedBuddy })
+    }
     if (table === 'question_answers') {
       return route.fulfill({ status: 403, headers, json: { message: 'Private answers forbidden' } })
     }
@@ -211,5 +214,24 @@ test('rejects wrong-level direct links and retries a denied content read', async
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
   expect(fixture.errors).toEqual([])
+  expect(fixture.liveRequests).toEqual([])
+})
+
+test('merged Trainer shows the saved buddy and all ten avatar choices', async ({ page }) => {
+  const fixture = await contentFixture(page, 3, {
+    id: 'owned-charmander', xp: 35, level: 2,
+    pokemon: { id: 'catalogue-charmander', name: 'Charmander',
+      sprite_url: 'https://fixture.invalid/sprite.svg' },
+  })
+  await page.goto('/trainer')
+  await expect(page.locator('.room-pokemon')).toHaveCount(1)
+  await expect(page.locator('.room-pokemon img')).toBeVisible()
+  const buddyRequest = fixture.requests.find(request => request.table === 'user_pokemon')
+  expect(buddyRequest.params.user_id).toBe('eq.11111111-1111-4111-8111-111111111111')
+  expect(buddyRequest.params.is_selected).toBe('eq.true')
+  await page.locator('.wardrobe-hotspot').click()
+  await expect(page.getByRole('button', { name: /^Equip .* avatar$/ })).toHaveCount(10)
+  expect(fixture.errors).toEqual([])
+  expect(fixture.writes).toEqual([])
   expect(fixture.liveRequests).toEqual([])
 })

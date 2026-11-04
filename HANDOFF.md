@@ -1,12 +1,11 @@
 # StudyDex handoff — level-based content enabled
 
-Updated 4 November 2026, Asia/Singapore. Branch `new-integration-backend`, HEAD
-`ac757aa` (user merged `origin/designed-poke-arena` after committing onboarding at
-`1959b61`). The user has now authorized committing these content changes, merging
-the fetched `origin/designed-poke-arena` and pushing `new-integration-backend`.
-This is the content checkpoint before that merge; see the subsequent merge record
-for its final status. No hosting deployment or database changes are included.
-No project dependencies added.
+Updated 4 November 2026, Asia/Singapore. Branch `new-integration-backend`.
+Onboarding commit `1959b61` and earlier merge `ac757aa` are preserved. Content is
+saved in `bd259d2`. The user authorized merging fetched `origin/designed-poke-arena`
+at `22f34ad` and pushing this branch. The merge retains ten-style avatars and adds
+Trainer's saved active buddy. See `docs/MERGE_2026-11-04.md` for conflict resolution,
+checks and backup. No hosting deployment, dependencies or database changes included.
 
 Read `docs/quiz/CONTENT_ENABLEMENT.md` for the file table, evidence and limits.
 The earlier `docs/HANDOFF.md` and onboarding deployment evidence remain in the user's
@@ -54,9 +53,10 @@ No install SQL was generated. Later SQL, including further reads, needs exact ap
 
 ## Verification and known limits
 
-94 focused unit tests pass (35 new content tests); eight Chrome content journeys
-pass with synthetic Auth/content and no live Supabase requests/writes. Build passes.
-Changed-file ESLint and diff whitespace check pass. Full unit suite: 238 pass,
+114 focused unit tests pass (including content, avatar and onboarding regressions);
+nine Chrome journeys pass with synthetic Auth/content and no live Supabase requests
+or writes, including the merged Trainer's buddy and ten styles. Build passes.
+Changed-file ESLint and diff whitespace check pass. Full unit suite: 240 pass,
 56 existing failures across four old Study/Arena/router test files; no new failing
 test names versus the saved baseline. `pnpm lint` stops at two existing errors in
 Timer.vue and accountService.spec.js. Unrelated lint autofixes were not retained.
@@ -64,7 +64,7 @@ Timer.vue and accountService.spec.js. Unrelated lint autofixes were not retained
 Real signed-in production content reads, full phone/manual visual acceptance,
 cross-device and concurrent-account flows remain unverified. Preflight metadata and
 mock tests are not proof of end-to-end live permission behavior. Existing Town buddy
-selection still changes page memory only; Trainer still shows sample Pokémon;
+selection still changes page memory only; Trainer now loads the saved active buddy.
 Rewards still uses five sample packs and unsaved collection/duplicate XP. Dashboard
 can read history but current previews and local timers do not create that history.
 
@@ -79,7 +79,7 @@ topics or misleading Foundation selector for a bank without track metadata. No i
 ## Next tasks, in order
 
 1. User tests current level-specific Lab/Arena with real accounts, reload and direct links.
-2. Verify saved buddy switching/collection consistency before repairing it; preserve UI.
+2. Persist Town buddy switching and verify cross-screen consistency; preserve UI.
 3. Connect rewards inventory/pack opening to existing approved RPCs when explicitly resumed.
 4. Resume secure grading/saved attempts only at the user's request; clarify daily limits,
    prepare exact SQL and isolated rollback/idempotency/isolation tests before approval.
@@ -87,5 +87,6 @@ topics or misleading Foundation selector for a bank without track metadata. No i
 
 Commands/evidence: `docs/quiz/CONTENT_ENABLEMENT.md`. Browser:
 `pnpm exec playwright test --config playwright.content.config.js`. Unit/build runs
-used temporary env-free configs; do not read local environment files. No merge,
-commit, push or stash mutation by the agent in this phase.
+used temporary env-free configs; do not read local environment files. The user
+authorized the content commit, Trainer merge and branch push. The stash remains
+untouched. Only `new-integration-backend` may be pushed; do not merge into main.

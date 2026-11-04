@@ -7,9 +7,15 @@ import ProfileSummary from '../../components/common/ProfileSummary.vue'
 import { getCurrentProfile } from '../../services/profileService'
 import { updateCurrentAvatar, updateCurrentProfile } from '../../services/accountService'
 import { avatarOptions } from '../../data/avatarOptions'
+import { getSelectedStudyBuddy } from '../../services/studyService'
+import PokemonBuddy from '../../components/pokebuddy/PokemonBuddy.vue'
 
 // A mutable fixture stands in for the saved profile; no live database writes occur.
-const { saved } = vi.hoisted(() => ({ saved: { profile: null } }))
+const { saved } = vi.hoisted(() => ({ saved: { profile: null, buddy: null } }))
+vi.mock('../../services/studyService', async importOriginal => ({
+  ...await importOriginal(),
+  getSelectedStudyBuddy: vi.fn(async () => structuredClone(saved.buddy)),
+}))
 vi.mock('../../services/profileService', () => ({
   getCurrentProfile: vi.fn(async () => structuredClone(saved.profile)),
 }))
@@ -35,9 +41,13 @@ let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
   localStorage.clear()
+  saved.buddy = null
+  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({
+    sprites: { front_default: '/fixture-buddy.png' },
+  }) })))
   saved.profile = { id: 'student-ash', display_name: 'Ash', school_level_id: 'level-3', avatar_choice: 'male', school_level: { name: 'Primary 3' } }
 })
-afterEach(() => wrapper?.unmount())
+afterEach(() => { wrapper?.unmount(); vi.unstubAllGlobals() })
 
 async function open(path = '/trainer') {
   const router = createRouter({ history: createMemoryHistory(), routes: [
@@ -52,6 +62,26 @@ async function open(path = '/trainer') {
   return router
 }
 const button = (text) => wrapper.findAll('button').find((item) => item.text() === text)
+
+it('loads the saved buddy and retains all ten new avatar styles after the merge', async () => {
+  saved.buddy = { id: 'owned-charmander', xp: 35, level: 2,
+    pokemon: { id: 'catalogue-charmander', name: 'Charmander', sprite_url: '/fixture-buddy.png' } }
+  saved.profile = { id: 'student-ash', display_name: 'Ash', school_level_id: 'level-3',
+    avatar_choice: 'male-1', school_level: { name: 'Primary 3' } }
+  await open()
+  expect(getSelectedStudyBuddy).toHaveBeenCalledWith('student-ash')
+  expect(wrapper.findComponent(PokemonBuddy).props('activePokemon')).toMatchObject({
+    ownedId: 'owned-charmander', name: 'Charmander', xp: 35, level: 2,
+  })
+  await wrapper.get('.wardrobe-hotspot').trigger('click')
+  expect(wrapper.findAll('button[aria-label^="Equip "]')).toHaveLength(10)
+})
+
+it('does not substitute a sample Pokémon when no saved buddy exists', async () => {
+  await open()
+  expect(getSelectedStudyBuddy).toHaveBeenCalledWith('student-ash')
+  expect(wrapper.findComponent(PokemonBuddy).exists()).toBe(false)
+})
 
 async function equip(avatar) {
   await wrapper.get('.wardrobe-hotspot').trigger('click')
