@@ -97,9 +97,7 @@ onMounted(() => {
           <div class="feature-cards">
 
             <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Home Screen Screenshot
-              </div>
+              <img src="/landing/homescreen.png" alt="Home screen" class="screenshot" />
               <h3>Home Screen</h3>
               <p>
                 Your buddy lives here. The sky follows the real time of day.
@@ -107,9 +105,7 @@ onMounted(() => {
             </div>
 
             <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Poképacks Screenshot
-              </div>
+              <img src="/landing/pokepacks.png" alt="Pokepacks" class="screenshot" />
               <h3>Poképacks</h3>
               <p>
                 Earn packs by studying and collect new Pokémon.
@@ -133,19 +129,15 @@ onMounted(() => {
           <div class="feature-cards">
 
             <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Study Deck Screenshot
-              </div>
+              <img src="/landing/subjects.png" alt="Subjects" class="screenshot" />
               <h3>Study Deck</h3>
               <p>
-                Flashcards made for your year of study.
+                Flashcards ready-made for your year of study.
               </p>
             </div>
 
             <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Boss Battle Screenshot
-              </div>
+              <img src="/landing/bossbattle.png" alt="Boss battle" class="screenshot" />
               <h3>Boss Battle</h3>
               <p>
                 Rushing through? A boss appears to test what you learned.
@@ -153,9 +145,7 @@ onMounted(() => {
             </div>
 
             <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Quiz Screenshot
-              </div>
+              <img src="/landing/flashcards.png" alt="Flashcards" class="screenshot" />
               <h3>Quizzes</h3>
               <p>
                 Real exam questions. The better your score, the bigger your reward.
@@ -169,9 +159,7 @@ onMounted(() => {
           <div class="feature-cards">
 
             <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Dashboard Screenshot
-              </div>
+              <img src="/landing/dashboard.png" alt="Dashboard" class="screenshot" />
               <h3>Dashboard</h3>
               <p>
                 See your study week and quiz scores. Parents can check in too.
@@ -347,15 +335,11 @@ h1 {
   text-align: left;
 }
 
-.screenshot-placeholder {
+.screenshot {
+  display: block;
   width: 100%;
   aspect-ratio: 16 / 10;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: #e9ecef;
-  color: #666;
-  font-weight: 600;
+  object-fit: cover;
 }
 
 .feature-card h3 {
