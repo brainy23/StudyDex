@@ -709,17 +709,19 @@ onUnmounted(() => {
         </section>
       </div>
 
-      <header class="trainer-hud">
-        <div class="title-card">
-          <span class="title-eyebrow">STUDYDEX</span>
-          <h1>Trainer Home</h1>
-        </div>
+     <header class="trainer-hud">
+      <div class="title-card">
+        <span class="title-eyebrow">STUDYDEX</span>
+        <h1>Trainer Home</h1>
+      </div>
+    </header>
 
-        <ClockWeather
-          :use-device-location="true"
-          @rain-change="rainActive = $event"
-        />
-      </header>
+    <div class="trainer-clock">
+      <ClockWeather
+        :use-device-location="true"
+        @rain-change="rainActive = $event"
+      />
+    </div>
     </div>
 
     <p v-if="navigationMessage" class="page-message" role="status">
@@ -1183,6 +1185,20 @@ onUnmounted(() => {
 .room-pokemon:has(.buddy-image-container:hover)::before {
   opacity: 1;
   visibility: visible;
+}
+
+.trainer-clock {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  z-index: 10;
+}
+
+@media (max-width: 600px) {
+  .trainer-clock {
+    top: 12px;
+    right: 12px;
+  }
 }
 
 </style>

@@ -123,6 +123,16 @@ export async function getSelectedStudyBuddy(userId) {
   return data
 }
 
+export async function getOwnedStudyPokemon(userId) {
+  if (!userId) throw new Error('Please log in to view your Pokédex.')
+  const { data, error } = await getSupabase()
+    .from('user_pokemon')
+    .select('id, user_id, pokemon_id, xp, level, is_selected, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)')
+    .eq('user_id', userId)
+  if (error) throw error
+  return data || []
+}
+
 export function resolveStudyImage(path) {
   if (!path) return ''
   // Public site paths and full HTTPS URLs work without assuming a storage bucket.

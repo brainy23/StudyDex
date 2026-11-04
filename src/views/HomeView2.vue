@@ -6,6 +6,7 @@ import axios from 'axios'
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
+import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { signOutCurrentSession } from '../services/authService'
 import { avatarOptions } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
@@ -36,92 +37,49 @@ const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/a
 const MAX_XP = 200
 
 
-// The incoming collection is a local prototype, separate from the real trainer profile.
-const demoCollectionOwnerId = '11111111-1111-4111-8111-111111111111'
+const savedOwnedPokemon = ref([])
+const ownedPokemonLoading = ref(true)
+const ownedPokemon = computed(() => savedOwnedPokemon.value.map(record => ({
+  ownedId: record.id,
+  id: record.pokemon?.id ?? record.pokemon_id,
+  name: record.pokemon?.name ?? 'Unknown Pokémon',
+  spriteUrl: resolveStudyImage(record.pokemon?.sprite_url),
+  xp: record.xp ?? 0,
+  level: record.level ?? 1,
+  is_selected: record.is_selected,
+  is_defeated: false,
+})))
 
-// Temporary Pokémon lookup.
-// Adapt these fields to your actual Pokémon table later.
-// pokemon_id in user_pokemon refers to one of these UUIDs.
-const pokemonCatalog = {
-  '22222222-2222-4222-8222-222222222222': {
-    pokeapi_id: 25,
-    name: 'Pikachu',
-  },
-  '33333333-3333-4333-8333-333333333333': {
-    pokeapi_id: 133,
-    name: 'Eevee',
-  },
-  '44444444-4444-4444-8444-444444444444': {
-    pokeapi_id: 4,
-    name: 'Charmander',
-  },
-}
-
-// Separate object containing the user's Pokémon records.
-// Every entry matches the user_pokemon columns shown.
-const userPokemon = ref({
-  pokemons: [
-    {
-      id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      user_id: demoCollectionOwnerId,
-      pokemon_id: '22222222-2222-4222-8222-222222222222',
-      xp: 90,
+const savedActiveBuddy = ref(null)
+const activeBuddy = computed(() => {
+  const record = savedActiveBuddy.value
+  if (!record?.pokemon) {
+    return {
+      ownedId: null,
+      id: null,
+      name: 'No buddy selected',
+      xp: 0,
       level: 1,
-      is_selected: true,
       is_defeated: false,
-      obtained_at: '2026-10-22T06:00:00Z',
-    },
-    {
-      id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-      user_id: demoCollectionOwnerId,
-      pokemon_id: '33333333-3333-4333-8333-333333333333',
-      xp: 45,
-      level: 1,
-      is_selected: false,
-      is_defeated: false,
-      obtained_at: '2026-10-22T06:05:00Z',
-    },
-    {
-      id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
-      user_id: demoCollectionOwnerId,
-      pokemon_id: '44444444-4444-4444-8444-444444444444',
-      xp: 60,
-      level: 1,
-      is_selected: false,
-      is_defeated: false,
-      obtained_at: '2026-10-22T06:10:00Z',
-    },
-  ],
-})
-
-const ownedPokemon = computed(() =>
-  userPokemon.value.pokemons
-    .filter(record => record.user_id === demoCollectionOwnerId)
-    .map(record => {
-      const details = pokemonCatalog[record.pokemon_id]
-
-      return {
-        ownedId: record.id,
-        id: details?.pokeapi_id ?? null,
-        name: details?.name ?? 'Unknown Pokémon',
-        xp: record.xp,
-        level: record.level,
-        is_selected: record.is_selected,
-        is_defeated: record.is_defeated,
-      }
-    })
-)
-
-const activeBuddy = computed(() =>
-  ownedPokemon.value.find(pokemon => pokemon.is_selected) ?? {
-    ownedId: null,
-    id: null,
-    name: 'No buddy selected',
-    xp: 0,
-    level: 1,
-    is_defeated: false,
+    }
   }
-)
+
+  const pokemonName = record.pokemon.name
+  const pokemonId = pokemonName.toLowerCase()
+    .replace(/[.'’]/g, '')
+    .replace(/\s+/g, '-')
+
+  return {
+    ownedId: record.id,
+    id: pokemonId,
+    name: pokemonName,
+    xp: record.xp ?? 0,
+    level: record.level ?? 1,
+    is_selected: true,
+    is_defeated: false,
+    static_img: record.pokemon.sprite_url || '',
+  }
+})
 
 const buildingButtons = [
   {
@@ -808,19 +766,13 @@ async function getPokeBall() {
 
 // Call this when a Pokémon is selected as the active buddy.
 function setActiveBuddy(pokemon) {
-  const selectedRecord = userPokemon.value.pokemons.find(
-    record =>
-      record.id === pokemon.ownedId &&
-      record.user_id === demoCollectionOwnerId
-  )
-
+  const selectedRecord = savedOwnedPokemon.value.find(record => record.id === pokemon.ownedId)
   if (!selectedRecord) return
-
-  userPokemon.value.pokemons.forEach(record => {
-    if (record.user_id === demoCollectionOwnerId) {
-      record.is_selected = record.id === selectedRecord.id
-    }
-  })
+  savedOwnedPokemon.value = savedOwnedPokemon.value.map(record => ({
+    ...record,
+    is_selected: record.id === selectedRecord.id,
+  }))
+  savedActiveBuddy.value = savedOwnedPokemon.value.find(record => record.id === selectedRecord.id)
 }
 
 const ballShaking = ref(false)
@@ -835,7 +787,7 @@ const townBuddyImage = computed(() => {
   const sprites = buddyData.value?.sprites
 
   if (buddySleeping.value) {
-    return pokeball.value || sprites?.front_default || ''
+    return pokeball.value || sprites?.front_default || activeBuddy.value.static_img || ''
   }
 
   return activeBuddyImage.value
@@ -849,8 +801,8 @@ const homepagePokemon = computed(() => {
     ...activeBuddy.value,
     isDefeated: activeBuddy.value.is_defeated,
     evolution_stage: activeBuddy.value.evolution_stage ?? 0,
-    animated_img: activeBuddyImage.value,
-    static_img: buddyData.value?.sprites?.front_default || ''
+    animated_img: activeBuddyImage.value || activeBuddy.value.static_img || '',
+    static_img: buddyData.value?.sprites?.front_default || activeBuddy.value.static_img || ''
   }
 })
 
@@ -875,16 +827,32 @@ let trainerProfileActive = true
 async function refreshTrainerProfile() {
   if (trainerProfileLoading) return
   trainerProfileLoading = true
+  ownedPokemonLoading.value = true
   try {
     const profile = await getCurrentProfile()
-    if (trainerProfileActive)
-      trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
+    if (!trainerProfileActive) return
+    trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
+
+    try {
+      savedActiveBuddy.value = await getSelectedStudyBuddy(profile.id)
+    } catch {
+      savedActiveBuddy.value = null
+      profileNotice.value = 'Your active Pokémon could not load. Refresh the page to try again.'
+    }
+    try {
+      savedOwnedPokemon.value = await getOwnedStudyPokemon(profile.id)
+    } catch {
+      savedOwnedPokemon.value = []
+      profileNotice.value = 'Your Pokédex could not load. Refresh the page to try again.'
+    }
   } catch {
     if (trainerProfileActive) {
       trainerProfile.value.name = 'Trainer'
+      savedActiveBuddy.value = null
       profileNotice.value = 'Your profile could not load. Refresh the page to try again.'
     }
   } finally {
+    ownedPokemonLoading.value = false
     trainerProfileLoading = false
   }
 }
@@ -936,6 +904,7 @@ const buddyExpValue = computed(() =>
 // The API data is already fetched by your existing buddy code.
 const profileBuddyIcon = computed(() =>
   buddyData.value?.sprites?.front_default ||
+  activeBuddy.value.static_img ||
   buddyData.value?.sprites?.other?.['official-artwork']
     ?.front_default ||
   ''
@@ -1300,10 +1269,6 @@ watch(
       alt="StudyDex"
     />
 
-    <ClockWeather
-      :use-device-location="true"
-      @rain-change="rainActive = $event"
-    />
   </header>
 
   <!-- Click outside to dismiss the profile menu -->
@@ -1391,6 +1356,13 @@ watch(
       </div>
     </div>
 
+    <div class="trainer-clock-weather">
+      <ClockWeather
+        :use-device-location="true"
+        @rain-change="rainActive = $event"
+      />
+    </div>
+
     <!-- PROFILE OPTIONS -->
     <Transition name="trainer-menu">
       <div
@@ -1450,6 +1422,7 @@ watch(
   <QuestPhone
     :todos="todos"
     :owned-pokemon="ownedPokemon"
+    :pokemon-loading="ownedPokemonLoading"
     :active-buddy="activeBuddy"
     :max-xp="MAX_XP"
     :device-image="asset + 'pokedex-goals.png'"
@@ -2839,6 +2812,9 @@ watch(
   right: 24px;
   z-index: 140;
 
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   width: 265px;
 
   font-family:
@@ -2846,6 +2822,17 @@ watch(
     "Arial Rounded MT Bold",
     system-ui,
     sans-serif;
+}
+
+.trainer-clock-weather {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  pointer-events: auto;
+}
+
+.trainer-clock-weather :deep(.clock-weather-widget) {
+  align-items: flex-end;
 }
 
 .trainer-hud,
