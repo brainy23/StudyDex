@@ -6,8 +6,12 @@ const route = useRoute()
 const router = useRouter()
 import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
-import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import { getSelectedStudyBuddy, getStudyCatalogue, resolveStudyImage, studyErrorMessage } from '../services/studyService'
+import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 const profile = ref(null)
+const activeBuddy = ref(null)
+const activeBuddyMessage = ref('')
+const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
@@ -21,6 +25,17 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
+    try {
+      activeBuddy.value = await getSelectedStudyBuddy(student.id)
+      activeBuddyMessage.value = activeBuddy.value
+        ? ''
+        : 'Select an active Pokémon from your Pokédex.'
+    } catch {
+      activeBuddy.value = null
+      activeBuddyMessage.value = 'Your active Pokémon could not load.'
+    }
+    if (!alive || request !== generation) return
+    loadArenaFighters()
     if (student.school_level_id) {
       // Science demos work even when the published catalogue is unavailable.
       try {
@@ -268,14 +283,6 @@ const spriteLoading = ref(false)
 const spriteError = ref('')
 const fighters = ref([])
 let spriteController
-function readArenaBuddy() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('studydex-active-buddy'))
-    const id = Number(saved?.pokeapi_id ?? saved?.id)
-    if (Number.isInteger(id) && id > 0) return { id, name: saved.name }
-  } catch { /* Use a preview buddy when none has been saved. */ }
-  return { id: 25, name: 'Pikachu' }
-}
 
 async function loadArenaFighters() {
   spriteController?.abort()
@@ -283,31 +290,27 @@ async function loadArenaFighters() {
   spriteController = controller
   spriteLoading.value = true
   spriteError.value = ''
-  const selected = readArenaBuddy()
+  const player = {
+    name: activeBuddy.value?.pokemon?.name || 'your buddy',
+    noBuddy: !activeBuddy.value?.pokemon?.name,
+  }
+  fighters.value = [player]
   // Grounded, fully evolved mentors: Venusaur, Blastoise, Raichu,
   // Nidoqueen, Nidoking, Alakazam, Machamp, Meganium, Typhlosion,
   // Feraligatr, Sceptile, Blaziken and Swampert.
   const pool = [3, 9, 26, 31, 34, 65, 68, 154, 157, 160, 254, 257, 260]
-    .filter(id => id !== selected.id)
   const enemyId = pool[Math.floor(Math.random() * pool.length)]
   try {
-    const data = await Promise.all([selected.id, enemyId].map(async id => {
-      const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}/`, { signal: controller.signal })
-      if (!response.ok) throw new Error(`Pokémon request failed: ${response.status}`)
-      return response.json()
-    }))
+    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${enemyId}/`, { signal: controller.signal })
+    if (!response.ok) throw new Error(`Pokémon request failed: ${response.status}`)
+    const pokemon = await response.json()
     if (controller.signal.aborted) return
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    fighters.value = data.map((pokemon, index) => {
-      const side = index === 0 ? 'back_default' : 'front_default'
-      const still = pokemon.sprites?.[side]
-      const animated = pokemon.sprites?.versions?.['generation-v']?.['black-white']?.animated?.[side]
-      return {
-        name: index === 0 ? selected.name || pokemon.name : pokemon.name,
-        image: (!reduceMotion && animated) || still,
-        still, failed: false, padding: 0,
-      }
-    })
+    const still = pokemon.sprites?.front_default
+    const animated = pokemon.sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default
+    fighters.value = [
+      player,
+      { name: pokemon.name, image: animated || still, still, failed: false, padding: 0 },
+    ]
   } catch (cause) {
     if (cause.name !== 'AbortError') spriteError.value = 'Battle buddies could not load.'
   } finally {
@@ -342,7 +345,6 @@ function groundArenaSprite(event, fighter) {
   } catch { fighter.padding = 0 }
 }
 
-onMounted(loadArenaFighters)
 onUnmounted(() => spriteController?.abort())
 
 
@@ -523,8 +525,9 @@ watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen],
       </section>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
         <div class="fighter-shadow"></div>
-        <img v-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
-        <span v-else class="fighter-unavailable">Sprite unavailable</span>
+        <Pokemon_Backwards v-if="index === 0 && activeBuddy?.pokemon?.name" class="player-back-sprite" :pokename="activeBuddy.pokemon.name" :fallback-src="activeBuddySprite" />
+        <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, front view`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
+        <span v-else class="fighter-unavailable">{{ index === 0 ? activeBuddyMessage : 'Sprite unavailable' }}</span>
 
       </div>
       <p v-if="spriteError && enteredArena" class="sprite-status">{{ spriteError }} <button type="button" @click="loadArenaFighters">Retry</button></p>
@@ -871,6 +874,7 @@ input:focus-visible {
 .arena-fighter { position: absolute; z-index: 7; height: 0; transform: translateX(-50%); }
 .player-fighter { left: 32%; top: 77%; width: 11%; }
 .opponent-fighter { left: 67%; top: 72%; width: 10.5%; }
+.arena-fighter > .player-back-sprite { position: absolute; bottom: 0; left: 0; width: 100%; height: 11cqw; }
 .arena-fighter > img { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; image-rendering: pixelated; filter: drop-shadow(0 3px 1px #1b253044); }
 .fighter-shadow { position: absolute; top: -.3cqw; left: 23%; width: 54%; height: 1cqw; border-radius: 50%; background: #31221466; filter: blur(3px); }
 .fighter-name { position: absolute; top: 1cqw; left: 50%; transform: translateX(-50%); border: 1px solid #e6bf60; border-radius: 20px; padding: 4px 12px; color: #fff4d0; background: #182c43e8; text-transform: capitalize; font-size: clamp(10px, .9cqw, 14px); white-space: nowrap; }

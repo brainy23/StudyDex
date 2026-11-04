@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
@@ -45,35 +46,41 @@ onMounted(() => { clock = setInterval(() => { now.value = new Date() }, 1000) })
 onUnmounted(() => clearInterval(clock))
 const quizzesOpen = computed(() => true)
 const science = computed(() => catalogue.value.subjects.find(s => /^science$/i.test(s.name.trim())))
+const selectedSubject = computed(() => {
+  if (route.query.subject === 'moe-science-preview') return { id:'moe-science-preview', name:'Science' }
+  return catalogue.value.subjects.find(s => s.id === route.query.subject) || science.value || catalogue.value.subjects[0] || null
+})
+const subjectTheme = computed(() => getSubjectTheme(selectedSubject.value?.name))
+const pageArt = computed(() => asset(subjectTheme.value === 'purple' ? 'science-purple.png' : 'subjects-white.png'))
 const level = computed(() => {
   const match = String(profile.value?.school_level?.name || '').match(/^(?:primary\s*|p\s*)?([3-6])(?:\b|$)/i)
   return match ? Number(match[1]) : null
 })
-const topics = computed(() => flow.value === 'quiz'
+const topics = computed(() => flow.value === 'quiz' && isScienceSubject(selectedSubject.value?.name)
   ? scienceTopics.filter(t => t.level === level.value && !(scienceCourse.value === 'foundation' && t.standardOnly)).map(t => ({ ...t, id:t.key, description:t.official, ready:!!demoBank[t.key]?.length }))
-  : catalogue.value.topics.filter(t => t.subject_id === science.value?.id))
+  : catalogue.value.topics.filter(t => t.subject_id === selectedSubject.value?.id).map(t => ({ ...t, ready:false, theme:selectedSubject.value?.name })))
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
 function disabled(item) { return flow.value === 'quiz' && (!item.ready || !quizzesOpen.value) }
 function actionText(item) { return flow.value !== 'quiz' ? 'Choose Learn or Study →' : !item.ready ? 'Coming soon' : !quizzesOpen.value ? 'Available from 7am' : 'Enter battle →' }
 function selectTopic(item) {
   if (disabled(item)) return
-  const query = { subject:science.value?.id || 'moe-science-preview', topic:item.id }
+  const query = { subject:selectedSubject.value?.id || 'moe-science-preview', topic:item.id }
   router.push(flow.value === 'quiz'
     ? { name:'quiz-battle', query:{ ...query, course:scienceCourse.value } }
     : { name:'study-mode', query })
 }
 </script>
 <template>
-<main class="sd-picker sd-topics" :style="{ '--page-art': `url(${asset('science-purple.png')})` }">
+<main class="sd-picker sd-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-subjects', query:{ flow } }">← All subjects</RouterLink></nav>
-  <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · SCIENCE</p><h1>Your Science adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
+  <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ selectedSubject?.name || 'STUDY' }}</p><h1>Your {{ selectedSubject?.name || 'study' }} adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
   <p v-if="loading" class="sd-page-state" role="status">Loading your subjects…</p>
     <div v-else-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
     <div v-else-if="!profile?.school_level_id" class="sd-page-state"><p>Set your school level to see the right topics.</p><RouterLink to="/account">Account settings</RouterLink></div>
-  <section v-else class="sd-topic-panel" aria-label="Science topics">
-    <div class="sd-topic-toolbar"><span class="sd-level">SCIENCE · {{ profile.school_level?.name }}</span><span class="sd-count">{{ topics.length }} topics</span></div>
-    <label v-if="flow === 'quiz' && level >= 5" class="sd-course">Syllabus view<select v-model="scienceCourse"><option value="standard">Standard Science</option><option value="foundation">Foundation Science</option></select></label>
-    <label class="sd-search"><span>Find a topic</span><input v-model="search" type="search" placeholder="Search Science topics…" /></label>
+  <section v-else class="sd-topic-panel" :aria-label="`${selectedSubject?.name || 'Study'} topics`">
+    <div class="sd-topic-toolbar"><span class="sd-level">{{ selectedSubject?.name || 'STUDY' }} · {{ profile.school_level?.name }}</span><span class="sd-count">{{ topics.length }} topics</span></div>
+    <label v-if="flow === 'quiz' && isScienceSubject(selectedSubject?.name) && level >= 5" class="sd-course">Syllabus view<select v-model="scienceCourse"><option value="standard">Standard Science</option><option value="foundation">Foundation Science</option></select></label>
+    <label class="sd-search"><span>Find a topic</span><input v-model="search" type="search" :placeholder="`Search ${selectedSubject?.name || 'study'} topics…`" /></label>
     <p v-if="flow === 'quiz' && !quizzesOpen" class="sd-notice">Quizzes open at 7am. You can browse your topics now.</p>
     <div class="sd-topic-list">
       <button v-for="(item,index) in shownTopics" :key="item.id" class="sd-topic-card" :disabled="disabled(item)" @click="selectTopic(item)">
@@ -81,8 +88,8 @@ function selectTopic(item) {
         <span class="sd-topic-art" aria-hidden="true"><span class="sd-topic-ring"><img :src="asset('pokeball-purple.svg')" alt="" draggable="false" /><b>{{ String(topics.findIndex(t => t.id === item.id) + 1).padStart(2,'0') }}</b></span><span class="sd-topic-chevron">›</span></span>
       </button>
     </div>
-    <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : 'No Science topics are available for your school level yet.' }}</p>
-    <p v-if="flow === 'quiz'" class="sd-footnote">Demo questions are for practice. Scores and EXP are not saved.</p>
+    <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : `No ${selectedSubject?.name || 'study'} topics are available for your school level yet.` }}</p>
+    <p v-if="flow === 'quiz' && isScienceSubject(selectedSubject?.name)" class="sd-footnote">Demo questions are for practice. Scores and EXP are not saved.</p>
   </section>
 </main>
 </template>

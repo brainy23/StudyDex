@@ -7,6 +7,7 @@ import 'vue3-typer/dist/vue-typer.css'
 const props = defineProps({
   todos: { type: Array, default: () => [] },
   ownedPokemon: { type: Array, default: () => [] },
+  pokemonLoading: { type: Boolean, default: false },
   activeBuddy: {
     type: Object,
     default: () => ({ ownedId: null, name: 'No buddy selected' })
@@ -50,8 +51,8 @@ function closeGoals() {
   goalsOpen.value = false
 }
 
-function pokemonSprite(id) {
-  return `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`
+function pokemonSprite(pokemon) {
+  return pokemon.spriteUrl || ''
 }
 
 onUnmounted(() => clearTimeout(questBootTimer))
@@ -236,16 +237,16 @@ onUnmounted(() => clearTimeout(questBootTimer))
                 :aria-label="`Choose ${pokemon.name} as your town buddy`"
                 @click="emit('select-buddy', pokemon)"
               >
-                <span class="pokedex-number">
-                  #{{ String(pokemon.id).padStart(3, '0') }}
-                </span>
+                <span class="pokedex-number">OWNED</span>
 
                 <img
-                  :src="pokemonSprite(pokemon.id)"
+                  v-if="pokemonSprite(pokemon)"
+                  :src="pokemonSprite(pokemon)"
                   alt=""
                   class="pokedex-sprite"
                   loading="lazy"
                 />
+                <span v-else class="pokedex-sprite-placeholder" aria-hidden="true">?</span>
 
                 <span class="pokedex-name">{{ pokemon.name }}</span>
                 <div class="small" style="font-size: 10px;">
@@ -263,8 +264,11 @@ onUnmounted(() => clearTimeout(questBootTimer))
               </button>
             </div>
 
+            <p v-else-if="pokemonLoading" class="quest-empty" role="status">
+              Loading your Pokédex…
+            </p>
             <p v-else class="quest-empty">
-              No Pokémon yet. Open a pack to meet your first buddy!
+              No Pokemon in PokeDex
             </p>
 
             <footer class="quest-footer">
@@ -1205,6 +1209,15 @@ onUnmounted(() => clearTimeout(questBootTimer))
   height: 76px;
   object-fit: contain;
   image-rendering: pixelated;
+}
+
+.pokedex-sprite-placeholder {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  color: #64748b;
+  font-size: 24px;
 }
 
 .pokedex-name {

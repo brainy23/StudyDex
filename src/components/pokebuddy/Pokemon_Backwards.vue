@@ -5,6 +5,10 @@ const props = defineProps({
   pokename: {
     type: String,
     required: true
+  },
+  fallbackSrc: {
+    type: String,
+    default: ''
   }
 })
 
@@ -36,7 +40,7 @@ async function fetchBackwardSprite(name, signal) {
       ?.animated?.back_default
 
   // Some Pokémon have no animated back sprite.
-  const image = animated || pokemon.sprites?.back_default
+  const image = animated || pokemon.sprites?.back_default || props.fallbackSrc
 
   if (!image) {
     throw new Error('No back sprite is available for this Pokémon.')
@@ -62,6 +66,10 @@ watch(
     loading.value = false
 
     const name = value?.trim().toLowerCase()
+      .replace(/♀/g, '-f')
+      .replace(/♂/g, '-m')
+      .replace(/[.'’]/g, '')
+      .replace(/\s+/g, '-')
 
     if (!name) {
       error.value = 'Choose a Pokémon.'
@@ -91,6 +99,11 @@ watch(
 )
 
 function handleImageError() {
+  if (props.fallbackSrc && sprite.value !== props.fallbackSrc) {
+    sprite.value = props.fallbackSrc
+    isAnimated.value = false
+    return
+  }
   sprite.value = ''
   error.value = 'The Pokémon image could not load.'
 }

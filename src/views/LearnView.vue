@@ -4,6 +4,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
   getStudyCatalogue,
+  getSelectedStudyBuddy,
+  resolveStudyImage,
   getTopicLesson,
   studyErrorMessage,
 } from '../services/studyService'
@@ -14,12 +16,14 @@ import '../assets/study.css'
 const route = useRoute()
 const router = useRouter()
 const profile = ref(null)
+const activeBuddyRecord = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
 const resources = reactive({})
 let alive = true
 let generation = 0
+let activeBuddyController
 
 const subject = computed(() => {
   const subjects = catalogue.value.subjects
@@ -38,6 +42,8 @@ const topic = computed(() =>
 )
 const currentResources = computed(() => resources[topic.value?.id])
 async function initialise() {
+  activeBuddyController?.abort()
+  activeBuddyController = null
   const request = ++generation
   loading.value = true
   error.value = null
@@ -48,9 +54,35 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
-    if (student.school_level_id) {
-      const data = await getStudyCatalogue(student.school_level_id)
-      if (alive && request === generation) catalogue.value = data
+    const [data, selectedBuddy] = await Promise.all([
+      student.school_level_id
+        ? getStudyCatalogue(student.school_level_id)
+        : Promise.resolve(null),
+      getSelectedStudyBuddy(student.id).catch(() => null),
+    ])
+    if (!alive || request !== generation) return
+    if (data) catalogue.value = data
+    activeBuddyRecord.value = selectedBuddy
+    classroomPokemon.value = null
+
+    const name = selectedBuddy?.pokemon?.name
+    if (name) {
+      const controller = new AbortController()
+      activeBuddyController = controller
+      const timeout = setTimeout(() => controller.abort(), 12000)
+      try {
+        const apiName = name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
+        const response = await fetch(`${POKE_API_BASE}/pokemon/${apiName}/`, {
+          signal: controller.signal,
+        })
+        if (!response.ok) throw new Error('Active Pokémon unavailable')
+        const pokemon = await response.json()
+        if (alive && request === generation) classroomPokemon.value = pokemon
+      } catch {
+        // Keep the saved sprite as the fallback when PokéAPI is unavailable.
+      } finally {
+        clearTimeout(timeout)
+      }
     }
   } catch (cause) {
     if (alive && request === generation) error.value = cause
@@ -81,6 +113,7 @@ function loadTopic(id) {
 }
 const enteredLab = computed(() => !!topic.value)
 const POKE_API_BASE = 'https://pokeapi.co/api/v2'
+const activeBuddyName = computed(() => activeBuddyRecord.value?.pokemon?.name || 'your Pokémon')
 const lessonResource = computed(() => currentResources.value?.lesson)
 const lessonConcepts = computed(() => [...(lessonResource.value?.data?.concepts || [])]
   .sort((a, b) => (a.concept_order ?? Infinity) - (b.concept_order ?? Infinity)))
@@ -111,7 +144,7 @@ function hideDecorativeImage(event) { event.target.style.visibility = 'hidden' }
 const professorSprite = `${import.meta.env.BASE_URL}poke-lab/professor-mewtwo.png`
 const professorFailed = ref(false)
 const learnerFailed = ref(false)
-const classroomSnorlax = ref(null)
+const classroomPokemon = ref(null)
 const stoolHome = { x: 11, y: 87 }
 const stoolPosition = reactive({ ...stoolHome })
 const stoolCanvas = ref(null)
@@ -135,9 +168,11 @@ let stoolPointer = null
 let stoolGrabOffset = { x: 0, y: 0 }
 const stoolMoved = computed(() => Math.hypot(stoolPosition.x - stoolHome.x, stoolPosition.y - stoolHome.y) > 4)
 const learnerSprite = computed(() => {
-  const sprites = classroomSnorlax.value?.sprites
+  const sprites = classroomPokemon.value?.sprites
   const gen5 = sprites?.versions?.['generation-v']?.['black-white']
-  return stoolMoved.value ? (gen5?.front_default || sprites?.front_default || '') : (gen5?.back_default || sprites?.back_default || '')
+  return stoolMoved.value
+    ? (gen5?.front_default || sprites?.front_default || resolveStudyImage(activeBuddyRecord.value?.pokemon?.sprite_url))
+    : (gen5?.back_default || sprites?.back_default || resolveStudyImage(activeBuddyRecord.value?.pokemon?.sprite_url))
 })
 
 const buddyCanvas = ref(null)
@@ -216,17 +251,6 @@ function stoolKey(event) {
   if (offset) { event.preventDefault(); moveStool(stoolPosition.x + offset[0], stoolPosition.y + offset[1]) }
 }
 
-onMounted(async () => {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 12000)
-  try {
-    const response = await fetch(`${POKE_API_BASE}/pokemon/143/`, { signal: controller.signal })
-    if (!response.ok) throw new Error('Snorlax unavailable')
-    const data = await response.json()
-    if (alive) classroomSnorlax.value = data
-  } catch { if (alive) learnerFailed.value = true }
-  finally { clearTimeout(timeout) }
-})
 const learningNavigationError = ref('')
 const learningNavigationBusy = ref(false)
 function returnToSelection() {
@@ -238,7 +262,7 @@ onMounted(() => {
     router.replace({ name: 'selection-subjects', query: { flow: 'study' } }).catch(cause => { error.value = cause; loading.value = false })
   } else initialise()
 })
-onUnmounted(() => { alive = false; generation++ })
+onUnmounted(() => { alive = false; generation++; activeBuddyController?.abort() })
 
 async function backToFlashcards() {
   if (!topic.value || learningNavigationBusy.value) return
@@ -289,12 +313,12 @@ async function backToFlashcards() {
           <img draggable="false" v-if="!learnRoomFailed" class="inline-learn-room" :src="learnImages.room" :style="learnRoomStyle" alt="" @error="learnRoomFailed = true" />
           <img draggable="false" v-if="professorSprite && !professorFailed" class="inline-professor" :src="professorSprite" alt="Mewtwo teaching beside the whiteboard" @error="professorFailed = true" />
           <div ref="stoolFloor" class="classroom-play-floor">
-            <canvas v-show="learnerSprite && !learnerFailed" ref="buddyCanvas" class="stool-buddy" :class="{ 'is-protesting': stoolMoved }" role="img" :aria-label="stoolMoved ? 'Snorlax asking for his stool back' : 'Snorlax resting on the stool, facing the whiteboard'"></canvas>
-            <button class="pixel-stool" :class="{ 'is-dragging': stoolDragging }" :style="stoolStyle" type="button" aria-label="Move Snorlax’s stool. Drag, or use arrow keys. Press Home to return it." @pointerdown="grabStool" @pointermove="dragStool" @pointerup="releaseStool" @pointercancel="releaseStool" @lostpointercapture="releaseStool" @keydown="stoolKey" @dblclick="returnStool">
+            <canvas v-show="learnerSprite && !learnerFailed" ref="buddyCanvas" class="stool-buddy" :class="{ 'is-protesting': stoolMoved }" role="img" :aria-label="stoolMoved ? `${activeBuddyName} asking for their stool back` : `${activeBuddyName} resting on the stool, facing the whiteboard`"></canvas>
+            <button class="pixel-stool" :class="{ 'is-dragging': stoolDragging }" :style="stoolStyle" type="button" :aria-label="`Move ${activeBuddyName}’s stool. Drag, or use arrow keys. Press Home to return it.`" @pointerdown="grabStool" @pointermove="dragStool" @pointerup="releaseStool" @pointercancel="releaseStool" @lostpointercapture="releaseStool" @keydown="stoolKey" @dblclick="returnStool">
               <canvas ref="stoolCanvas" width="440" height="530" aria-hidden="true"></canvas>
             </button>
             <div v-if="stoolMoved" class="stool-speech" role="status" aria-live="polite">
-              <span class="stool-speaker">SNORLAX</span>
+              <span class="stool-speaker">{{ activeBuddyName.toUpperCase() }}</span>
               <strong>Hey, focus! Give me back my stool!!!</strong>
               <button type="button" @click="returnStool">Give it back</button>
             </div>
@@ -995,7 +1019,6 @@ input:focus-visible {
 /* Coordinates match the enlarged-board classroom artwork. */
 @media(min-width:1001px) {
   .inline-whiteboard { left:18.7%; top:8%; width:62.7%; height:50.5%; padding:clamp(16px,1.6cqw,32px); background:#fffdf6; }
-  .is-learning .study-clock { position:fixed; top:82px; left:16px; width:max-content; transform:scale(.65); transform-origin:top left; }
   .is-learning .return-flashcards { position:fixed; right:20px; bottom:20px; top:auto; font-size:clamp(12px,1vw,18px); }
 }
 .inline-learn-scene .inline-professor { left:84%; top:52%; width:15%; height:39%; object-fit:contain; object-position:center bottom; }
@@ -1040,10 +1063,18 @@ input:focus-visible {
 .poke-lab-page .study-navigation .home-link:disabled { opacity:.55; cursor:wait; }
 .poke-lab-page .study-navigation .home-link:focus-visible { outline:3px solid #ffe194; outline-offset:3px; }
 .poke-lab-page .study-header > .study-clock {
-  position:static; width:auto; max-width:100%; transform:none; pointer-events:auto;
+  position:fixed; top:82px; right:16px; left:auto;
+  width:max-content; max-width:calc(100vw - 32px);
+  transform:none; pointer-events:auto;
 }
 @media(min-width:1001px) {
   .poke-lab-page.is-learning .study-clock { zoom:.65; }
+}
+@media(max-width:600px) {
+  .poke-lab-page .study-header > .study-clock {
+    top:76px; right:12px; max-width:calc(100vw - 24px);
+    transform:scale(.72); transform-origin:top right;
+  }
 }
 /* A wider image box lets Mewtwo grow without stretching the artwork. */
 .inline-learn-scene .inline-professor {
