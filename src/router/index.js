@@ -133,6 +133,15 @@ export function createAppRouter(
         component: () => import('../views/SurpriseBossView.vue'),
         meta: { requiresAuth: true },
       },
+      {
+        path: '/tutorial',
+        name: 'tutorial',
+        component: HomeView,
+        meta: {
+          requiresAuth: true,
+          tutorial: true,
+        },
+      },
 
       ...(!hasStarterRoute
         ? [
@@ -180,6 +189,14 @@ export function createAppRouter(
             : {}),
         },
       }
+    }
+
+    // Optional authentication bypass for local development only.
+    if (
+      import.meta.env.DEV &&
+      import.meta.env.VITE_SKIP_AUTH === 'true'
+    ) {
+      return true
     }
 
     if (!to.meta.requiresAuth) return true
