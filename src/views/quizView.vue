@@ -525,7 +525,7 @@ watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen],
         <div class="fighter-shadow"></div>
         <img v-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
         <span v-else class="fighter-unavailable">Sprite unavailable</span>
-        
+
       </div>
       <p v-if="spriteError && enteredArena" class="sprite-status">{{ spriteError }} <button type="button" @click="loadArenaFighters">Retry</button></p>
 
