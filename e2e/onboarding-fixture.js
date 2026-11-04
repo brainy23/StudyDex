@@ -8,6 +8,7 @@ export async function mockOnboarding(
     avatarConfirmed = false,
     starterClaimed = false,
     confirmationRequired = false,
+    seedAuthOnce = false,
   } = {},
 ) {
   const levels = Array.from({ length: 6 }, (_, index) => ({
@@ -52,11 +53,16 @@ export async function mockOnboarding(
   page.on('pageerror', (error) => errors.push(error.message))
   await page.emulateMedia({ reducedMotion: 'reduce' })
   await page.addInitScript(
-    ({ session, authenticated }) => {
-      if (authenticated)
+    ({ session, authenticated, seedAuthOnce }) => {
+      if (
+        authenticated &&
+        (!seedAuthOnce || !sessionStorage.getItem('studydex-fixture-auth-seeded'))
+      ) {
         localStorage.setItem('sb-studydex-fixture-auth-token', JSON.stringify(session))
+        if (seedAuthOnce) sessionStorage.setItem('studydex-fixture-auth-seeded', 'true')
+      }
     },
-    { session, authenticated },
+    { session, authenticated, seedAuthOnce },
   )
   await page.route('https://*.supabase.co/**', (route) => {
     liveRequests.push(route.request().url())

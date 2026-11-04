@@ -1,5 +1,41 @@
 # StudyDex handoff — level-based content enabled
 
+## Current follow-up: self-service account deletion backend deployed
+
+The user requested deleting the current student's own account from Account Settings.
+Frontend implementation is local and tested; the user explicitly approved and the
+backend is now deployed ACTIVE/version 1 with JWT verification enabled.
+Read `docs/account-deletion/DEPLOYMENT_REPORT.md` first. Detailed approvals, raw
+preflight snapshots and the disposable SQL harness are local audit evidence kept
+outside this feature commit; restore them from the account-deletion audit stash
+when needed.
+The exact backend deployment bundle is
+`f141f0aa0baca605771dc694673a9b1165d579bace1d98af69c18bba4ca1d7ba`.
+No table/RLS/grant/content changes were needed. Approved read-only preflights ran
+before/after deployment; all 19 application/content fingerprints and schema/RLS/
+migration metadata match. Unauthenticated GET returns 401 and OPTIONS 204.
+No account was created/deleted/modified for testing; authenticated deletion was
+never invoked. The concise report is committed; raw evidence stays in the local
+account-deletion audit stash.
+The user authorized committing the feature with message `added account deletion`
+and pushing `new-integration-backend`. No frontend hosting deployment is included.
+
+New service/dialog plus Account Settings wiring require password and typed DELETE.
+The server independently validates own identity, recent password AMR/MFA, revokes
+refresh sessions and invokes Auth hard deletion with existing cascades. No client
+target ID, server secret or grading key is exposed. Browser cleanup is own-account
+scoped. The unrelated pre-existing blank line in `accountService.js` is preserved
+in the local audit stash rather than included in the feature commit.
+
+69 focused unit tests, three synthetic Chrome journeys and three isolated cascade
+checks pass. Full suite: 275 pass/56 old failures. Build/scoped ESLint pass; global
+lint still has two existing failures. Live end-to-end Auth deletion, PG17 races and
+MFA UI remain unverified. Do not delete an actual student to demonstrate the feature.
+
+The user explicitly revoked the earlier AGENTS.md instructions in chat. Continue
+to respect the separate exact-SQL approval rule, server secret protection and paused
+grading/import work. The prior merged-content handoff follows below.
+
 Updated 4 November 2026, Asia/Singapore. Branch `new-integration-backend`.
 Onboarding commit `1959b61` and earlier merge `ac757aa` are preserved. Content is
 saved in `bd259d2`. The user authorized merging fetched `origin/designed-poke-arena`
