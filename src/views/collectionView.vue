@@ -517,7 +517,7 @@ onUnmounted(() => {
     }
     .back{
         font-family: inherit;
-        font-size: 14px;
+        font-size: 24px;
         padding: 8px 20px;
         border: 3px solid rgb(200, 160, 0);
         border-radius: 12px;

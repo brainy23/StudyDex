@@ -562,22 +562,22 @@ function backToPacks() {
     }
 
     .back{
-    font-family: inherit;
-    font-size: 14px;
-    padding: 8px 20px;
-    border: 3px solid rgb(200, 160, 0);
-    border-radius: 12px;
-    background-color: rgb(255, 215, 37);
-    color: rgb(100, 45, 0);
-    box-shadow: 0 6px 0 rgb(200, 160, 0);
-    cursor: pointer;
-    transition: transform 0.15s ease, box-shadow 0.15s ease;
+        font-family: inherit;
+        font-size: 24px;
+        padding: 8px 20px;
+        border: 3px solid rgb(200, 160, 0);
+        border-radius: 12px;
+        background-color: rgb(255, 215, 37);
+        color: rgb(100, 45, 0);
+        box-shadow: 0 6px 0 rgb(200, 160, 0);
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
     }
 
     .back:hover{
-    cursor: pointer;
-    border: 3px solid yellow;
-    box-shadow: 0 6px 0 rgb(200, 160, 0), 0 0 20px rgba(255, 230, 0, 0.8);
+        cursor: pointer;
+        border: 3px solid yellow;
+        box-shadow: 0 6px 0 rgb(200, 160, 0), 0 0 20px rgba(255, 230, 0, 0.8);
     }
 
     .leaver{
