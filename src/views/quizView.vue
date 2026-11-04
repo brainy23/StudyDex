@@ -1,18 +1,17 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
-import { scienceTopics, demoBank } from '../data/scienceQuizData'
 const route = useRoute()
 const router = useRouter()
 import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
-import { getSelectedStudyBuddy, getStudyCatalogue, resolveStudyImage, studyErrorMessage } from '../services/studyService'
+import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
+import { getQuizTopicPreview } from '../services/quizPreviewService'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 const profile = ref(null)
 const activeBuddy = ref(null)
 const activeBuddyMessage = ref('')
 const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
-const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
 let alive = true
@@ -21,38 +20,50 @@ async function initialise() {
   const request = ++generation
   loading.value = true
   error.value = null
+  enteredArena.value = false
+  profile.value = null
+  activeBuddy.value = null
+  previewQuestions.value = []
+  selectedPreviewTopic.value = null
+  previewSubject.value = null
+  resetPreview()
   try {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
-    try {
-      activeBuddy.value = await getSelectedStudyBuddy(student.id)
-      activeBuddyMessage.value = activeBuddy.value
-        ? ''
-        : 'Select an active Pokémon from your Pokédex.'
-    } catch {
-      activeBuddy.value = null
-      activeBuddyMessage.value = 'Your active Pokémon could not load.'
-    }
+    if (!student.school_level_id) return
+    const data = await getQuizTopicPreview(student, route.query.topic, route.query.subject)
     if (!alive || request !== generation) return
-    loadArenaFighters()
-    if (student.school_level_id) {
-      // Science demos work even when the published catalogue is unavailable.
-      try {
-        const data = await getStudyCatalogue(student.school_level_id)
-        if (alive && request === generation) catalogue.value = data
-      } catch { catalogue.value = { subjects: [], topics: [] } }
-    }
+    selectedPreviewTopic.value = data.topic
+    previewSubject.value = data.subject
+    previewQuestions.value = data.questions
+    enteredArena.value = true
+    // Decorative sprites must not delay or hide readable questions.
+    void loadSavedBuddy(student.id, request)
   } catch (cause) {
     if (alive && request === generation) error.value = cause
   } finally {
     if (alive && request === generation) loading.value = false
   }
 }
-onMounted(() => {
+async function loadSavedBuddy(userId, request) {
+  let record = null
+  let message = ''
+  try {
+    record = await getSelectedStudyBuddy(userId)
+    if (!record) message = 'Select an active Pokémon from your Pokédex.'
+  } catch { message = 'Your active Pokémon could not load.' }
+  if (!alive || request !== generation) return
+  activeBuddy.value = record
+  activeBuddyMessage.value = message
+  void loadArenaFighters()
+}
+function openRequestedTopic() {
   if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'quiz' } })
-  else initialise()
-})
+  else void initialise()
+}
+onMounted(openRequestedTopic)
+watch(() => [route.query.topic, route.query.subject], openRequestedTopic)
 onUnmounted(() => { alive = false; generation++ })
 const base = import.meta.env.BASE_URL
 
@@ -66,45 +77,9 @@ const images = {
 
 
 const currentTime = ref(new Date())
-// Preview bar has its own layout row below the arena.
-const live = ref(true)
-const previewHour = ref(12)
-const autoPreview = ref(false)
-let previewInterval
-function stopAutoPreview() {
-  clearInterval(previewInterval)
-  previewInterval = undefined
-  autoPreview.value = false
-}
-function useLiveTime() {
-  stopAutoPreview()
-  currentTime.value = new Date()
-  live.value = true
-}
-function setPreview(value) {
-  const next = Number(value)
-  if (!Number.isFinite(next)) return
-  stopAutoPreview()
-  live.value = false
-  previewHour.value = ((next % 24) + 24) % 24
-}
-function toggleAutoPreview() {
-  if (autoPreview.value) { stopAutoPreview(); return }
-  previewHour.value = hour.value
-  live.value = false
-  autoPreview.value = true
-  const startedAt = performance.now()
-  const startHour = previewHour.value
-  previewInterval = setInterval(() => {
-    previewHour.value = (startHour + (performance.now() - startedAt) / 60000 * 24) % 24
-  }, 50)
-}
-onUnmounted(stopAutoPreview)
-
 let clockInterval
 
 const hour = computed(() => {
-  if (!live.value) return previewHour.value
   const time = currentTime.value
 
   return (
@@ -113,9 +88,6 @@ const hour = computed(() => {
     time.getSeconds() / 3600
   )
 })
-
-// Opening hours: 7am until midnight.
-const quizzesOpen = computed(() => true)
 
 // Floodlights: 7pm until midnight.
 const arenaLightsOn = computed(() => hour.value >= 19)
@@ -249,15 +221,6 @@ const floodlights = [
   { id: 'right', left: 91.3, top: 16.8, angle: 24 },
 ]
 
-const displayTime = computed(() => {
-  const minutes = Math.floor(hour.value * 60)
-
-  const hoursText = String(Math.floor(minutes / 60)).padStart(2, '0')
-  const minutesText = String(minutes % 60).padStart(2, '0')
-
-  return `${hoursText}:${minutesText}`
-})
-
 function refreshClock() {
   currentTime.value = new Date()
 }
@@ -274,10 +237,8 @@ onUnmounted(() => {
 })
 
 const enteredArena = ref(false)
-const entryError = ref('')
 function returnToSelection() {
-  clearAttack()
-  router.push({ name:'selection-topics', query:{ flow:'quiz', course:route.query.course === 'foundation' ? 'foundation' : 'standard' } })
+  router.push({ name:'selection-topics', query:{ flow:'quiz', ...(previewSubject.value ? { subject:previewSubject.value.id } : {}) } })
 }
 const spriteLoading = ref(false)
 const spriteError = ref('')
@@ -348,54 +309,29 @@ function groundArenaSprite(event, fighter) {
 onUnmounted(() => spriteController?.abort())
 
 
-// Local practice questions only. No scores, EXP or rewards are saved.
-const selectedDemoTopic = ref(null)
-const demoIndex = ref(0)
-const demoChoice = ref(null)
-const demoScore = ref(0)
-const demoFinished = ref(false)
-const attackSide = ref(null)
-let attackTimer
-const demoQuestions = computed(() => demoBank[selectedDemoTopic.value?.key] || [])
-const demoQuestion = computed(() => demoQuestions.value[demoIndex.value])
-function clearAttack() { clearTimeout(attackTimer); attackSide.value = null }
-function restartDemo() {
-  clearAttack()
-  demoIndex.value = 0
-  demoChoice.value = null
-  demoScore.value = 0
-  demoFinished.value = false
+// Public question previews only. No grading, attempts, XP or rewards are written.
+const selectedPreviewTopic = ref(null)
+const previewSubject = ref(null)
+const previewIndex = ref(0)
+const previewChoice = ref(null)
+const previewFinished = ref(false)
+const previewQuestions = ref([])
+const previewQuestion = computed(() => previewQuestions.value[previewIndex.value])
+function resetPreview() {
+  previewIndex.value = 0
+  previewChoice.value = null
+  previewFinished.value = false
 }
-function answerDemo(index) {
-  if (demoChoice.value !== null || demoFinished.value || !quizzesOpen.value) return
-  demoChoice.value = index
-  const correct = index === demoQuestion.value[2]
-  if (correct) demoScore.value++
-  clearAttack()
-  attackSide.value = correct ? 0 : 1
-  attackTimer = setTimeout(() => { attackSide.value = null }, 1000)
+function choosePreview(optionId) {
+  if (previewChoice.value !== null || previewFinished.value ||
+    !previewQuestion.value?.options.some(option => option.id === optionId)) return
+  previewChoice.value = optionId
 }
-function nextDemo() {
-  if (demoChoice.value === null) return
-  clearAttack()
-  if (demoIndex.value + 1 >= demoQuestions.value.length) demoFinished.value = true
-  else { demoIndex.value++; demoChoice.value = null }
+function nextPreview() {
+  if (previewChoice.value === null) return
+  if (previewIndex.value + 1 >= previewQuestions.value.length) previewFinished.value = true
+  else { previewIndex.value++; previewChoice.value = null }
 }
-onUnmounted(clearAttack)
-function openRequestedBattle() {
-  if (loading.value || error.value || !profile.value?.school_level_id) return
-  enteredArena.value = false
-  entryError.value = ''
-  const match = String(profile.value.school_level?.name || '').match(/^(?:primary\s*|p\s*)?([3-6])(?:\b|$)/i)
-  const level = match ? Number(match[1]) : null
-  const item = scienceTopics.find(t => t.key === route.query.topic && t.level === level && !(route.query.course === 'foundation' && t.standardOnly))
-  if (!item || !demoBank[item.key]?.length) { entryError.value = 'This quiz is unavailable for your school level. Choose another topic.'; return }
-  if (!quizzesOpen.value) { entryError.value = 'Quizzes open at 7am. Please come back then.'; return }
-  selectedDemoTopic.value = item
-  restartDemo()
-  enteredArena.value = true
-}
-watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen], openRequestedBattle)
 
 
 </script>
@@ -489,41 +425,40 @@ watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen],
 
 
       <!-- The question stays on the arena's built-in screen. -->
-      <section v-if="enteredArena && quizzesOpen" class="quiz-content demo-board" aria-label="Demo quiz">
-        <div class="demo-caption"><span>SCIENCE · {{ selectedDemoTopic?.name }}</span><span>{{ demoFinished ? 'Complete' : `${demoIndex + 1} / ${demoQuestions.length}` }}</span></div>
-        <h2 id="arena-question">{{ demoFinished ? 'Well done, trainer!' : demoQuestion?.[0] }}</h2>
-        <p v-if="demoFinished">You answered {{ demoScore }} of {{ demoQuestions.length }} correctly.</p>
+      <section v-if="enteredArena" class="quiz-content demo-board" aria-label="Question preview">
+        <div class="demo-caption"><span>{{ previewSubject?.name }} · {{ selectedPreviewTopic?.name }}</span><span>{{ previewFinished ? 'Complete' : `${previewIndex + 1} / ${previewQuestions.length}` }}</span></div>
+        <h2 id="arena-question">{{ previewFinished ? 'Preview complete, trainer!' : previewQuestion?.question_text }}</h2>
+        <p v-if="previewFinished">You explored {{ previewQuestions.length }} questions. This preview is not graded.</p>
       </section>
 
       <!-- Classic battle menu: dialogue left, four choices right. -->
-      <section v-if="enteredArena && quizzesOpen" class="battle-dock" aria-label="Battle answer controls">
+      <section v-if="enteredArena" class="battle-dock" aria-label="Battle answer controls">
         <div class="battle-dialogue" aria-live="polite">
-          <template v-if="demoFinished">
-            <span class="dialogue-kicker">ENCOUNTER COMPLETE</span>
+          <template v-if="previewFinished">
+            <span class="dialogue-kicker">PREVIEW COMPLETE</span>
             <p>Great practice, trainer! Ready for another challenge?</p>
-            <small>Demo practice · results are not saved.</small>
+            <small>Preview only · answers, scores and EXP are not saved.</small>
           </template>
-          <template v-else-if="demoChoice === null">
-            <p>What will <strong>{{ fighters[0]?.name || 'your buddy' }}</strong> do?</p>
+          <template v-else-if="previewChoice === null">
+            <p>Choose an option to explore this question.</p><small>Preview only · no grading or saved results.</small>
           </template>
           <template v-else>
-            <p class="battle-explanation">{{ demoQuestion[3] }}</p>
-            <button type="button" class="battle-next" @click="nextDemo">{{ demoIndex + 1 === demoQuestions.length ? 'See results' : 'Next question' }} →</button>
+            <p class="battle-explanation">Choice selected. This preview does not check answers.</p>
+            <button type="button" class="battle-next" @click="nextPreview">{{ previewIndex + 1 === previewQuestions.length ? 'Finish preview' : 'Next question' }} →</button>
           </template>
         </div>
-        <div v-if="demoFinished" class="battle-end-actions">
-          <button type="button" @click="restartDemo">Play again</button>
+        <div v-if="previewFinished" class="battle-end-actions">
+          <button type="button" @click="resetPreview">Preview again</button>
           <button type="button" @click="returnToSelection">Choose topic</button>
         </div>
-        <div v-else-if="demoQuestion" class="demo-answers" role="group" aria-labelledby="arena-question">
-          <button v-for="(answer, index) in demoQuestion[1]" :key="`${demoIndex}-${index}`" type="button" :class="['demo-answer-' + index, { correct: demoChoice !== null && index === demoQuestion[2], wrong: demoChoice === index && index !== demoQuestion[2] }]" :disabled="demoChoice !== null" @click="answerDemo(index)">
-            <b class="choice-letter">{{ ['A','B','C','D'][index] }}</b><span class="choice-text">{{ answer }}</span>
-            <span v-if="demoChoice !== null && index === demoQuestion[2]" aria-label="Correct answer">✓</span>
-            <span v-else-if="demoChoice === index" aria-label="Incorrect answer">✕</span>
+        <div v-else-if="previewQuestion" class="demo-answers" role="group" aria-labelledby="arena-question">
+          <button v-for="(option, index) in previewQuestion.options" :key="option.id" type="button" :class="['demo-answer-' + index, { 'preview-selected': previewChoice === option.id }]" :aria-pressed="previewChoice === option.id" :disabled="previewChoice !== null" @click="choosePreview(option.id)">
+            <b class="choice-letter">{{ ['A','B','C','D'][index] }}</b><span class="choice-text">{{ option.option_text }}</span>
+            <span v-if="previewChoice === option.id" aria-label="Selected option">●</span>
           </button>
         </div>
       </section>
-      <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
+      <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="index === 0 ? 'player-fighter' : 'opponent-fighter'">
         <div class="fighter-shadow"></div>
         <Pokemon_Backwards v-if="index === 0 && activeBuddy?.pokemon?.name" class="player-back-sprite" :pokename="activeBuddy.pokemon.name" :fallback-src="activeBuddySprite" />
         <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, front view`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
@@ -548,10 +483,10 @@ watch([loading, () => route.query.topic, () => route.query.course, quizzesOpen],
 
 
     <section v-if="!enteredArena" class="arena-picker redesigned-picker" style="padding:100px 24px;">
-      <p v-if="loading" role="status">Opening your battle…</p>
+      <p v-if="loading" role="status">Opening your questions…</p>
       <div v-else-if="error" role="alert"><p>{{ studyErrorMessage(error, 'Your Arena content') }}</p><button @click="initialise">Try again</button></div>
       <div v-else-if="!profile?.school_level_id"><p>Set your school level to see the right quizzes.</p><RouterLink to="/account">Account settings</RouterLink></div>
-      <div v-else role="status"><p>{{ entryError }}</p><button @click="returnToSelection">Choose a topic</button></div>
+      <div v-else role="status"><p>Choose a topic for your school level.</p><button @click="returnToSelection">Choose a topic</button></div>
     </section>
 
 
@@ -905,7 +840,7 @@ input:focus-visible {
 /* CLASSIC BATTLE LAYOUT — no levels, HP or XP panels. */
 .demo-board { display: flex; flex-direction: column; align-items: stretch; justify-content: center; text-align: center; padding: 1cqw 1.4cqw; }
 .demo-caption { display: flex; justify-content: space-between; gap: 10px; color: #ffe6a2; font-size: clamp(9px, .8cqw, 13px); font-weight: 800; }
-.demo-board h2 { margin: auto 0; padding: 12px 0; font-size: clamp(20px, 2cqw, 34px); line-height: 1.35; color: #fff8e7; }
+.demo-board h2 { white-space: pre-wrap; margin: auto 0; padding: 12px 0; font-size: clamp(20px, 2cqw, 34px); line-height: 1.35; color: #fff8e7; }
 .demo-board > p { color: #fff8e7; }
 .battle-dock { position: absolute; z-index: 9; left: 2%; right: 2%; bottom: 1.5%; height: 19%; display: grid; grid-template-columns: 42% minmax(0, 1fr); gap: 12px; padding: 10px; border: 3px solid #344652; border-radius: 18px; background: #ede8d7; box-shadow: 0 5px 0 #192735, inset 0 0 0 2px #fff9dc; color: #263548; }
 .battle-dialogue { min-width: 0; overflow-y: auto; padding: 12px 16px; border: 3px solid #d6b254; border-radius: 9px; background: #183047; box-shadow: inset 0 0 0 2px #080f1d; color: #fff5dc; }
@@ -917,11 +852,11 @@ input:focus-visible {
 .demo-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-height: 0; }
 .demo-answers button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 0; overflow-y: auto; padding: 8px 12px; border: 3px solid #fff4d2; outline: 2px solid #45515b; border-radius: 18px; color: white; font: inherit; font-size: clamp(11px, 1.1cqw, 18px); font-weight: 800; text-align: left; cursor: pointer; box-shadow: inset 0 -5px 0 #0002, inset 0 2px 0 #fff6; }
 .choice-letter { display: grid; place-items: center; flex: 0 0 25px; height: 25px; border-radius: 50%; background: #0002; font-size: 12px; }
-.choice-text { flex: 1; overflow-wrap: anywhere; }
+.choice-text { white-space: pre-wrap; flex: 1; overflow-wrap: anywhere; }
 .demo-answer-0 { background: #be4358; }.demo-answer-1 { background: #dfb94e; color: #26334a !important; }.demo-answer-2 { background: #488247; }.demo-answer-3 { background: #396d99; }
 .demo-answers button:hover:not(:disabled) { filter: brightness(1.15); }
 .demo-answers button:disabled { cursor: default; }
-.demo-answers .correct { outline: 3px solid #ffe270; border-color: #ffe270; }
+.demo-answers .preview-selected { outline: 3px solid #ffe270; border-color: #ffe270; }
 .demo-answers .wrong { border-style: dashed; }
 .battle-next, .battle-end-actions button { padding: 8px 12px; border: 2px solid #b58d32; border-radius: 9px; background: #ffe08a; color: #26334a; font: inherit; font-weight: 800; cursor: pointer; }
 .battle-next { font-size: 12px; }

@@ -4,7 +4,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
-  getStudyCatalogue,
+  getStudentStudyCatalogue,
   getTopicFlashcards,
   getSelectedStudyBuddy,
   resolveStudyImage,
@@ -61,7 +61,7 @@ async function initialise() {
     topicCompletion.bindStudent(student.id, student.school_level_id)
     const [data, selectedBuddy] = await Promise.all([
       student.school_level_id
-        ? getStudyCatalogue(student.school_level_id)
+        ? getStudentStudyCatalogue(student)
         : Promise.resolve(null),
       getSelectedStudyBuddy(student.id).catch(() => null),
     ])

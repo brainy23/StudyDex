@@ -2,8 +2,9 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
-import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
+import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
@@ -25,10 +26,8 @@ async function load() {
     profile.value = student
     catalogue.value = { subjects: [], topics: [] }
     if (student.school_level_id) {
-      try {
-        const data = await getStudyCatalogue(student.school_level_id)
-        if (active && request === requestId) catalogue.value = data
-      } catch (cause) { if (flow.value !== 'quiz') throw cause }
+      const data = await (flow.value === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student)
+      if (active && request === requestId) catalogue.value = data
     }
   } catch (cause) { if (active && request === requestId) error.value = studyErrorMessage(cause, 'Your subjects') }
   finally { if (active && request === requestId) loading.value = false }
@@ -38,17 +37,13 @@ onUnmounted(() => { active = false; requestId++ })
 watch(() => route.query.flow, load)
 
 const lanes = computed(() => {
-  const subjects = [...catalogue.value.subjects]
-  if (flow.value === 'quiz' && !subjects.some(subject => isScienceSubject(subject.name))) {
-    subjects.unshift({ id:'moe-science-preview', name:'Science', preview:true })
-  }
+  const subjects = catalogue.value.subjects
   return subjects.map(subject => {
     const topicCount = catalogue.value.topics.filter(topic => topic.subject_id === subject.id).length
-    const isScienceQuiz = flow.value === 'quiz' && isScienceSubject(subject.name)
     return {
       ...subject,
       topicCount,
-      enabled: topicCount > 0 || isScienceQuiz,
+      enabled: topicCount > 0,
       theme: getSubjectTheme(subject.name),
       icon: isScienceSubject(subject.name) ? 'science' : /math/i.test(subject.name) ? 'mathematics' : /^english$/i.test(subject.name) ? 'english' : 'study',
     }

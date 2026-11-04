@@ -1,0 +1,3367 @@
+{
+  "tables": [
+    {
+      "oid": "17630",
+      "table_name": "levels",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17798",
+      "table_name": "profiles",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17776",
+      "table_name": "question_answers",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17758",
+      "table_name": "question_options",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17740",
+      "table_name": "questions",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17997",
+      "table_name": "quiz_attempt_answers",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17961",
+      "table_name": "quiz_attempts",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17653",
+      "table_name": "subjects",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17669",
+      "table_name": "topics",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    },
+    {
+      "oid": "17920",
+      "table_name": "user_pokemon",
+      "schema_name": "public",
+      "relrowsecurity": true,
+      "relforcerowsecurity": false
+    }
+  ],
+  "columns": [
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "levels",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "smallint",
+      "table_name": "levels",
+      "column_name": "level_number",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "levels",
+      "column_name": "name",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "avatar_choice",
+      "schema_name": "public",
+      "default_expression": "'prefer_not_to_say'::text"
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "profiles",
+      "column_name": "created_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "profiles",
+      "column_name": "display_name",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "profiles",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": false,
+      "data_type": "uuid",
+      "table_name": "profiles",
+      "column_name": "school_level_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "question_answers",
+      "column_name": "correct_option_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": false,
+      "data_type": "text",
+      "table_name": "question_answers",
+      "column_name": "explanation",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "question_answers",
+      "column_name": "question_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "question_options",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "smallint",
+      "table_name": "question_options",
+      "column_name": "option_order",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "question_options",
+      "column_name": "option_text",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "question_options",
+      "column_name": "question_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": false,
+      "data_type": "uuid",
+      "table_name": "questions",
+      "column_name": "concept_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "questions",
+      "column_name": "created_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": true,
+      "data_type": "smallint",
+      "table_name": "questions",
+      "column_name": "difficulty",
+      "schema_name": "public",
+      "default_expression": "1"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "questions",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "questions",
+      "column_name": "question_purpose",
+      "schema_name": "public",
+      "default_expression": "'quiz'::text"
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "questions",
+      "column_name": "question_text",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "questions",
+      "column_name": "question_type",
+      "schema_name": "public",
+      "default_expression": "'mcq'::text"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "questions",
+      "column_name": "topic_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "quiz_attempt_answers",
+      "column_name": "answered_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempt_answers",
+      "column_name": "attempt_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempt_answers",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempt_answers",
+      "column_name": "question_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempt_answers",
+      "column_name": "selected_option_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "quiz_attempts",
+      "column_name": "attempt_type",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "quiz_attempts",
+      "column_name": "completed_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "quiz_attempts",
+      "column_name": "created_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempts",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "integer",
+      "table_name": "quiz_attempts",
+      "column_name": "score",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempts",
+      "column_name": "topic_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "integer",
+      "table_name": "quiz_attempts",
+      "column_name": "total_questions",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "quiz_attempts",
+      "column_name": "user_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "integer",
+      "table_name": "quiz_attempts",
+      "column_name": "xp_change",
+      "schema_name": "public",
+      "default_expression": "0"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "subjects",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "subjects",
+      "column_name": "name",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "topics",
+      "column_name": "created_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": false,
+      "data_type": "text",
+      "table_name": "topics",
+      "column_name": "description",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "topics",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "topics",
+      "column_name": "level_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "text",
+      "table_name": "topics",
+      "column_name": "name",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "topics",
+      "column_name": "subject_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": false,
+      "data_type": "integer",
+      "table_name": "topics",
+      "column_name": "topic_order",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "user_pokemon",
+      "column_name": "id",
+      "schema_name": "public",
+      "default_expression": "gen_random_uuid()"
+    },
+    {
+      "not_null": true,
+      "data_type": "boolean",
+      "table_name": "user_pokemon",
+      "column_name": "is_defeated",
+      "schema_name": "public",
+      "default_expression": "false"
+    },
+    {
+      "not_null": true,
+      "data_type": "boolean",
+      "table_name": "user_pokemon",
+      "column_name": "is_selected",
+      "schema_name": "public",
+      "default_expression": "false"
+    },
+    {
+      "not_null": true,
+      "data_type": "integer",
+      "table_name": "user_pokemon",
+      "column_name": "level",
+      "schema_name": "public",
+      "default_expression": "1"
+    },
+    {
+      "not_null": true,
+      "data_type": "timestamp with time zone",
+      "table_name": "user_pokemon",
+      "column_name": "obtained_at",
+      "schema_name": "public",
+      "default_expression": "now()"
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "user_pokemon",
+      "column_name": "pokemon_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "uuid",
+      "table_name": "user_pokemon",
+      "column_name": "user_id",
+      "schema_name": "public",
+      "default_expression": null
+    },
+    {
+      "not_null": true,
+      "data_type": "integer",
+      "table_name": "user_pokemon",
+      "column_name": "xp",
+      "schema_name": "public",
+      "default_expression": "0"
+    }
+  ],
+  "identity": {
+    "role": "postgres",
+    "version": "17.11",
+    "database": "postgres",
+    "read_only": "on",
+    "captured_at": "2026-11-04T13:44:31.610318+00:00",
+    "expected_project": "sbrteylcizwkzetcqdro"
+  },
+  "policies": [
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "anon",
+        "authenticated"
+      ],
+      "tablename": "levels",
+      "permissive": "PERMISSIVE",
+      "policyname": "Anyone can read school levels",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(( SELECT auth.uid() AS uid) = id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can read their own profile",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "UPDATE",
+      "qual": "(( SELECT auth.uid() AS uid) = id)",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "profiles",
+      "permissive": "PERMISSIVE",
+      "policyname": "Users can update their own profile",
+      "schemaname": "public",
+      "with_check": "(( SELECT auth.uid() AS uid) = id)"
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM questions question\n  WHERE (question.id = question_options.question_id)))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "question_options",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_level_options",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(EXISTS ( SELECT 1\n   FROM topics topic\n  WHERE (topic.id = questions.topic_id)))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "questions",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_level_questions",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "true",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "subjects",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_subject_names",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(level_id = ( SELECT profile.school_level_id\n   FROM profiles profile\n  WHERE (profile.id = ( SELECT auth.uid() AS uid))))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "topics",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_registered_level_topics",
+      "schemaname": "public",
+      "with_check": null
+    },
+    {
+      "cmd": "SELECT",
+      "qual": "(user_id = ( SELECT auth.uid() AS uid))",
+      "roles": [
+        "authenticated"
+      ],
+      "tablename": "user_pokemon",
+      "permissive": "PERMISSIVE",
+      "policyname": "studydeck_read_own_buddy",
+      "schemaname": "public",
+      "with_check": null
+    }
+  ],
+  "triggers": [],
+  "functions": [
+    {
+      "proname": "get_onboarding_status",
+      "arguments": "",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "prosecdef": false,
+      "provolatile": "s",
+      "result_type": "jsonb",
+      "schema_name": "public",
+      "anon_execute": false,
+      "definition_md5": "a53990751cb41e18be9b85160efb87d8",
+      "authenticated_execute": true
+    },
+    {
+      "proname": "save_onboarding_avatar",
+      "arguments": "p_avatar_choice text",
+      "proconfig": [
+        "search_path=\"\""
+      ],
+      "prosecdef": false,
+      "provolatile": "v",
+      "result_type": "jsonb",
+      "schema_name": "public",
+      "anon_execute": false,
+      "definition_md5": "84d55fdd63be85fe0f159483ca3561c8",
+      "authenticated_execute": true
+    }
+  ],
+  "privileges": [
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "levels"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "questions"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "topics"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "topics"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "topics"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "topics"
+    },
+    {
+      "allowed": true,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "topics"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "delete",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "insert",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "select",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "truncate",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "anon",
+      "privilege": "update",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "levels"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "levels"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "profiles"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "question_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "question_options"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "questions"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "questions"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "quiz_attempt_answers"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "quiz_attempts"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "subjects"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "topics"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "topics"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "topics"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "topics"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "topics"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "delete",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "insert",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": true,
+      "rolname": "authenticated",
+      "privilege": "select",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "truncate",
+      "table_name": "user_pokemon"
+    },
+    {
+      "allowed": false,
+      "rolname": "authenticated",
+      "privilege": "update",
+      "table_name": "user_pokemon"
+    }
+  ],
+  "constraints": [
+    {
+      "conname": "levels_level_number_key",
+      "contype": "u",
+      "definition": "UNIQUE (level_number)",
+      "table_name": "levels",
+      "convalidated": true
+    },
+    {
+      "conname": "levels_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "levels",
+      "convalidated": true
+    },
+    {
+      "conname": "valid_level",
+      "contype": "c",
+      "definition": "CHECK (((level_number >= 1) AND (level_number <= 6)))",
+      "table_name": "levels",
+      "convalidated": true
+    },
+    {
+      "conname": "profiles_avatar_choice_check",
+      "contype": "c",
+      "definition": "CHECK ((avatar_choice = ANY (ARRAY['male'::text, 'female'::text, 'prefer_not_to_say'::text, 'female-classic'::text, 'male-classic'::text, 'female-1'::text, 'male-1'::text, 'female-2'::text, 'male-2'::text, 'female-3'::text, 'male-3'::text, 'female-4'::text, 'male-4'::text])))",
+      "table_name": "profiles",
+      "convalidated": true
+    },
+    {
+      "conname": "profiles_display_name_valid",
+      "contype": "c",
+      "definition": "CHECK (((char_length(btrim(display_name)) >= 1) AND (char_length(btrim(display_name)) <= 80)))",
+      "table_name": "profiles",
+      "convalidated": true
+    },
+    {
+      "conname": "profiles_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE",
+      "table_name": "profiles",
+      "convalidated": true
+    },
+    {
+      "conname": "profiles_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "profiles",
+      "convalidated": true
+    },
+    {
+      "conname": "profiles_school_level_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (school_level_id) REFERENCES levels(id) ON DELETE SET NULL",
+      "table_name": "profiles",
+      "convalidated": true
+    },
+    {
+      "conname": "correct_option_matches_question",
+      "contype": "f",
+      "definition": "FOREIGN KEY (question_id, correct_option_id) REFERENCES question_options(question_id, id) ON DELETE CASCADE",
+      "table_name": "question_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "question_answers_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (question_id)",
+      "table_name": "question_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "question_answers_question_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE",
+      "table_name": "question_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "question_options_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "question_options",
+      "convalidated": true
+    },
+    {
+      "conname": "question_options_question_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE CASCADE",
+      "table_name": "question_options",
+      "convalidated": true
+    },
+    {
+      "conname": "unique_option_order",
+      "contype": "u",
+      "definition": "UNIQUE (question_id, option_order)",
+      "table_name": "question_options",
+      "convalidated": true
+    },
+    {
+      "conname": "unique_question_option_pair",
+      "contype": "u",
+      "definition": "UNIQUE (question_id, id)",
+      "table_name": "question_options",
+      "convalidated": true
+    },
+    {
+      "conname": "valid_option_order",
+      "contype": "c",
+      "definition": "CHECK ((option_order > 0))",
+      "table_name": "question_options",
+      "convalidated": true
+    },
+    {
+      "conname": "questions_concept_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (concept_id) REFERENCES topic_concepts(id) ON DELETE SET NULL",
+      "table_name": "questions",
+      "convalidated": true
+    },
+    {
+      "conname": "questions_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "questions",
+      "convalidated": true
+    },
+    {
+      "conname": "questions_question_purpose_check",
+      "contype": "c",
+      "definition": "CHECK ((question_purpose = ANY (ARRAY['quick_check'::text, 'quiz'::text, 'boss_battle'::text])))",
+      "table_name": "questions",
+      "convalidated": true
+    },
+    {
+      "conname": "questions_topic_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE RESTRICT",
+      "table_name": "questions",
+      "convalidated": true
+    },
+    {
+      "conname": "valid_difficulty",
+      "contype": "c",
+      "definition": "CHECK (((difficulty >= 1) AND (difficulty <= 3)))",
+      "table_name": "questions",
+      "convalidated": true
+    },
+    {
+      "conname": "valid_question_type",
+      "contype": "c",
+      "definition": "CHECK ((question_type = ANY (ARRAY['mcq'::text, 'true_false'::text])))",
+      "table_name": "questions",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempt_answers_attempt_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (attempt_id) REFERENCES quiz_attempts(id) ON DELETE CASCADE",
+      "table_name": "quiz_attempt_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempt_answers_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "quiz_attempt_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempt_answers_question_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (question_id) REFERENCES questions(id) ON DELETE RESTRICT",
+      "table_name": "quiz_attempt_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "selected_option_matches_question",
+      "contype": "f",
+      "definition": "FOREIGN KEY (question_id, selected_option_id) REFERENCES question_options(question_id, id) ON DELETE RESTRICT",
+      "table_name": "quiz_attempt_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "unique_attempt_question",
+      "contype": "u",
+      "definition": "UNIQUE (attempt_id, question_id)",
+      "table_name": "quiz_attempt_answers",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempts_attempt_type_check",
+      "contype": "c",
+      "definition": "CHECK ((attempt_type = ANY (ARRAY['quiz'::text, 'boss_battle'::text])))",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempts_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempts_score_check",
+      "contype": "c",
+      "definition": "CHECK ((score >= 0))",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempts_topic_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (topic_id) REFERENCES topics(id) ON DELETE RESTRICT",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempts_total_questions_check",
+      "contype": "c",
+      "definition": "CHECK ((total_questions > 0))",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "quiz_attempts_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "valid_quiz_score",
+      "contype": "c",
+      "definition": "CHECK ((score <= total_questions))",
+      "table_name": "quiz_attempts",
+      "convalidated": true
+    },
+    {
+      "conname": "subjects_name_key",
+      "contype": "u",
+      "definition": "UNIQUE (name)",
+      "table_name": "subjects",
+      "convalidated": true
+    },
+    {
+      "conname": "subjects_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "subjects",
+      "convalidated": true
+    },
+    {
+      "conname": "topics_level_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (level_id) REFERENCES levels(id)",
+      "table_name": "topics",
+      "convalidated": true
+    },
+    {
+      "conname": "topics_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "topics",
+      "convalidated": true
+    },
+    {
+      "conname": "topics_subject_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (subject_id) REFERENCES subjects(id)",
+      "table_name": "topics",
+      "convalidated": true
+    },
+    {
+      "conname": "topics_topic_order_check",
+      "contype": "c",
+      "definition": "CHECK ((topic_order > 0))",
+      "table_name": "topics",
+      "convalidated": true
+    },
+    {
+      "conname": "unique_topic_per_level_subject",
+      "contype": "u",
+      "definition": "UNIQUE (level_id, subject_id, name)",
+      "table_name": "topics",
+      "convalidated": true
+    },
+    {
+      "conname": "user_pokemon_level_check",
+      "contype": "c",
+      "definition": "CHECK ((level >= 1))",
+      "table_name": "user_pokemon",
+      "convalidated": true
+    },
+    {
+      "conname": "user_pokemon_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)",
+      "table_name": "user_pokemon",
+      "convalidated": true
+    },
+    {
+      "conname": "user_pokemon_pokemon_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (pokemon_id) REFERENCES pokemon(id) ON DELETE RESTRICT",
+      "table_name": "user_pokemon",
+      "convalidated": true
+    },
+    {
+      "conname": "user_pokemon_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE",
+      "table_name": "user_pokemon",
+      "convalidated": true
+    },
+    {
+      "conname": "user_pokemon_user_id_pokemon_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (user_id, pokemon_id)",
+      "table_name": "user_pokemon",
+      "convalidated": true
+    },
+    {
+      "conname": "user_pokemon_xp_check",
+      "contype": "c",
+      "definition": "CHECK ((xp >= 0))",
+      "table_name": "user_pokemon",
+      "convalidated": true
+    }
+  ],
+  "fingerprints": [
+    {
+      "scope": "levels",
+      "row_count": 6,
+      "fingerprint": "fef1bc89a0a03a11ef7c18ad809841c3"
+    },
+    {
+      "scope": "profiles",
+      "row_count": 6,
+      "fingerprint": "a1da572bf2e1fff77e41e26e8abd062c"
+    },
+    {
+      "scope": "question_answers",
+      "row_count": 1015,
+      "fingerprint": "8a7d2e35af944a06768f8ef5b8ff1cd4"
+    },
+    {
+      "scope": "question_options",
+      "row_count": 4060,
+      "fingerprint": "8e3e40989808e2874166618fc1e5b64e"
+    },
+    {
+      "scope": "questions",
+      "row_count": 1015,
+      "fingerprint": "b42f0ec2439631f5e54581e8c5cbf60d"
+    },
+    {
+      "scope": "quiz_attempt_answers",
+      "row_count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "scope": "quiz_attempts",
+      "row_count": 0,
+      "fingerprint": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    {
+      "scope": "subjects",
+      "row_count": 2,
+      "fingerprint": "af089f9fa75403f8e7f816e75f459320"
+    },
+    {
+      "scope": "topics",
+      "row_count": 81,
+      "fingerprint": "fd9983078b959170d1aaeb293d2fc2f1"
+    },
+    {
+      "scope": "user_pokemon",
+      "row_count": 2,
+      "fingerprint": "660aa2c295708bcf65d678e4ecdb45c0"
+    }
+  ],
+  "column_privileges": [
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "question_answers",
+      "column_name": "correct_option_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "question_answers",
+      "column_name": "explanation"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "question_answers",
+      "column_name": "question_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "answered_at"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "attempt_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "question_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "selected_option_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "attempt_type"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "completed_at"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "created_at"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "score"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "topic_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "total_questions"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "user_id"
+    },
+    {
+      "rolname": "anon",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "xp_change"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "question_answers",
+      "column_name": "correct_option_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "question_answers",
+      "column_name": "explanation"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "question_answers",
+      "column_name": "question_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "answered_at"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "attempt_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "question_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempt_answers",
+      "column_name": "selected_option_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "attempt_type"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "completed_at"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "created_at"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "score"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "topic_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "total_questions"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "user_id"
+    },
+    {
+      "rolname": "authenticated",
+      "can_insert": true,
+      "can_select": true,
+      "can_update": true,
+      "table_name": "quiz_attempts",
+      "column_name": "xp_change"
+    }
+  ],
+  "question_distribution": [
+    {
+      "topic": "2D Shapes",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "2D Shapes",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Addition and Subtraction",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Addition and Subtraction",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Length",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Length",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Money",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Money",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Multiplication and Division",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Multiplication and Division",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Numbers up to 100",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Numbers up to 100",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Picture Graphs",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Picture Graphs",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Time",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Time",
+      "subject": "mathematics",
+      "level_number": 1,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "2D Shapes and Patterns",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "2D Shapes and Patterns",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "3D Shapes",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "3D Shapes",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Addition and Subtraction",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Addition and Subtraction",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Fractions",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Fractions",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Length, Mass and Volume",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Length, Mass and Volume",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Money",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Money",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Multiplication and Division",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Multiplication and Division",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Numbers up to 1,000",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Numbers up to 1,000",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Picture Graphs with Scales",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Picture Graphs with Scales",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Time",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Time",
+      "subject": "mathematics",
+      "level_number": 2,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Addition and Subtraction",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Addition and Subtraction",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Angles",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Angles",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Area and Perimeter",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Area and Perimeter",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Bar Graphs",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Bar Graphs",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Fractions",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Fractions",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Length, Mass and Volume",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Length, Mass and Volume",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Money",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Money",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Multiplication and Division",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Multiplication and Division",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Numbers up to 10,000",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Numbers up to 10,000",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Perpendicular and Parallel Lines",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Perpendicular and Parallel Lines",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Time",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Time",
+      "subject": "mathematics",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Cycles in Plants and Animals (Life Cycles)",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Cycles in Plants and Animals (Life Cycles)",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 12,
+      "question_count": 12,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "diversity of living and non-living things",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "diversity of living and non-living things",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 7,
+      "question_count": 7,
+      "question_purpose": "quick_check",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Diversity of Materials",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Diversity of Materials",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Interaction of Forces (Magnets)",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Interaction of Forces (Magnets)",
+      "subject": "science",
+      "level_number": 3,
+      "gradable_count": 14,
+      "question_count": 14,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Angles",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Angles",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Area and Perimeter",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Area and Perimeter",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Decimals",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Decimals",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Factors and Multiples",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Factors and Multiples",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Four Operations",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Four Operations",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Fractions",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Fractions",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Line Symmetry",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Line Symmetry",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Nets of 3D Solids",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Nets of 3D Solids",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Numbers up to 100,000",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Numbers up to 100,000",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Rectangle and Square",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Rectangle and Square",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Tables, Line Graphs and Pie Charts",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Tables, Line Graphs and Pie Charts",
+      "subject": "mathematics",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Cycles in Matter and Water (Matter)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Cycles in Matter and Water (Matter)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Energy Forms and Uses (Heat)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Energy Forms and Uses (Heat)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 14,
+      "question_count": 14,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Energy Forms and Uses (Light)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Energy Forms and Uses (Light)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Human System (Digestive System)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Human System (Digestive System)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 12,
+      "question_count": 12,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Plant System (Plant Parts and Functions)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Plant System (Plant Parts and Functions)",
+      "subject": "science",
+      "level_number": 4,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Angle Relationships",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Angle Relationships",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Area of Triangles and Composite Figures",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Area of Triangles and Composite Figures",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Decimal Operations and Unit Conversion",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Decimal Operations and Unit Conversion",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Four Operations and Order of Operations",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Four Operations and Order of Operations",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Fractions and Division",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Fractions and Division",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Numbers up to 10 Million",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Numbers up to 10 Million",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Operations with Fractions",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Operations with Fractions",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Parallelograms, Rhombuses and Trapeziums",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Parallelograms, Rhombuses and Trapeziums",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Percentage and Everyday Applications",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Percentage and Everyday Applications",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Rate",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Rate",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Triangle Properties and Unknown Angles",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Triangle Properties and Unknown Angles",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Volume of Cubes and Cuboids",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Volume of Cubes and Cuboids",
+      "subject": "mathematics",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Cycles in Matter and Water (Water)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Cycles in Matter and Water (Water)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 14,
+      "question_count": 14,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Cycles in Plants and Animals (Reproduction)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Cycles in Plants and Animals (Reproduction)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 12,
+      "question_count": 12,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Electrical System",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Electrical System",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 16,
+      "question_count": 16,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Human System (Respiratory and Circulatory Systems)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Human System (Respiratory and Circulatory Systems)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 14,
+      "question_count": 14,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Plant System (Respiratory and Circulatory Systems)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Plant System (Respiratory and Circulatory Systems)",
+      "subject": "science",
+      "level_number": 5,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Algebraic Expressions",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Algebraic Expressions",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Area and Circumference of Circles",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Area and Circumference of Circles",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Average of a Set of Data",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Average of a Set of Data",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Cuboid Volume, Missing Dimensions and Roots",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Cuboid Volume, Missing Dimensions and Roots",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Division of Fractions",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Division of Fractions",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Ratios and Equivalent Ratios",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Ratios and Equivalent Ratios",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Reverse Percentages and Percentage Change",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Reverse Percentages and Percentage Change",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Semicircles, Quarter Circles and Composite Figures",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Semicircles, Quarter Circles and Composite Figures",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Sharing in a Ratio and Fraction Relationships",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Sharing in a Ratio and Fraction Relationships",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Substitution and Linear Equations",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Substitution and Linear Equations",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Unknown Angles in Special Quadrilaterals",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Unknown Angles in Special Quadrilaterals",
+      "subject": "mathematics",
+      "level_number": 6,
+      "gradable_count": 10,
+      "question_count": 10,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 1
+    },
+    {
+      "topic": "Energy Conversion",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Energy Conversion",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 14,
+      "question_count": 14,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Energy Forms and Uses (Photosynthesis)",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Energy Forms and Uses (Photosynthesis)",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 12,
+      "question_count": 12,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Interaction of Forces (Frictional Force, Gravitational Force, Elastic Spring Force)",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Interaction of Forces (Frictional Force, Gravitational Force, Elastic Spring Force)",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 14,
+      "question_count": 14,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    },
+    {
+      "topic": "Interactions within the Environment",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 2,
+      "question_count": 2,
+      "question_purpose": "boss_battle",
+      "difficulty_three_count": 2
+    },
+    {
+      "topic": "Interactions within the Environment",
+      "subject": "science",
+      "level_number": 6,
+      "gradable_count": 18,
+      "question_count": 18,
+      "question_purpose": "quiz",
+      "difficulty_three_count": 0
+    }
+  ],
+  "new_session_table_absent": true,
+  "new_question_table_absent": true
+}

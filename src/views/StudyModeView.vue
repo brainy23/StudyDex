@@ -2,11 +2,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
-import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
-const flow = computed(() => route.query.flow === 'quiz' ? 'quiz' : 'study')
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
@@ -24,10 +23,8 @@ async function load() {
     profile.value = student
     catalogue.value = { subjects: [], topics: [] }
     if (student.school_level_id) {
-      try {
-        const data = await getStudyCatalogue(student.school_level_id)
-        if (active && request === requestId) catalogue.value = data
-      } catch (cause) { if (flow.value !== 'quiz') throw cause }
+      const data = await getStudentStudyCatalogue(student)
+      if (active && request === requestId) catalogue.value = data
     }
   } catch (cause) { if (active && request === requestId) error.value = studyErrorMessage(cause, 'Your subjects') }
   finally { if (active && request === requestId) loading.value = false }
