@@ -16,6 +16,15 @@ import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
 import StarterView from '../views/starterSelectionView.vue'
 
+import AdminHome from '@/views/admin/AdminHome.vue'
+import AdminUsers from '@/views/admin/AdminUsers.vue'
+import AdminEducation from '@/views/admin/AdminEducation.vue'
+import AdminQuiz from '@/views/admin/AdminQuiz.vue'
+import AdminAddQuiz from '@/views/admin/AdminAddQuiz.vue'
+import AdminQuizDetails from '@/views/admin/AdminQuizDetails.vue'
+import AdminAddDeck from '@/views/admin/AdminAddDeck.vue'
+import AdminEducationDetails from '@/views/admin/AdminEducationDetails.vue'
+
 import { getSupabase } from '../lib/supabase'
 import { selectionRoutes } from './selectionRoutes'
 
@@ -153,6 +162,56 @@ export function createAppRouter(
             },
           ]
         : []),
+
+      // Admin routes
+      {
+        path: '/admin-home',
+        name: 'adminHome',
+        component: AdminHome,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-users',
+        name: 'adminUsers',
+        component: AdminUsers,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-education',
+        name: 'adminEducation',
+        component: AdminEducation,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-quiz',
+        name: 'adminQuiz',
+        component: AdminQuiz,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-addquiz',
+        name: 'adminAddQuiz',
+        component: AdminAddQuiz,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-quiz/:id',
+        name: 'adminQuizDetails',
+        component: AdminQuizDetails,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-adddeck',
+        name: 'adminAddDeck',
+        component: AdminAddDeck,
+        meta: { requiresAuth: true },
+      },
+      {
+        path: '/admin-education/:id',
+        name: 'adminEducationDetails',
+        component: AdminEducationDetails,
+        meta: { requiresAuth: true },
+      },
     ],
   })
 
