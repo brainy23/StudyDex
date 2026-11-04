@@ -200,9 +200,6 @@ onMounted(() => {
       </button>
     </div>
 
-    <a href="/signup" class="button">
-      Sign up now
-    </a>
   </section>
 
   <section class="footer-strip"></section>
