@@ -1681,18 +1681,12 @@ watch(
       <span class="sd-nav-label">To-Do List</span>
     </button>
 
-    <!-- BAG -->
-    <!-- BAG WITH UNOPENED PACK COUNT -->
+    <!-- POKEDEX -->
+    <!-- Available to view when buddy sleeps -->
     <button
       type="button"
       class="sd-nav-button"
-      :aria-label="
-        unopenedPackCount > 0
-          ? `Bag, ${unopenedPackCount} unopened packs`
-          : 'Bag, no unopened packs'
-      "
-
-      :disabled="buddySleeping"
+      @click="router.push('/collection')"
     >
       <span class="sd-icon-tile sd-icon-bag">
         <svg viewBox="0 0 32 32" aria-hidden="true">
@@ -1720,20 +1714,9 @@ watch(
 
           <path d="M16 13v4" />
         </svg>
-
-        <Transition name="pack-badge">
-          <span
-            v-if="unopenedPackCount > 0"
-            :key="unopenedPackLabel"
-            class="sd-pack-badge"
-            aria-hidden="true"
-          >
-            {{ unopenedPackLabel }}
-          </span>
-        </Transition>
       </span>
 
-      <span class="sd-nav-label">Bag</span>
+      <span class="sd-nav-label">PokeDex</span>
     </button>
 
   </nav>
