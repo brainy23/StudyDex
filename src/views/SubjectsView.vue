@@ -6,6 +6,7 @@ import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studySe
 import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import '../assets/selection-pages.css'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 const route = useRoute()
 const router = useRouter()
 const flow = computed(() => route.query.flow === 'quiz' ? 'quiz' : 'study')
@@ -69,5 +70,6 @@ function selectSubject(item) {
     </button>
   </div>
   <p v-else class="sd-empty">No subjects are available for your school level yet.</p>
+  <StudydexBubbleNav :current="flow"/>
 </main>
 </template>
