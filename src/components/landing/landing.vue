@@ -41,6 +41,7 @@ const clouds = [
       <h3>Learn. Evolve. Grow.</h3>
       <ProfileSummary />
       <RouterLink to="/home" class="enter-btn">Start</RouterLink>
+      <RouterLink to="/characterdesign" class="enter-btn">Start your journey</RouterLink>
     </div>
   </div>
 </template>

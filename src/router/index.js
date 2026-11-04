@@ -4,6 +4,8 @@ import HomeView from '../views/HomeView2.vue'
 import Pokebuddy from '../components/pokebuddy/PokeBuddy.vue'
 import Landing from '../components/landing/landing.vue'
 import Landinginfo from '../components/landing-info/landing-info.vue'
+import Characterdesign from '../components/characterdesign/characterdesign.vue'
+import Tutorialguide from '../components/tutorialguide/tutorialguide.vue'
 
 import RegisterView from '../views/RegisterView.vue'
 import LoginView from '../views/LoginView.vue'
@@ -28,7 +30,6 @@ export function createAppRouter(
     },
   }))
 
-  // Reuse the starter route if selectionRoutes already defines it.
   const hasStarterRoute = selectionRoutes.some(
     route => route.path === '/starter' || route.name === 'starter',
   )
@@ -64,6 +65,16 @@ export function createAppRouter(
         name: 'landing',
         component: Landing,
         meta: { requiresAuth: true },
+      },
+      {
+        path: '/characterdesign',
+        name: 'characterdesign',
+        component: Characterdesign,
+      },
+      {
+        path: '/tutorialguide',
+        name: 'tutorialguide',
+        component: Tutorialguide,
       },
       {
         path: '/home',
@@ -137,7 +148,7 @@ export function createAppRouter(
   })
 
   router.beforeEach(async to => {
-    // Preserve links that previously opened learning through study-decks.
+    // Support older study-deck links to the learning page.
     if (to.name === 'study-decks' && to.query.mode === 'learn') {
       const query = { ...to.query }
       delete query.mode
@@ -149,7 +160,7 @@ export function createAppRouter(
       }
     }
 
-    // Preserve old quiz and boss-battle links.
+    // Support older study-deck links to quizzes and boss battles.
     if (
       to.name === 'study-decks' &&
       ['quiz', 'boss_battle'].includes(to.query.mode)
@@ -178,7 +189,7 @@ export function createAppRouter(
 
       if (!error && data.session) return true
     } catch {
-      // Redirect to login when the auth client is unavailable.
+      // Protected pages require a valid session.
     }
 
     return { name: 'login' }

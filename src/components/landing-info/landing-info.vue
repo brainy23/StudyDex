@@ -1,326 +1,380 @@
 <script setup>
-const features = [
-  { icon: '/assets/trainer_f2_face.png', title: 'Get a buddy',          text: 'Pick a trainer and open a starter pack to meet your Pokémon buddy.' },
-  { icon: '/assets/study_deck_book.png', title: 'Study in short blocks', text: 'Use the 25-minute timer and flashcards made for your year.' },
-  { icon: '/assets/quiz_buddy.png',      title: 'Take quizzes',          text: 'Answer syllabus questions. Score well to earn XP and rewards.' },
-  { icon: '/assets/pack_gen1.png',       title: 'Level up',              text: 'Open Poképacks, collect Pokémon and watch your buddy evolve.' },
-  { icon: '/assets/clock_evening.png',   title: 'Take breaks',           text: 'Only 4 sessions a day count. After that, go rest and play!' },
-  { icon: '/assets/xp_bar_dark.png',     title: 'Track progress',        text: 'See your study time and quiz scores. Parents can check in too.' },
-]
+import { ref, onMounted } from 'vue'
+import { Carousel } from 'bootstrap'
+import axios from 'axios'
+
+// pokemon on the right side of hero
+const heroPokemon = ref('')
+
+async function getHeroPokemon() {
+  try {
+    const response = await axios.get(`${import.meta.env.VITE_POKE_API_URL}/pokemon/pikachu/`)
+    heroPokemon.value = response.data.sprites.other['official-artwork'].front_default
+  } catch (error) {
+    console.error('Unable to load Pokémon:', error.message)
+  }
+}
+
+// Screenshots used throughout the landing page
+const screenshots = ref({
+  home: [
+    '/landing/home_1.png',
+    '/landing/home_2.png',
+    '/landing/home_3.png'
+  ],
+
+  packs: [
+    '/landing/packs_1.png',
+    '/landing/packs_2.png',
+    '/landing/packs_3.png'
+  ],
+
+  timer: [
+    '/landing/timer_1.png',
+    '/landing/timer_2.png',
+    '/landing/timer_3.png'
+  ],
+
+  deck: [
+    '/landing/deck_1.png',
+    '/landing/deck_2.png',
+    '/landing/deck_3.png'
+  ],
+
+  battle: [
+    '/landing/battle_1.png',
+    '/landing/battle_2.png',
+    '/landing/battle_3.png'
+  ],
+
+  quiz: [
+    '/landing/quiz_1.png',
+    '/landing/quiz_2.png',
+    '/landing/quiz_3.png'
+  ],
+
+  dashboard: [
+    '/landing/dashboard_1.png',
+    '/landing/dashboard_2.png',
+    '/landing/dashboard_3.png'
+  ]
+})
+
+function startCarousels() {
+  try {
+    const carousels = document.querySelectorAll('.carousel')
+
+    carousels.forEach((carousel) => {
+      new Carousel(carousel, {
+        interval: 2000,
+        ride: 'carousel'
+      })
+    })
+  } catch (error) {
+    console.error('Unable to start carousels:', error)
+  }
+}
+
+onMounted(() => {
+  startCarousels()
+  getHeroPokemon()
+})
 </script>
 
 <template>
-  <div class="landing-page">
-    <header class="landing-header">
-      <nav class="landing-nav" aria-label="Main navigation">
-        <a href="#top" class="nav-brand">
-          <img src="/backgrounds/studydex_logo.png" alt="StudyDex" class="nav-logo" />
-        </a>
+  <nav class="nav">
+    <img src="/backgrounds/studydex_logo.png" alt="StudyDex" class="logo" />
+    <div class="links">
+      <a href="/tutorial">Tutorial</a>
+      <a href="/login" class="btn outline">Log in</a>
+    </div>
+  </nav>
 
-        <div class="nav-links">
-          <a href="/tutorial">Tutorial</a>
-          <a href="/help">Need help?</a>
+  <section class="hero">
+    <div>
+      <p class="small">The study app for primary school kids</p>
+      <h1>Gamify your learning experience with <span class="mark">Pokémon!</span></h1>
+      <p>Focus in short study sessions and grow your Pokémon buddy along the way.</p>
+      <a href="/signup" class="btn yellow">Sign up now</a>
+    </div>
+    <img v-if="heroPokemon"
+    :src="heroPokemon" alt="Pikachu" class="hero-img" />
+  </section>
+
+  <section class="info">
+    <h2>What can you do on StudyDex?</h2>
+    <div class="cards">
+      <div class="card">
+        <img src="/assets/trainer_f2_face.png" alt="" />
+        <h3>Get a buddy</h3>
+        <p>Pick a trainer and meet your Pokémon buddy.</p>
+      </div>
+      <div class="card">
+        <img src="/assets/study_deck_book.png" alt="" />
+        <h3>Study in short blocks</h3>
+        <p>25-minute timer and flashcards for your year.</p>
+      </div>
+      <div class="card">
+        <img src="/assets/quiz_buddy.png" alt="" />
+        <h3>Take quizzes</h3>
+        <p>Score well to earn XP and rewards.</p>
+      </div>
+      <div class="card">
+        <img src="/assets/pack_gen1.png" alt="" />
+        <h3>Level up</h3>
+        <p>Open Poképacks and evolve your buddy.</p>
+      </div>
+      <div class="card">
+        <img src="/assets/clock_evening.png" alt="" />
+        <h3>Take breaks</h3>
+        <p>Only 4 sessions a day count. Then go play!</p>
+      </div>
+      <div class="card">
+        <img src="/assets/xp_bar_dark.png" alt="" />
+        <h3>Track progress</h3>
+        <p>See your scores. Parents can check in too.</p>
+      </div>
+    </div>
+  </section>
+
+
+  <section class="detail">
+    <div id="home" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.home" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
         </div>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#home" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#home" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Home screen</p>
+      <h2>Your buddy lives here</h2>
+      <p>Your home screen changes with the real time of day: a bright sky in the morning and a sunset in the evening. Your Pokémon buddy stands beside you, with its level and XP bar, and you can start a study session, open your Study Deck or check your Poképacks from here.</p>
+      <ul>
+        <li>Sky follows the real sunrise and sunset</li>
+        <li>See your buddy, level and XP at a glance</li>
+        <li>2 of 4 study sessions done? It shows you</li>
+      </ul>
+    </div>
+  </section>
 
-        <div class="nav-buttons">
-          <RouterLink to="/login" class="landing-button button-outline">Log in</RouterLink>
-          <RouterLink to="/signup" class="landing-button button-yellow">Sign up</RouterLink>
+  <section class="detail flip">
+    <div id="packs" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.packs" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
         </div>
-      </nav>
-    </header>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#packs" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#packs" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Poképacks</p>
+      <h2>Open packs, collect Pokémon!</h2>
+      <p>Earn Poképacks by finishing study sessions and quizzes. Open one to unlock a new Pokémon, bonus XP or other surprises. Packs come from different generations.</p>
+      <ul>
+        <li>Earned by studying, never bought</li>
+        <li>New Pokémon to collect</li>
+        <li>Packs from every generation</li>
+      </ul>
+    </div>
+  </section>
 
-    <main>
-      <section id="top" class="landing-hero" aria-labelledby="hero-heading">
-        <img src="/backgrounds/morning_homepage.png" alt="" class="hero-background" />
-        <div class="hero-text">
-          <h1 id="hero-heading">Study a little, play a lot!</h1>
-          <p>Focus in short study sessions and grow your Pokémon buddy along the way.</p>
+  <section class="detail">
+    <div id="timer" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.timer" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
         </div>
-      </section>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#timer" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#timer" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Study timer</p>
+      <h2>Focus for 25 minutes</h2>
+      <p>Start a study block and the timer counts down 25 minutes. Finish it to earn XP for your buddy. You can do up to 4 sessions a day. After that your buddy gets dizzy and reminds you to take a break. Study too late at night and your buddy falls asleep.</p>
+      <ul>
+        <li>25-minute focus blocks</li>
+        <li>Only the first 4 sessions a day earn XP</li>
+        <li>No XP late at night, rest instead</li>
+      </ul>
+    </div>
+  </section>
 
-      <section class="info" aria-labelledby="features-heading">
-        <div class="info-content">
-          <h2 id="features-heading">What can you do on StudyDex?</h2>
-
-          <div class="features">
-            <article v-for="f in features" :key="f.title" class="feature">
-              <img :src="f.icon" alt="" class="feature-icon" />
-              <h3>{{ f.title }}</h3>
-              <p>{{ f.text }}</p>
-            </article>
-          </div>
-
-          <RouterLink to="/signup" class="landing-button button-yellow signup-button">
-            Start your journey
-          </RouterLink>
+  <section class="detail flip">
+    <div id="deck" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.deck" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
         </div>
-      </section>
-    </main>
-  </div>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#deck" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#deck" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Study Deck</p>
+      <h2>Flashcards for your year</h2>
+      <p>Flip through flashcards made for your year of study, starting with Science. Tap a card to see the answer and move on when you are ready.</p>
+      <ul>
+        <li>Topics follow the primary school syllabus</li>
+        <li>Pick your year and subject</li>
+        <li>Short cards that are easy to revise</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="detail">
+    <div id="battle" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.battle" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
+        </div>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#battle" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#battle" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Boss battle</p>
+      <h2>Prove what you learned</h2>
+      <p>Rushing through your flashcards just to finish? A boss appears! Answer its questions correctly to win. If you get them wrong, your buddy loses some XP, so it pays to really learn.</p>
+      <ul>
+        <li>Questions from the cards you just studied</li>
+        <li>Win to keep your XP</li>
+        <li>Lose and your buddy loses XP</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="detail flip">
+    <div id="quiz" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.quiz" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
+        </div>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#quiz" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#quiz" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Quizzes</p>
+      <h2>Test yourself</h2>
+      <p>Quizzes use questions from the latest syllabus and past year papers. The better your score, the bigger your reward.</p>
+      <ul>
+        <li>Based on real exam questions</li>
+        <li>Rewards depend on your score</li>
+        <li>See which answers you got wrong</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="detail">
+    <div id="dashboard" class="carousel slide">
+      <div class="carousel-inner">
+        <div v-for="(src, i) in screenshots.dashboard" :key="src" :class="['carousel-item', { active: i === 0 }]">
+          <img :src="src" class="screen" alt="" />
+        </div>
+      </div>
+      <button class="carousel-control-prev" data-bs-target="#dashboard" data-bs-slide="prev"><span class="carousel-control-prev-icon"></span></button>
+      <button class="carousel-control-next" data-bs-target="#dashboard" data-bs-slide="next"><span class="carousel-control-next-icon"></span></button>
+    </div>
+    <div>
+      <p class="small">Progress dashboard</p>
+      <h2>See how you are growing</h2>
+      <p>Your dashboard shows how many study sessions you did, your quiz scores and the topics that need more practice. Parents can use it to see how their children is doing.</p>
+      <ul>
+        <li>Charts of your study week</li>
+        <li>Quiz scores by topic</li>
+        <li>Parents & Teachers can check in too</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="ending">
+  </section>
 </template>
 
 <style scoped>
-.landing-page {
-  min-height: 100vh;
-  min-height: 100svh;
-  background: #a9dff7;
-  color: #17324d;
-  font-family: 'Fredoka', sans-serif;
-  line-height: 1.5;
-}
-
-.landing-header {
+/* nav */
+.nav {
   position: sticky;
   top: 0;
   z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 24px;
   background: #1f3a93;
   border-bottom: 4px solid #ffd000;
 }
+.logo { height: 40px; }
+.links { display: flex; align-items: center; gap: 16px; }
+.links a { color: white; font-weight: 700; text-decoration: none; }
 
-.landing-nav {
+/* buttons */
+.btn { display: inline-block; padding: 10px 20px; border-radius: 12px; font-weight: 800; text-decoration: none; }
+.yellow  { background: #ffd000; color: #2b2100 !important; }
+.outline { border: 2px solid white; }
+
+/* hero */
+.hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: 1fr 1fr;
   align-items: center;
-  gap: 16px;
-  width: 100%; 
-  margin-inline: auto;
-  padding: 12px 24px; /* adjust the padding later if want remnove the tutorial sign up then make them go to the sides*/
+  gap: 40px;
+  min-height: 85vh;
+  padding: 40px 8%;
+  background: #fffaf0;
+  color: #17324d;
 }
+.small { color: #e08a00; font-weight: 800; text-transform: uppercase; }
+h1 { font-size: 60px; margin: 0 0 16px; color: #1f3a93; }
+.mark { background: linear-gradient(transparent 60%, #ffd000 60%); }
+.hero p { font-size: 18px; margin-bottom: 24px; }
+.hero-img { width: 100%; max-width: 460px; }
 
-.nav-brand {
-  justify-self: start;
-}
-
-.nav-logo {
-  display: block;
-  width: auto;
-  height: 40px;
-  max-width: 100%;
-  object-fit: contain;
-
-}
-
-.nav-links {
-  display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.nav-links a {
-  display: inline-flex;
-  align-items: center;
-  min-height: 44px;
-  padding: 10px 12px;
-  color: #ffffff;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.nav-links a:hover {
-  color: #ffd000;
-}
-
-.nav-buttons {
-  display: flex;
-  justify-self: end;
-  gap: 10px;
-}
-
-.landing-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 44px;
-  padding: 10px 18px;
-  border: 2px solid transparent;
-  border-radius: 12px;
-  font-weight: 800;
-  line-height: 1.5;
-  text-align: center;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.button-yellow {
-  background: #ffd000;
-  color: #2b2100;
-  border-color: #ffd000;
-}
-
-.button-yellow:hover {
-  background: #ffe066;
-  border-color: #ffe066;
-}
-
-.button-outline {
-  color: #ffffff;
-  border-color: #ffffff;
-}
-
-.button-outline:hover {
-  background: #ffffff;
-  color: #1f3a93;
-}
-
-.landing-page a:focus-visible {
-  outline: 3px solid currentColor;
-  outline-offset: 4px;
-}
-
-.landing-hero {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-height: clamp(320px, 52vh, 512px);
-  min-height: clamp(320px, 52svh, 512px);
-  padding: clamp(24px, 5vw, 48px);
-  overflow: hidden;
-  scroll-margin-top: 80px;
-}
-
-.hero-background {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-}
-
-.hero-text {
-  position: relative;
-  width: 100%;
-  max-width: 640px;
-  padding: clamp(24px, 4vw, 40px);
-  border: 1px solid rgba(31, 58, 147, 0.15);
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 8px 24px rgba(23, 50, 77, 0.12);
-  text-align: center;
-}
-
-.hero-text h1 {
-  margin: 0 0 16px;
-  font-size: clamp(30px, 5vw, 48px);
-  font-weight: 700;
-  line-height: 1.15;
-  text-wrap: balance;
-}
-
-.hero-text p {
-  margin: 0;
-  font-size: clamp(16px, 2vw, 18px);
-  line-height: 1.6;
-}
-
+/* info */
 .info {
-  padding: clamp(32px, 5vw, 56px) 24px;
+  padding: 60px 24px;
+  background: #a9dff7;
   text-align: center;
 }
-
-.info-content {
-  max-width: 1104px;
-  margin-inline: auto;
-}
-
-.info h2 {
-  margin: 0 0 28px;
-  font-size: clamp(26px, 3.5vw, 34px);
-  font-weight: 700;
-  line-height: 1.25;
-  text-wrap: balance;
-}
-
-.features {
+.cards {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
 }
+.card { padding: 20px; border-radius: 20px; background: white; }
+.card img { height: 60px; max-width: 100%; object-fit: contain; image-rendering: pixelated; }
 
-.feature {
-  min-width: 0;
-  padding: 24px;
-  border-radius: 20px;
-  background: #ffffff;
-  overflow-wrap: break-word;
+/* walkthrough */
+.detail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 48px;
+  padding: 60px 8%;
+  color: #17324d;
 }
-
-.feature-icon {
-  display: block;
-  width: 96px;
-  height: 64px;
-  max-width: 100%;
-  margin-inline: auto;
-  object-fit: contain;
-  image-rendering: pixelated;
+.flip { background: #fffaf0; }   /* every second section gets the cream colour */
+.flip .carousel { order: 2; }    /* and its pictures go on the right */
+.screen {
+  width: 100%;
+  aspect-ratio: 16 / 10;   /* every picture the same size, so nothing jumps */
+  object-fit: cover;
+  border-radius: 16px;
+  border: 4px solid #1f3a93;
+  box-shadow: 0 10px 24px rgba(23, 50, 77, 0.2);
 }
+.detail h2 { font-size: 34px; margin: 0 0 12px; color: #1f3a93; }
+.detail p { font-size: 17px; line-height: 1.6; }
+.detail li { margin-bottom: 8px; font-weight: 700; }
 
-.feature h3 {
-  margin: 16px 0 8px;
-  font-size: 21px;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.feature p {
-  margin: 0;
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-.signup-button {
-  margin-top: 28px;
-  padding: 12px 28px;
-  border-color: #1f3a93;
-  font-size: 20px;
-}
-
-@media (max-width: 56rem) {
-  .features {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 48rem) {
-  .landing-header {
-    position: static;
-  }
-
-  .landing-nav {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px 16px;
-  }
-
-  .nav-links {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .nav-buttons {
-    grid-column: 2;
-    grid-row: 1;
-  }
-}
-
-@media (max-width: 30rem) {
-  .landing-nav {
-    display: flex;
-    flex-direction: column;
-    padding-inline: 16px;
-  }
-
-  .landing-hero {
-    padding: 24px 16px;
-  }
-
-  .info {
-    padding-inline: 16px;
-  }
-
-  .features {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 16px;
-  }
-}
+/* ending */
+.ending { padding: 60px 24px; text-align: center; background: #ffd000; color: #1f3a93; }
+.ending .btn { background: white; }
 </style>
