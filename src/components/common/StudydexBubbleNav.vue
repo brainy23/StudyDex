@@ -5,7 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 const props = defineProps({
   current: { type: String, default: '' },
   sleeping: { type: Boolean, default: false },
-  routes: { type: Object, default: () => ({ town: '/home', study: '/study-decks', quiz: '/quiz', bag: '/trainer' }) },
+  routes: { type: Object, default: () => ({ town: '/home', study: '/study-decks', quiz: '/quiz', pokedex: '/collection' }) },
 })
 const router = useRouter()
 const route = useRoute()
@@ -19,10 +19,10 @@ const items = [
   { id: 'study', label: 'Study', x: .3827, y: -.9239, color: '#8df1dc' },
   { id: 'quiz', label: 'Quiz', x: .7071, y: -.7071, color: '#ffcb9b' },
   { id: 'todos', label: 'To-Do', x: .9239, y: -.3827, color: '#acedd9' },
-  { id: 'bag', label: 'Bag', x: 1, y: 0, color: '#d8bdff' },
+  { id: 'pokedex', label: 'PokeDex', x: 1, y: 0, color: '#d8bdff' },
 ]
 const selected = computed(() => props.current || items.find(item => props.routes[item.id] === route.path)?.id)
-const unavailable = item => selected.value === item.id || (props.sleeping && ['study', 'quiz', 'bag'].includes(item.id))
+const unavailable = item => selected.value === item.id || (props.sleeping && ['study', 'quiz'].includes(item.id))
 function close(restoreFocus = false) {
   opened.value = false
   if (restoreFocus) toggle.value?.focus()
@@ -99,7 +99,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
         :style="{ '--x': item.x, '--y': item.y, '--tint': item.color, '--delay': `${index * 35}ms` }"
         :disabled="unavailable(item) || busy" :tabindex="opened ? 0 : -1"
         :aria-hidden="!opened" :aria-current="selected === item.id ? 'page' : undefined"
-        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz','bag'].includes(item.id) ? ', buddy sleeping' : ''}`"
+        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz'].includes(item.id) ? ', buddy sleeping' : ''}`"
         @click="navigate(item)">
 
         <span v-if="item.id === 'town'" class="sd-pokeball" aria-hidden="true"></span>

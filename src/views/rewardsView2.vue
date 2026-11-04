@@ -368,6 +368,9 @@ function backToPacks() {
 
 <template>
   <main :class="{ browsing: stage === 'browse' }" :style="theme" @pointermove="onMove">
+    <div>
+        <button onclick="history.back()" class="back">Back</button> 
+    </div>
     <div v-if="stage !== 'browse'" class="backdrop" :class="{ on: flipped }"></div>
 
     <div v-if="stage === 'browse'" class="browse">
@@ -556,6 +559,25 @@ function backToPacks() {
     .openbutton:active{
         transform: translateY(5px);
         box-shadow: 0 1px 0 gray;
+    }
+
+    .back{
+        font-family: inherit;
+        font-size: 24px;
+        padding: 8px 20px;
+        border: 3px solid rgb(200, 160, 0);
+        border-radius: 12px;
+        background-color: rgb(255, 215, 37);
+        color: rgb(100, 45, 0);
+        box-shadow: 0 6px 0 rgb(200, 160, 0);
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .back:hover{
+        cursor: pointer;
+        border: 3px solid yellow;
+        box-shadow: 0 6px 0 rgb(200, 160, 0), 0 0 20px rgba(255, 230, 0, 0.8);
     }
 
     .leaver{

@@ -14,6 +14,7 @@ import RewardsView from '../views/rewardsView2.vue'
 import QuizView from '../views/quizView.vue'
 import StudyView from '../views/studyView.vue'
 import StarterView from '../views/starterSelectionView.vue'
+import CollectionView from '../views/collectionView.vue'
 
 import AdminHome from '@/views/admin/AdminHome.vue'
 import AdminUsers from '@/views/admin/AdminUsers.vue'
@@ -125,6 +126,11 @@ export function createAppRouter(
         path: '/rewards',
         name: 'rewards',
         component: RewardsView,
+      },
+      {
+        path: '/collection',
+        name: 'collection',
+        component: CollectionView,
       },
       {
         path: '/study-decks',
