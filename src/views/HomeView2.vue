@@ -17,6 +17,8 @@ import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
+import playSound from '../../scripts/soundEffect'
+
 const router = useRouter()
 
 
@@ -781,6 +783,7 @@ function shakePokeball() {
   if (!buddySleeping.value || !pokeball.value) return
 
   ballShaking.value = true
+  playSound('metalClang')
 }
 
 const townBuddyImage = computed(() => {
@@ -1565,7 +1568,7 @@ watch(
             }"
 
             @click="selectBuilding(building)"
-            @mouseenter="hoveredBuilding = building.id"
+            @mouseenter="hoveredBuilding = building.id; playSound('pop')"
             @mouseleave="hoveredBuilding = null"
           >
 
