@@ -7,6 +7,7 @@ import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/selection-pages.css'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 const route = useRoute()
 const router = useRouter()
 const pokemonTransition = usePokemonTransition()
@@ -99,5 +100,6 @@ function selectSubject(item) {
     </button>
   </div>
   <p v-else class="sd-empty">No subjects are available for your school level yet.</p>
+  <StudydexBubbleNav :current="flow"/>
 </main>
 </template>
