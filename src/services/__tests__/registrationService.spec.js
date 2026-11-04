@@ -8,7 +8,6 @@ const valid = {
   email: ' learner@example.edu.sg ',
   displayName: ' Ash ',
   schoolLevel: 'p3',
-  avatarChoice: 'male',
   password: 'Password123 ',
   confirmPassword: 'Password123 ',
 }
@@ -23,7 +22,7 @@ describe('registration', () => {
       email: 'learner@example.edu.sg',
       password: 'Password123 ',
       options: {
-        data: { display_name: 'Ash', school_level_number: 3, avatar_choice: 'male' },
+        data: { display_name: 'Ash', school_level_number: 3 },
         emailRedirectTo: expect.stringMatching(/\/register$/),
       },
     })
@@ -42,14 +41,12 @@ describe('registration', () => {
     { displayName: '   ' },
     { displayName: 'a'.repeat(81) },
     { schoolLevel: 'p7' },
-    { avatarChoice: '' },
-    { avatarChoice: 'unsupported' },
     { password: 'abc123' },
     { confirmPassword: 'Password123' },
   ])('rejects invalid fields before contacting Supabase: %j', async (patch) => {
     const fields = { ...valid, ...patch }
     expect(validateRegistration(fields)).not.toBe('')
-    await expect(registerUser(fields)).rejects.toThrow()
+    await expect(registerUser(fields)).rejects.toThrow(/.+/)
     expect(signUp).not.toHaveBeenCalled()
   })
 
@@ -62,17 +59,8 @@ describe('registration', () => {
   })
 })
 
-it.each(['male', 'female', 'prefer_not_to_say'])(
-  'preserves the %s avatar choice in signup',
-  async (avatarChoice) => {
-    signUp.mockResolvedValue({ data: { user: { id: 'new-user' }, session: null }, error: null })
-    await registerUser({ ...valid, avatarChoice })
-    expect(signUp).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        options: expect.objectContaining({
-          data: expect.objectContaining({ avatar_choice: avatarChoice }),
-        }),
-      }),
-    )
-  },
-)
+it('does not submit a legacy/avatar value supplied by an old caller', async () => {
+  signUp.mockResolvedValue({ data: { user: { id: 'new-user' }, session: null }, error: null })
+  await registerUser({ ...valid, avatarChoice: 'male' })
+  expect(signUp.mock.calls[0][0].options.data).not.toHaveProperty('avatar_choice')
+})

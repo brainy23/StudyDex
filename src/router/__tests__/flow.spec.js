@@ -22,6 +22,15 @@ vi.mock('../../lib/supabase', () => ({
 vi.mock('../../services/profileService', () => ({
   getCurrentProfile: vi.fn(async () => structuredClone(studentProfile)),
 }))
+// These existing navigation/weather checks represent an already-onboarded user.
+// First-time and failed-status routing is covered in onboardingGuard/OnboardingFlow.
+vi.mock('../../services/onboardingService', async () => ({
+  ...(await vi.importActual('../../services/onboardingService')),
+  getOnboardingStatus:vi.fn(async () => ({ user_id:studentProfile.id, avatar_choice:studentProfile.avatar_choice,
+    school_level_id:studentProfile.school_level_id, avatar_confirmed:true, starter_claimed:true,
+    onboarding_complete:true, next_step:'town' })),
+  watchOnboardingAccount:() => () => {},
+}))
 // Use deterministic API responses; the weather flow still runs without network access.
 vi.mock('vue3-apexcharts', () => ({
   default: { name: 'VueApexCharts', template: '<div class="test-chart" />' },

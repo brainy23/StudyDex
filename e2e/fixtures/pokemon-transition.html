@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StudyDex transition preview</title>
+    <style>
+      body {
+        margin: 0;
+        background: #e9f1ef;
+        color: #17324d;
+        font: 18px system-ui;
+      }
+      main {
+        padding: 32px;
+        min-height: 120vh;
+      }
+      nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
+      nav button {
+        padding: 14px;
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="preview"></div>
+    <script type="module">
+      import { createApp, h, ref } from 'vue'
+      import PokemonTransition from '/src/components/common/PokemonTransition.vue'
+      import { createPokemonTransition } from '/src/composables/usePokemonTransition.js'
+
+      // Isolated preview only: no application routes, credentials or database calls.
+      const controller = createPokemonTransition({ loadingTimeoutMs: 5000 })
+      const outcome = ref('Choose a destination. Preview loading takes 2.5 seconds.')
+      const fixture = { hold: false, resolve: null, reject: null, controller }
+      window.transitionFixture = fixture
+      function start(destination) {
+        outcome.value = 'Loading'
+        controller
+          .run({
+            source: 'Town',
+            destination,
+            title: destination === 'Poké Arena' ? 'A Challenge Awaits!' : 'A new adventure awaits!',
+            description: `Get ready to explore ${destination}.`,
+            task: () =>
+              new Promise((resolve, reject) => {
+                fixture.resolve = resolve
+                fixture.reject = reject
+                if (!fixture.hold) setTimeout(resolve, 2500)
+              }),
+          })
+          .then(() => {
+            outcome.value = `${destination} ready`
+          })
+          .catch((error) => {
+            outcome.value = error.message
+          })
+      }
+      createApp({
+        setup: () => () =>
+          h('div', [
+            h('main', [
+              h('h1', 'Transition preview'),
+              h('p', 'Test-only preview. These buttons do not navigate or load real content.'),
+              h(
+                'nav',
+                ['Poké Arena', 'Poké Lab', 'Trainer House'].map((destination) =>
+                  h('button', { onClick: () => start(destination) }, destination),
+                ),
+              ),
+              h('p', { id: 'outcome' }, outcome.value),
+            ]),
+            h(PokemonTransition, { controller }),
+          ]),
+      }).mount('#preview')
+    </script>
+  </body>
+</html>

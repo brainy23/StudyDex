@@ -4,22 +4,27 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
-  getStudyCatalogue,
+  getStudentStudyCatalogue,
   getTopicFlashcards,
+  getSelectedStudyBuddy,
+  resolveStudyImage,
   studyErrorMessage,
 } from '../services/studyService'
 import TownBackground from '@/components/common/TownBackground.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import StudyImage from '../components/study/StudyImage.vue'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 
 const route = useRoute()
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
+const selectedBuddyRecord = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
@@ -56,10 +61,15 @@ async function initialise() {
     if (!alive || request !== generation) return
     profile.value = student
     topicCompletion.bindStudent(student.id, student.school_level_id)
-    if (student.school_level_id) {
-      const data = await getStudyCatalogue(student.school_level_id)
-      if (alive && request === generation) catalogue.value = data
-    }
+    const [data, selectedBuddy] = await Promise.all([
+      student.school_level_id
+        ? getStudentStudyCatalogue(student)
+        : Promise.resolve(null),
+      getSelectedStudyBuddy(student.id).catch(() => null),
+    ])
+    if (!alive || request !== generation) return
+    if (data) catalogue.value = data
+    selectedBuddyRecord.value = selectedBuddy
   } catch (cause) {
     if (alive && request === generation) error.value = cause
   } finally {
@@ -159,7 +169,6 @@ onUnmounted(() => {
 })
 
 
-// Mewtwo companion; change this ID to select another Pokémon.
 const POKE_API_BASE = 'https://pokeapi.co/api/v2'
 const pokemonCache = new Map()
 const reduceMotion = ref(false)
@@ -176,7 +185,12 @@ const spriteLoading = ref(false)
 const spriteError = ref('')
 const spriteIndex = ref(0)
 const spriteRetry = ref(0)
-const buddyApiKey = computed(() => '150')
+const buddyApiKey = computed(() => {
+  const name = selectedBuddyRecord.value?.pokemon?.name
+  return name
+    ? name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
+    : null
+})
 // PokemonBuddy owns presentation and evolution animations; the parent owns data.
 const pokemonBuddy = ref(null)
 const activePokemon = ref(null)
@@ -186,27 +200,34 @@ function updateStudyPokemon({ pokemon, changes }) {
 }
 const spriteChoices = computed(() => {
   const sprites = apiPokemon.value?.sprites
+  const savedSprite = resolveStudyImage(selectedBuddyRecord.value?.pokemon?.sprite_url)
   return [...new Set([
     !reduceMotion.value && sprites?.versions?.['generation-v']?.['black-white']?.animated?.front_default,
     sprites?.front_default,
     sprites?.other?.['official-artwork']?.front_default,
-  ].filter((url) => typeof url === 'string' && url.startsWith('https://')))]
+    savedSprite,
+  ].filter((url) => typeof url === 'string' && (url.startsWith('https://') || (url.startsWith('/') && !url.startsWith('//')))))]
 })
 const buddySprite = computed(() => spriteChoices.value[spriteIndex.value] || '')
-watch(apiPokemon, data => {
-  activePokemon.value = data ? {
-    id: data.id,
-    name: data.name.charAt(0).toUpperCase() + data.name.slice(1),
-    xp: 0,
+watch([apiPokemon, selectedBuddyRecord, buddySprite], ([data, record, sprite]) => {
+  if (!record?.pokemon) {
+    activePokemon.value = null
+    return
+  }
+  const savedSprite = resolveStudyImage(record.pokemon.sprite_url)
+  activePokemon.value = {
+    id: data?.id ?? null,
+    ownedId: record.id,
+    name: data?.name
+      ? data.name.charAt(0).toUpperCase() + data.name.slice(1)
+      : record.pokemon.name,
+    xp: record.xp ?? 0,
+    level: record.level ?? 1,
     evolution_stage: 0,
     isDefeated: false,
-    animated_img: buddySprite.value,
-    static_img: data.sprites.front_default || ''
-  } : null
-})
-// Preserve reduced-motion selection and retry the next image if one fails.
-watch(buddySprite, sprite => {
-  if (activePokemon.value) activePokemon.value.animated_img = sprite
+    animated_img: sprite || savedSprite,
+    static_img: data?.sprites?.front_default || savedSprite,
+  }
 })
 
 function nextBuddySprite() {
@@ -398,9 +419,31 @@ async function startSurpriseBoss() {
   bossNavigating.value = true
   pauseFocusTimer()
   try {
-    const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
-    if (failure) { encounter.status = 'cancelled'; writeEncounter(encounter); ratingMessage.value = 'Battle navigation was cancelled.' }
-  } catch { encounter.status = 'cancelled'; writeEncounter(encounter); ratingMessage.value = 'Could not open the boss battle.' }
+    await pokemonTransition.run({
+      source: 'Poké Lab',
+      destination: 'Boss Battle',
+      title: 'A Boss Appears!',
+      description: 'A legendary Pokémon is ready to test your knowledge.',
+      durationMs: 2500,
+      waitFor: `surprise-boss:${encounter.id}`,
+      task: async (signal) => {
+        const failure = await router.push({ name: 'surprise-boss', query: { encounter: encounter.id } })
+        if (signal.aborted) throw signal.reason
+        const target = router.currentRoute.value
+        if (failure || target.name !== 'surprise-boss' || target.query.encounter !== encounter.id) {
+          throw new Error('Battle navigation was cancelled. Please try again.')
+        }
+      },
+    })
+  } catch {
+    // Only cancel an encounter that failed to leave this flashcard view. After
+    // navigation, the battle owns the saved state and its error/retry interface.
+    if (alive) {
+      encounter.status = 'cancelled'
+      writeEncounter(encounter)
+      ratingMessage.value = 'Could not open the boss battle. Please try again.'
+    }
+  }
   finally { bossNavigating.value = false }
 }
 function restoreBossProgress() {
@@ -481,7 +524,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
     <header class="study-header">
       <nav class="study-navigation" aria-label="Study navigation">
         <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-        
+
         <button type="button" class="home-link" @click="returnToSelection">Topics</button>
       </nav>
       <div v-show="enteredLab" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
@@ -1119,6 +1162,10 @@ input:focus-visible {
 .lab-pokemon-buddy :deep(.buddy-image-container) {
   width: 100%; height: 100%; min-height: 0; align-items: flex-end;
 }
+/* Adjust the size of the buddy sprite within the chamber. */
+.lab-pokemon-buddy :deep(.buddy-image-container .buddy-sprite) {
+  width: auto; height: 72%; max-width: 60%;
+}
 /* Keep status text accessible without covering the chamber's artwork. */
 .lab-pokemon-buddy :deep(h2),
 .lab-pokemon-buddy :deep(h3),
@@ -1259,7 +1306,6 @@ input:focus-visible {
 /* Coordinates match the enlarged-board classroom artwork. */
 @media(min-width:1001px) {
   .inline-whiteboard { left:18.7%; top:8%; width:62.7%; height:50.5%; padding:clamp(16px,1.6cqw,32px); background:#fffdf6; }
-  .is-learning .study-clock { position:fixed; top:82px; left:16px; width:max-content; transform:scale(.65); transform-origin:top left; }
   .is-learning .return-flashcards { position:fixed; right:20px; bottom:20px; top:auto; font-size:clamp(12px,1vw,18px); }
 }
 .inline-learn-scene .inline-professor { left:84%; top:52%; width:15%; height:39%; object-fit:contain; object-position:center bottom; }
@@ -1304,10 +1350,18 @@ input:focus-visible {
 .poke-lab-page .study-navigation .home-link:disabled { opacity:.55; cursor:wait; }
 .poke-lab-page .study-navigation .home-link:focus-visible { outline:3px solid #ffe194; outline-offset:3px; }
 .poke-lab-page .study-header > .study-clock {
-  position:static; width:auto; max-width:100%; transform:none; pointer-events:auto;
+  position:fixed; top:82px; right:16px; left:auto;
+  width:max-content; max-width:calc(100vw - 32px);
+  transform:none; pointer-events:auto;
 }
 @media(min-width:1001px) {
   .poke-lab-page.is-learning .study-clock { zoom:.65; }
+}
+@media(max-width:600px) {
+  .poke-lab-page .study-header > .study-clock {
+    top:76px; right:12px; max-width:calc(100vw - 24px);
+    transform:scale(.72); transform-origin:top right;
+  }
 }
 /* A wider image box lets Mewtwo grow without stretching the artwork. */
 .inline-learn-scene .inline-professor {

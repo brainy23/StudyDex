@@ -1,0 +1,10 @@
+{
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"migrations\":[{\"version\":\"20261016133252\",\"name\":\"create_study_timer_sessions_and_pomodoro_blocks\"},{\"version\":\"20261016134048\",\"name\":\"create_pokemon_catalog_and_user_pokemon\"},{\"version\":\"20261016135619\",\"name\":\"create_quiz_attempts\"},{\"version\":\"20261016140241\",\"name\":\"create_quiz_attempt_answers\"},{\"version\":\"20261016140921\",\"name\":\"create_user_packs\"},{\"version\":\"20261017133030\",\"name\":\"registration_profiles\"},{\"version\":\"20261017134908\",\"name\":\"registration_avatar_choice\"},{\"version\":\"20261018102005\",\"name\":\"profile_editing_permissions\"},{\"version\":\"20261021065052\",\"name\":\"add_science_learning_goals_concepts_and_content_order\"},{\"version\":\"20261103212559\",\"name\":\"studydex_pokemon_persistence_v1\"},{\"version\":\"20261104102229\",\"name\":\"studydex_onboarding_avatar_v1\"}]}"
+    }
+  ],
+  "structuredContent": null,
+  "isError": false
+}

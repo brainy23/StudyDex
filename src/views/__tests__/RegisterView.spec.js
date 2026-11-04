@@ -26,7 +26,7 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/')
 })
 
-async function fillRegistration(avatarChoice = 'male') {
+async function fillRegistration() {
   const wrapper = mount(RegisterView, { global: { stubs: { RouterLink: true } } })
   await wrapper.get('form').trigger('submit')
   expect(wrapper.find('#email-input').exists()).toBe(true)
@@ -42,12 +42,7 @@ async function fillRegistration(avatarChoice = 'male') {
   await wrapper.get('form').trigger('submit')
   await wrapper.get('#level-selector').setValue('p3')
   await wrapper.get('form').trigger('submit')
-  await wrapper.get('form').trigger('submit')
-  expect(wrapper.find('input[name="avatar"]').exists()).toBe(true)
-  expect(wrapper.get('[role="status"]').text()).toContain('Choose an avatar')
-  expect(registerUser).not.toHaveBeenCalled()
-  await wrapper.get(`input[name="avatar"][value="${avatarChoice}"]`).setValue(true)
-  await wrapper.get('form').trigger('submit')
+  expect(wrapper.find('input[name="avatar"]').exists()).toBe(false)
   await wrapper.get('#password-input').setValue('Password123')
   await wrapper.get('#confirm-password-input').setValue('Password123')
   return wrapper
@@ -93,17 +88,15 @@ it('sends an immediately authenticated signup to landing', async () => {
   wrapper.unmount()
 })
 
-it.each(['male', 'female', 'prefer_not_to_say'])(
-  'submits the selected %s avatar',
-  async (avatarChoice) => {
-    registerUser.mockResolvedValue({ needsEmailConfirmation: true })
-    const wrapper = await fillRegistration(avatarChoice)
-    await wrapper.get('form').trigger('submit')
-    await flushPromises()
-    expect(registerUser).toHaveBeenCalledWith(expect.objectContaining({ avatarChoice }))
-    wrapper.unmount()
-  },
-)
+it('uses four signup steps and leaves appearance selection to the room', async () => {
+  registerUser.mockResolvedValue({ needsEmailConfirmation: true })
+  const wrapper = await fillRegistration()
+  expect(wrapper.text()).toContain('Step 4 of 4')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(registerUser.mock.calls[0][0]).not.toHaveProperty('avatarChoice')
+  wrapper.unmount()
+})
 
 it.each([
   '/register#message=Confirmation+link+accepted.+Please+proceed+to+confirm+the+other+link',

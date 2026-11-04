@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import BackToHome from '../components/common/BackToHome.vue'
+import DeleteAccountPanel from '../components/common/DeleteAccountPanel.vue'
 import { avatarOptions } from '../data/avatarOptions'
 import { getCurrentProfile } from '../services/profileService'
 import {
@@ -29,6 +30,7 @@ const emailError = ref('')
 const profileMessage = ref('')
 const emailMessage = ref('')
 const checkingEmail = ref(false)
+const deletingAccount = ref(false)
 let refreshingAvatar = false
 let accountPageActive = true
 const isLocalDevelopment = ['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
@@ -74,7 +76,7 @@ async function loadAccount() {
 }
 
 async function saveProfile() {
-  if (savingProfile.value || savingEmail.value) return
+  if (savingProfile.value || savingEmail.value || deletingAccount.value) return
   savingProfile.value = true
   profileError.value = ''
   profileMessage.value = ''
@@ -94,7 +96,7 @@ async function saveProfile() {
 }
 
 async function changeEmail() {
-  if (savingEmail.value || savingProfile.value) return
+  if (savingEmail.value || savingProfile.value || deletingAccount.value) return
   savingEmail.value = true
   emailError.value = ''
   emailMessage.value = ''
@@ -114,7 +116,7 @@ async function changeEmail() {
 }
 
 async function refreshEmailStatus() {
-  if (loading.value || savingEmail.value || savingProfile.value || checkingEmail.value) return
+  if (loading.value || savingEmail.value || savingProfile.value || checkingEmail.value || deletingAccount.value) return
   checkingEmail.value = true
   emailError.value = ''
   try {
@@ -136,7 +138,7 @@ async function refreshEmailStatus() {
 }
 
 async function resendConfirmation() {
-  if (savingEmail.value || savingProfile.value || checkingEmail.value) return
+  if (savingEmail.value || savingProfile.value || checkingEmail.value || deletingAccount.value) return
   savingEmail.value = true
   emailError.value = ''
   emailMessage.value = ''
@@ -153,7 +155,7 @@ async function resendConfirmation() {
 }
 
 async function refreshAvatar() {
-  if (loading.value || savingProfile.value || savingEmail.value || refreshingAvatar || !profile.value) return
+  if (loading.value || savingProfile.value || savingEmail.value || refreshingAvatar || !profile.value || deletingAccount.value) return
   refreshingAvatar = true
   const accountId = profile.value.id
   const previousAvatar = profile.value.avatar_choice
@@ -175,6 +177,12 @@ async function refreshAvatar() {
 function refreshAccountOnFocus() {
   refreshEmailStatus()
   refreshAvatar()
+}
+
+function accountDeleted(result) {
+  if (result.accountChanged) { void loadAccount(); return }
+  // Reload to remove all in-memory caches for the deleted account too.
+  window.location.replace(`${import.meta.env.BASE_URL}landing-info`)
 }
 
 onMounted(() => {
@@ -205,7 +213,7 @@ onUnmounted(() => {
       <template v-else>
         <form class="account-card" aria-labelledby="profile-heading" @submit.prevent="saveProfile">
           <h2 id="profile-heading">Trainer profile</h2>
-          <fieldset :disabled="savingProfile || savingEmail">
+          <fieldset :disabled="savingProfile || savingEmail || deletingAccount">
             <label for="display-name">Display name</label>
             <input
               id="display-name"
@@ -237,7 +245,6 @@ onUnmounted(() => {
                     type="radio"
                     name="avatar"
                     :value="option.value"
-                    required
                   />
                   <span class="avatar-frame"
                     ><img :src="option.image" :alt="option.imageAlt || `${option.label} avatar`"
@@ -245,6 +252,9 @@ onUnmounted(() => {
                   <span>{{ option.label }}</span>
                 </label>
               </div>
+              <p v-if="!avatarOptions.some(option => option.value === avatarChoice)">
+                Your current avatar stays until you choose a new style.
+              </p>
             </fieldset>
             <div class="form-actions">
               <button type="submit" :disabled="!profileDirty || savingProfile">
@@ -291,7 +301,7 @@ onUnmounted(() => {
           >
             {{ checkingEmail ? 'Checking…' : 'Check confirmation status' }}
           </button>
-          <fieldset :disabled="savingEmail || savingProfile">
+          <fieldset :disabled="savingEmail || savingProfile || deletingAccount">
             <label for="new-email">New email address</label>
             <input
               id="new-email"
@@ -316,6 +326,9 @@ onUnmounted(() => {
           <p v-if="emailError" class="error" role="alert">{{ emailError }}</p>
           <p v-if="emailMessage" class="success" role="status">{{ emailMessage }}</p>
         </form>
+        <DeleteAccountPanel v-if="profile" :user-id="profile.id" :email="currentEmail"
+          :disabled="savingProfile || savingEmail || checkingEmail"
+          @busy="deletingAccount = $event" @deleted="accountDeleted" />
       </template>
     </div>
   </main>

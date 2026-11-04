@@ -1,4 +1,5 @@
 import { getSupabase } from '../lib/supabase'
+import { filterStudentCatalogue } from '../utils/studyCatalogue'
 
 // Explicit field lists deliberately exclude question_answers and grading data.
 const TOPIC_FIELDS = 'id, level_id, subject_id, name, description, topic_order'
@@ -37,6 +38,10 @@ export async function getStudyCatalogue(levelId) {
     ),
   ])
   return { subjects, topics }
+}
+
+export async function getStudentStudyCatalogue(profile) {
+  return filterStudentCatalogue(await getStudyCatalogue(profile?.school_level_id), profile)
 }
 
 export async function getStudyQuestions(topicId, purpose) {
@@ -121,6 +126,16 @@ export async function getSelectedStudyBuddy(userId) {
     .maybeSingle()
   if (error) throw error
   return data
+}
+
+export async function getOwnedStudyPokemon(userId) {
+  if (!userId) throw new Error('Please log in to view your Pokédex.')
+  const { data, error } = await getSupabase()
+    .from('user_pokemon')
+    .select('id, user_id, pokemon_id, xp, level, is_selected, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)')
+    .eq('user_id', userId)
+  if (error) throw error
+  return data || []
 }
 
 export function resolveStudyImage(path) {

@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
   getStudyCatalogue,
+  getOwnedStudyPokemon,
   getTopicLesson,
   getStudyQuestions,
   getTopicFlashcards,
@@ -36,6 +37,19 @@ it('requires a real profile level and filters/orders the topic catalogue', async
   const query = requests.find((request) => request.table === 'topics').query
   expect(query.eq).toHaveBeenCalledWith('level_id', 'level-4')
   expect(query.order).toHaveBeenCalledWith('topic_order', { nullsFirst: false })
+})
+
+it('loads only the signed-in user’s owned Pokémon with their display sprite', async () => {
+  const pokemon = [{ id: 'owned-1', pokemon_id: 'species-1', pokemon: { id: 'species-1', name: 'Pikachu', sprite_url: '/pikachu.png' } }]
+  responses.user_pokemon = { data: pokemon, error: null }
+
+  await expect(getOwnedStudyPokemon('user-1')).resolves.toEqual(pokemon)
+  const { query } = requests.find((request) => request.table === 'user_pokemon')
+  expect(query.eq).toHaveBeenCalledWith('user_id', 'user-1')
+  expect(query.select).toHaveBeenCalledWith(
+    'id, user_id, pokemon_id, xp, level, is_selected, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)',
+  )
+  await expect(getOwnedStudyPokemon(null)).rejects.toThrow('log in')
 })
 
 it('orders goals and concepts and keeps the lesson available when quick-check access is denied', async () => {
