@@ -1,4 +1,5 @@
 <script setup>
+import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 
@@ -6,6 +7,8 @@ import { getCurrentProfile } from '../services/profileService'
 import { updateCurrentAvatar } from '../services/accountService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { avatarOptions, findAvatar } from '../data/avatarOptions'
+
+import ExpriencePrompt from '../components/common/expriencePrompt.vue'
 
 import BackToHome from '../components/common/BackToHome.vue'
 
@@ -189,7 +192,49 @@ const activeBuddy = computed(() => {
     level: record.level ?? 1,
     isDefeated: false,
     static_img: resolveStudyImage(record.pokemon.sprite_url),
+// POKÉMON — SAVED SELECTED BUDDY
+// =====================================================
+
+// Temporary visual testing only. Saved Pokémon XP is never changed.
+const showXpTestButtons = import.meta.env.DEV
+const previewXp = ref(null)
+const xpTestResult = ref(null)
+function testPokemonXp(delta) {
+  if (!showXpTestButtons || !selectedBuddyRecord.value || xpTestResult.value) return
+  const before = Number(previewXp.value ?? selectedBuddyRecord.value.xp ?? 0)
+  const after = Math.max(0, before + delta)
+  previewXp.value = after
+  xpTestResult.value = {
+    title: 'XP badge test',
+    pokemonName: selectedBuddyRecord.value.pokemon?.name || 'Your Pokémon',
+    delta,
+    appliedDelta: after - before,
+    xp: after,
+    saving: false,
+    error: '',
+    duplicate: false
   }
+}
+const selectedBuddyRecord=ref(null)
+watch(() => selectedBuddyRecord.value?.id, () => {
+  previewXp.value = null
+  xpTestResult.value = null
+})
+const buddyLoadError=ref('')
+async function refreshTrainerBuddy() {
+  if(!profile.value?.id) return
+  try { selectedBuddyRecord.value=await getSelectedStudyBuddy(profile.value.id); buddyLoadError.value='' }
+  catch { buddyLoadError.value='Your Pokémon could not load.' }
+}
+watch(()=>profile.value?.id, refreshTrainerBuddy)
+onMounted(()=>window.addEventListener('studydex:pokemon-xp',refreshTrainerBuddy))
+onUnmounted(()=>window.removeEventListener('studydex:pokemon-xp',refreshTrainerBuddy))
+const activeBuddy=computed(()=>{
+  const record=selectedBuddyRecord.value
+  if(!record?.pokemon) return null
+  return { ownedId:record.id,id:record.pokemon.name.toLowerCase().replace(/[.'’]/g,'').replace(/\s+/g,'-'),
+    name:record.pokemon.name,xp:previewXp.value ?? record.xp ?? 0,level:record.level??1,isDefeated:false,
+    static_img:resolveStudyImage(record.pokemon.sprite_url) }
 })
 
 // =====================================================
@@ -411,6 +456,22 @@ onUnmounted(() => {
 <template>
 
   <main class="trainer-page">
+    <section v-if="showXpTestButtons" class="xp-test-panel" aria-label="Pokémon XP testing">
+      <strong>XP badge test</strong>
+      <p>Preview only · not saved</p>
+      <p v-if="selectedBuddyRecord" aria-live="polite">
+        {{ selectedBuddyRecord.pokemon?.name }} · {{ previewXp ?? selectedBuddyRecord.xp ?? 0 }} XP
+      </p>
+      <div class="xp-test-actions">
+        <button type="button" :disabled="!selectedBuddyRecord || !!xpTestResult"
+          @click="testPokemonXp(50)">+50 XP</button>
+        <button type="button" :disabled="!selectedBuddyRecord || !!xpTestResult"
+          @click="testPokemonXp(-50)">−50 XP</button>
+      </div>
+      <p v-if="buddyLoadError" role="alert">{{ buddyLoadError }}</p>
+    </section>
+    <ExpriencePrompt :result="xpTestResult" @close="xpTestResult = null" />
+
 
     <StudydexBubbleNav current="bag" />
 
@@ -658,6 +719,22 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.xp-test-panel {
+  position: fixed; right: 16px; bottom: 16px; z-index: 30;
+  width: min(280px, calc(100vw - 32px)); padding: 16px;
+  border: 2px solid #b998d8; border-radius: 18px;
+  background: #fffdf8; color: #303557; box-shadow: 0 8px 24px #15102540;
+}
+.xp-test-panel p { margin: 6px 0 10px; font-size: 12px; }
+.xp-test-actions { display: flex; gap: 8px; }
+.xp-test-actions button {
+  flex: 1; padding: 10px 14px; border: 0; border-radius: 10px;
+  background: #7550ad; color: white; font: inherit; font-weight: 800; cursor: pointer;
+}
+.xp-test-actions button:last-child { background: #a44059; }
+.xp-test-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.xp-test-actions button:focus-visible { outline: 3px solid #c19425; outline-offset: 3px; }
+
 
 .trainer-page,
 .trainer-page * { box-sizing: border-box; }

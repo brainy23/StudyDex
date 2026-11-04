@@ -1,4 +1,8 @@
 <script setup>
+import ExpriencePrompt from '../components/common/expriencePrompt.vue'
+import { useExperiencePrompt } from '../composables/useExperiencePrompt'
+import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { readEncounter, writeEncounter } from '../composables/bossEncounter'
@@ -7,13 +11,17 @@ const router = useRouter()
 const storedEncounter = readEncounter()
 const encounter = ref(storedEncounter?.id === route.query.encounter && storedEncounter?.status === 'pending' ? storedEncounter : null)
 import { getCurrentProfile } from '../services/profileService'
-import { getStudyCatalogue, studyErrorMessage } from '../services/studyService'
+import { getSelectedStudyBuddy, getStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import TownBackground from '@/components/common/TownBackground.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 
 const profile = ref(null)
+const selectedRewardBuddy=ref(null)
+const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience }=useExperiencePrompt(selectedRewardBuddy, async ()=>{
+  selectedRewardBuddy.value=await getSelectedStudyBuddy(profile.value.id)
+})
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
 const error = ref(null)
@@ -27,6 +35,9 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
+    selectedRewardBuddy.value=await getSelectedStudyBuddy(student.id)
+    if(!alive || request!==generation) return
+    loadArenaFighters()
     if (student.school_level_id) {
       // Science demos work even when the published catalogue is unavailable.
       try {
@@ -157,12 +168,8 @@ const fighters = ref([])
 const legendaryBossId = ref(encounter.value?.bossId || null)
 let spriteController
 function readArenaBuddy() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('studydex-active-buddy'))
-    const id = Number(saved?.pokeapi_id ?? saved?.id)
-    if (Number.isInteger(id) && id > 0) return { id, name: saved.name }
-  } catch { /* Use a preview buddy when none has been saved. */ }
-  return { id: 25, name: 'Pikachu' }
+  const pokemon=selectedRewardBuddy.value?.pokemon
+  return { id:pokemon?.name?.toLowerCase().replace(/[.'’]/g,'').replace(/\s+/g,'-') || 'pikachu', name:pokemon?.name || 'Your buddy' }
 }
 
 async function loadArenaFighters() {
@@ -226,11 +233,11 @@ function groundArenaSprite(event, fighter) {
   } catch { fighter.padding = 0 }
 }
 
-onMounted(loadArenaFighters)
+
 onUnmounted(() => spriteController?.abort())
 
 
-// Local practice questions only. No scores, EXP or rewards are saved.
+// Local practice questions only. Pokémon XP rewards are saved through the Supabase reward function.
 const demoBank = {
   "p3-living": [
     [
@@ -692,9 +699,9 @@ function answerDemo(index) {
   attackTimer = setTimeout(() => { attackSide.value = null }, 1000)
 }
 function nextDemo() {
-  if (demoChoice.value === null) return
+  if (demoChoice.value === null || demoFinished.value) return
   clearAttack()
-  if (demoIndex.value + 1 >= demoQuestions.value.length) demoFinished.value = true
+  if (demoScore.value >= 5 || demoIndex.value + 1 >= demoQuestions.value.length) demoFinished.value = true
   else { demoIndex.value++; demoChoice.value = null }
 }
 onUnmounted(clearAttack)
@@ -702,7 +709,7 @@ onUnmounted(clearAttack)
 
 // Encounter-only entry. There is no topic-selection flow on this page.
 const encounterError = ref('')
-const hitsRequired = computed(() => Math.ceil(demoQuestions.value.length * .7))
+const hitsRequired = computed(() => 5)
 const bossHp = computed(() => Math.max(0, hitsRequired.value - demoScore.value))
 function persistBattle() {
   if (!encounter.value || !enteredArena.value) return
@@ -726,8 +733,14 @@ watch(loading, () => {
   demoFinished.value = !!encounter.value.finished
   enteredArena.value = true
 }, { immediate: true })
+watch([demoFinished,enteredArena],([finished,entered])=>{
+  if(!finished || !entered || !encounter.value) return
+  encounter.value.xpEventId ||= newExperienceId()
+  if(!writeEncounter(encounter.value)) { encounterError.value='Could not save this battle’s reward reference. Please enable browser session storage and reload.'; return }
+  rewardExperience({id:encounter.value.xpEventId,type:'boss',health:bossHp.value})
+})
 async function finishEncounter() {
-  if (!demoFinished.value || !encounter.value) return
+  if (!demoFinished.value || !encounter.value || experiencePrompt.value) return
   persistBattle()
   encounter.value.outcome = demoScore.value >= hitsRequired.value ? 'won' : 'lost'
   encounter.value.status = 'complete'
@@ -739,6 +752,7 @@ async function finishEncounter() {
 }
 </script>
 <template>
+  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
