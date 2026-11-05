@@ -62,6 +62,7 @@ watch([() => props.result, () => props.result?.saving], async ([result], _, onCl
 }, { immediate: true, flush: 'post' })
 
 const isLoss = computed(() => (props.result?.delta ?? 0) < 0)
+const isQuiz = computed(() => props.result?.rewardType === 'quiz')
 
 const hasAdjustedDeduction = computed(() => {
   const result = props.result
@@ -221,8 +222,8 @@ onBeforeUnmount(() => dialog.value?.close())
             </div>
             <div v-if="result.saving" class="feedback-panel">
               <span class="saving-spinner" aria-hidden="true"></span>
-              <h3>Updating your Pokémon…</h3>
-              <p>Saving your progress.</p>
+              <h3>{{ isQuiz ? 'Checking your quiz…' : 'Updating your Pokémon…' }}</h3>
+              <p>{{ isQuiz ? 'Grading your answers and saving your XP.' : 'Saving your progress.' }}</p>
             </div>
 
             <div v-else-if="result.error" class="feedback-panel error-panel">
@@ -232,6 +233,10 @@ onBeforeUnmount(() => dialog.value?.close())
             </div>
 
             <template v-else>
+              <div v-if="isQuiz" class="quiz-score">
+                <strong>{{ result.scorePercent }}%</strong>
+                <span>{{ result.correct }} / {{ result.total }} correct</span>
+              </div>
               <div class="reward-panel">
                 <span class="reward-label">
                   {{
@@ -260,6 +265,10 @@ onBeforeUnmount(() => dialog.value?.close())
                   }}
                 </p>
               </div>
+
+              <p v-if="isQuiz && Number.isFinite(result.appliedDelta) && result.appliedDelta < result.delta" class="info-note">
+                {{ result.delta }} XP earned. {{ result.appliedDelta }} XP applied to your buddy because of its XP limit.
+              </p>
 
               <div class="buddy-summary">
                 <span class="buddy-icon" aria-hidden="true">✦</span>
@@ -518,6 +527,9 @@ onBeforeUnmount(() => dialog.value?.close())
 }
 
 .xp-content { margin-top: 22px; }
+.quiz-score { display: flex; align-items: baseline; justify-content: center; gap: 12px; margin-bottom: 16px; color: #26365b; }
+.quiz-score strong { font-size: 32px; }
+.quiz-score span { font-size: 14px; }
 .evolution-preview { height: 200px; margin-bottom: 16px; }
 .evolution-preview :deep(.buddy-stage) { min-height: 0; height: 100%; flex: 1 1 0; }
 .evolution-preview :deep(h3),

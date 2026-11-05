@@ -10,25 +10,19 @@ const router = useRouter()
 import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
-import { getQuizTopicPreview } from '../services/quizPreviewService'
 import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 
-import xpPrompt from '../components/common/xpPrompt.vue'
-import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 
 
 import { getStudentStudyCatalogue } from '../services/studyService'
 import { startQuiz, submitQuiz } from '../services/quizService'
 import XpPrompt from '../components/common/xpPrompt.vue'
+import { quizExperienceResult } from '../utils/quizRewards'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
 const profile = ref(null)
 const activeBuddy = ref(null)
-const { prompt: experiencePrompt, dismiss: dismissExperience } = useExperiencePrompt(activeBuddy, async () => {
-  activeBuddy.value = await getSelectedStudyBuddy(profile.value.id)
-  await loadArenaFighters()
-})
 const activeBuddyMessage = ref('')
 const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
 const playerPokemon = computed(() => activeBuddy.value?.pokemon ? {
@@ -354,7 +348,7 @@ function groundArenaSprite(event, fighter) {
 onUnmounted(() => spriteController?.abort())
 
 
-// Public question previews only. No grading, attempts, XP or rewards are written.
+// The server grades and saves each submitted attempt and its rewards.
 const selectedPreviewTopic = ref(null)
 const previewSubject = ref(null)
 const previewIndex = ref(0)
@@ -375,8 +369,11 @@ function resetPreview() {
   answers.value = {}
   quizResult.value = null
   submitError.value = ''
+  xpResult.value = null
+  submitting.value = false
 }
 async function newAttempt() {
+  if (submitting.value || xpResult.value?.animating) return
   try { sessionStorage.removeItem(`studydex:quiz:${profile.value.id}:${selectedPreviewTopic.value.id}:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())}`) } catch { /* optional recovery */ }
   await initialise()
 }
@@ -387,23 +384,41 @@ function choosePreview(optionId) {
   answers.value[previewQuestion.value.id] = optionId
 }
 async function nextPreview() {
-  if (previewChoice.value === null || submitting.value) return
+  if (previewChoice.value === null || submitting.value || previewFinished.value) return
   if (previewIndex.value + 1 >= previewQuestions.value.length) {
     submitting.value = true
     submitError.value = ''
+    const request = generation
+    const runId = quizRun.value.run_id
+    const pendingResult = {
+      id: runId, rewardType: 'quiz', title: 'Checking your quiz…', saving: true, error: '',
+      pokemonName: activeBuddy.value?.pokemon?.name || 'Your Pokémon',
+      retry: nextPreview,
+    }
+    xpResult.value = pendingResult
     try {
       const owner = profile.value.id
-      const result = await submitQuiz(quizRun.value.run_id, { ...answers.value }, owner)
-      if (!alive || profile.value?.id !== owner) return
+      const result = await submitQuiz(runId, { ...answers.value }, owner)
+      if (!alive || request !== generation || profile.value?.id !== owner || quizRun.value?.run_id !== runId) return
       quizResult.value = result
       previewFinished.value = true
       void topicCompletion.refresh()
-      xpResult.value = { ...result, title: 'Quiz complete!', saving: false }
+      xpResult.value = quizExperienceResult(result)
       void loadSavedBuddy(owner, generation)
-    } catch (cause) { if (alive) submitError.value = cause.message || 'Your answers could not be saved. Try again.' }
-    finally { submitting.value = false }
+    } catch (cause) {
+      if (alive && request === generation) {
+        submitError.value = cause.message || 'Your answers could not be saved. Try again.'
+        xpResult.value = { ...pendingResult, title: 'Quiz submission failed', saving: false, error: submitError.value }
+      }
+    } finally {
+      if (alive && request === generation) submitting.value = false
+    }
   }
   else { previewIndex.value++; previewChoice.value = null }
+}
+
+function showSavedReward() {
+  if (quizResult.value) xpResult.value = quizExperienceResult({ ...quizResult.value, duplicate: true })
 }
 
 
@@ -419,7 +434,6 @@ const battleOptions = computed(() =>
   <XpPrompt :result="xpResult" @close="xpResult = null" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
-    <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
       <!-- SKY -->
       <div
@@ -524,6 +538,7 @@ const battleOptions = computed(() =>
           <template v-if="previewFinished">
             <span class="dialogue-kicker">RESULT SAVED</span>
             <p>Your result is saved in Study History.</p>
+            <button type="button" class="battle-next" @click="showSavedReward">View XP reward</button>
             <details><summary>Review answers</summary><p v-for="(item,index) in quizResult.review" :key="item.question_id">{{ index + 1 }}. {{ item.selected_option_id === item.correct_option_id ? 'Correct' : 'Incorrect' }} — {{ item.explanation || 'Review this topic in Poké Lab.' }}</p></details>
           </template>
           <template v-else-if="previewChoice === null">

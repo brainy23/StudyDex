@@ -1,9 +1,7 @@
 <script setup>
 import axios from 'axios'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import NavBar from '../common/NavBar.vue'
 import PokeSprite from './PokeSprite.vue'
-import PokemonBuddy from './PokemonBuddy.vue'
 
 const API = 'https://pokeapi.co/api/v2'
 const MAX_XP = 100
@@ -385,7 +383,6 @@ async function addRandomPokemon(asGift = false) {
 <template>
   <main class="trainer-page">
     <div class="page-content">
-      <NavBar />
 
       <div class="page-layout">
         <!-- AVATAR AND ACTIVE BUDDY -->
