@@ -440,9 +440,27 @@ async function startFocusTimer() {
     coreStart()
   } catch { /* persistedStudy.error offers retry */ }
 }
+// async function resetFocusTimer() {
+//   coreReset()
+//   if (persistedStudy.ready.value) { try { await persistedStudy.action('reset') } catch { /* retry offered */ } }
+// }
+function whenStudyReady() {
+  if (persistedStudy.ready.value) return Promise.resolve()
+  return new Promise(resolve => {
+    const stop = watch(persistedStudy.ready, ready => {
+      if (ready) { stop(); resolve() }
+    })
+  })
+}
+
 async function resetFocusTimer() {
   coreReset()
-  if (persistedStudy.ready.value) { try { await persistedStudy.action('reset') } catch { /* retry offered */ } }
+  focusSeconds.value = 25 * 60
+  timerFinished.value = false
+  await whenStudyReady()
+  try { await persistedStudy.action('reset') } catch { /* retry offered */ }
+  focusSeconds.value = 25 * 60
+  timerFinished.value = false
 }
 async function refreshDailySessions() {
   if (!profile.value?.id) return
@@ -511,7 +529,7 @@ async function startSurpriseBoss() {
     ratingMessage.value = 'Boss battle route is not installed yet.'
     return
   }
-  // pauseFocusTimer()
+  pauseFocusTimer()
   const encounter = {
     id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
     xpEventId:newExperienceId(),
@@ -576,7 +594,7 @@ function restoreBossProgress() {
     ratingMessage.value = 'Boss defeated! Continue where you left off. Press Start to resume your timer.'
   } else {
     restartCards()
-    resetFocusTimer()
+    void resetFocusTimer()
     ratingMessage.value = won
       ? 'This deck changed; starting a fresh review with a 25-minute timer.'
       : 'Boss battle lost. Your deck and 25-minute study timer have been reset. Try again at a steadier pace.'
