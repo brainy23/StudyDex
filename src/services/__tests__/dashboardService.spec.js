@@ -1,9 +1,13 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import {
+  getDashboardData,
   getDashboardPomodoroBlocks,
   getDashboardQuizAttempts,
   getDashboardStudySessions,
 } from '../dashboardService'
+import { getCurrentProfile } from '../profileService'
+
+vi.mock('../profileService', () => ({ getCurrentProfile: vi.fn() }))
 
 const { from } = vi.hoisted(() => ({ from: vi.fn() }))
 vi.mock('../../lib/supabase', () => ({ getSupabase: () => ({ from }) }))
@@ -15,12 +19,16 @@ beforeEach(() => {
   requests.length = 0
   from.mockReset()
   responses = {}
+  getCurrentProfile.mockReset()
+  getCurrentProfile.mockResolvedValue({ id: 'verified-user', school_level_id: 'level-3',
+    school_level: { level_number: 3, name: 'Primary 3' } })
   from.mockImplementation((table) => {
     const query = Object.assign(Promise.resolve(responses[table] ?? { data: [], error: null }), {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       order: vi.fn().mockReturnThis(),
       in: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockReturnThis(),
     })
     requests.push({ table, query })
     return query
@@ -75,4 +83,53 @@ it('reports query errors without returning a blocked status', async () => {
 
   expect(result.status).toBe('error')
   expect(result.status).not.toBe('blocked')
+})
+
+it('fetches Supabase subjects and limits dashboard options to the student curriculum and available level topics', async () => {
+  responses.subjects = { data: [
+    { id: 'english', name: 'English' }, { id: 'math', name: 'Mathematics' },
+    { id: 'science', name: 'Science' },
+  ], error: null }
+  responses.topics = { data: [
+    { id: 'math-3', subject_id: 'math', level_id: 'level-3' },
+    { id: 'science-4', subject_id: 'science', level_id: 'level-4' },
+    { id: 'english-3', subject_id: 'english', level_id: 'level-3' },
+  ], error: null }
+  const dashboard = await getDashboardData()
+  expect(dashboard.catalogue).toMatchObject({ status: 'ready', data: {
+    subjects: [{ id: 'math', name: 'Mathematics' }],
+    topics: [{ id: 'math-3', subject_id: 'math', level_id: 'level-3' }],
+  } })
+  const subjects = requests.find(request => request.table === 'subjects').query
+  expect(subjects.select).toHaveBeenCalledWith('id, name')
+  expect(subjects.order).toHaveBeenCalledWith('name')
+  expect(requests.find(request => request.table === 'topics').query.eq)
+    .toHaveBeenCalledWith('level_id', 'level-3')
+  expect(requests.find(request => request.table === 'quiz_attempts').query.eq)
+    .toHaveBeenCalledWith('user_id', 'verified-user')
+})
+
+it('includes both Math and Science when Supabase has topics for the student’s level', async () => {
+  responses.subjects = { data: [{ id: 'math', name: 'Mathematics' }, { id: 'science', name: 'Science' }], error: null }
+  responses.topics = { data: [
+    { id: 'math-3', subject_id: 'math', level_id: 'level-3' },
+    { id: 'science-3', subject_id: 'science', level_id: 'level-3' },
+  ], error: null }
+  const dashboard = await getDashboardData()
+  expect(dashboard.catalogue.data.subjects.map(subject => subject.id)).toEqual(['math', 'science'])
+})
+
+it('shows subject permission failures instead of substituting sample data', async () => {
+  responses.subjects = { data: null, error: { code: '42501', message: 'permission denied' } }
+  const dashboard = await getDashboardData()
+  expect(dashboard.catalogue).toMatchObject({ status: 'error', data: null, code: '42501' })
+  expect(dashboard.catalogue.message).toContain('permission')
+})
+
+it('handles an empty catalogue and missing school level without inventing subjects', async () => {
+  expect((await getDashboardData()).catalogue).toMatchObject({ status: 'empty', data: { subjects: [], topics: [] } })
+  requests.length = 0
+  getCurrentProfile.mockResolvedValueOnce({ id: 'verified-user', school_level_id: null })
+  expect((await getDashboardData()).catalogue.status).toBe('needs_setup')
+  expect(requests.some(request => ['subjects', 'topics'].includes(request.table))).toBe(false)
 })

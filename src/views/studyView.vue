@@ -3,6 +3,7 @@ import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+import { useStudySession } from '../composables/useStudySession'
 
 import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -22,7 +23,7 @@ import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import '../assets/study.css'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
@@ -42,7 +43,7 @@ const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
 const selectedBuddyRecord = ref(null)
-const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async result => {
+const { prompt:experiencePrompt, showSaved:showSavedExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async () => {
   completedFocusSessions.value = await getRewardedTimerCount(profile.value.id)
   selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
 })
@@ -69,6 +70,7 @@ const topic = computed(() =>
     : availableTopics.value[0] || null,
 )
 const currentResources = computed(() => resources[topic.value?.id])
+const persistedStudy = useStudySession(profile, topic, 'flashcards')
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -182,8 +184,11 @@ onMounted(() => {
   if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'study' } })
   else initialise()
 })
-onBeforeRouteLeave(() => {
+onBeforeRouteLeave(async to => {
   pauseFocusTimer()
+  if (persistedStudy.ready.value) {
+    try { await persistedStudy.action(to.name === 'learn' || to.name === 'surprise-boss' ? 'pause' : 'abandon') } catch { /* last confirmed heartbeat remains saved */ }
+  }
 })
 onUnmounted(() => {
   alive = false
@@ -213,7 +218,7 @@ const buddyApiKey = computed(() => {
     ? name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
     : null
 })
-// PokemonBuddy owns presentation and evolution animations; the parent owns data.
+// PokeSprite owns presentation and evolution animations; the parent owns data.
 const pokemonBuddy = ref(null)
 const activePokemon = ref(null)
 function updateStudyPokemon({ pokemon, changes }) {
@@ -246,7 +251,7 @@ watch([apiPokemon, selectedBuddyRecord, buddySprite], ([data, record, sprite]) =
     xp: record.xp ?? 0,
     level: record.level ?? 1,
     evolution_stage: 0,
-    isDefeated: false,
+    isDefeated: record.is_defeated ?? false,
     animated_img: sprite || savedSprite,
     static_img: data?.sprites?.front_default || savedSprite,
   }
@@ -320,8 +325,19 @@ watch(() => profile.value?.id, async (id, _, onCleanup) => {
   try { const count=await getRewardedTimerCount(id); if(!cancelled) completedFocusSessions.value=count }
   catch { /* Saving a reward will show an actionable error if SQL is missing. */ }
 }, {immediate:true})
-function recordFocusCompletion() {
-  rewardExperience({ id:newExperienceId(), type:'timer' })
+async function recordFocusCompletion() {
+  try {
+    const saved = await persistedStudy.action('complete_block')
+    if (!saved) return
+    if (saved.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
+    else if (saved.block?.running_since) {
+      focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+      timerFinished.value = false
+      timerDeadline = Date.now() + focusSeconds.value * 1000
+      timerRunning.value = true
+      focusInterval = setInterval(tickFocusTimer, 250)
+    }
+  } catch { /* persistedStudy.error offers retry */ }
 }
 
 // Paused/idle/completed is always red, even when fewer than two minutes remain.
@@ -344,20 +360,43 @@ function pauseFocusTimer() {
   tickFocusTimer()
   timerRunning.value = false
   clearInterval(focusInterval)
+  if (persistedStudy.state.value?.block?.running_since) void persistedStudy.action('pause').catch(() => {})
 }
-function startFocusTimer() {
-  if (timerRunning.value) return
-  if (!focusSeconds.value) focusSeconds.value = 25 * 60
+async function startFocusTimer() {
+  if (timerRunning.value || persistedStudy.busy.value || !persistedStudy.ready.value) return
+  try {
+    if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
+    const block = persistedStudy.state.value?.block
+    const saved = await persistedStudy.action(block && !block.focus_completed_at ? 'resume' : 'start', newExperienceId())
+    if (!saved?.block) return
+    focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+  } catch { return }
   timerFinished.value = false
   timerDeadline = Date.now() + focusSeconds.value * 1000
   timerRunning.value = true
   focusInterval = setInterval(tickFocusTimer, 250)
 }
-function resetFocusTimer() {
+async function resetFocusTimer() {
   pauseFocusTimer()
+  if (persistedStudy.ready.value) {
+    try { await persistedStudy.action('reset') } catch { return }
+  }
   focusSeconds.value = 25 * 60
   timerFinished.value = false
 }
+watch(() => persistedStudy.state.value?.block, block => {
+  if (!block) return
+  focusSeconds.value = Math.max(0, Math.ceil((1500000 - block.active_ms) / 1000))
+  timerFinished.value = !!block.focus_completed_at
+  if (!block.running_since) { timerRunning.value = false; clearInterval(focusInterval) }
+})
+async function refreshDailySessions() {
+  if (!profile.value?.id) return
+  try { completedFocusSessions.value = await getRewardedTimerCount(profile.value.id) } catch { /* next save reports errors */ }
+}
+let dailyRefresh
+onMounted(() => { dailyRefresh = setInterval(refreshDailySessions, 30000); window.addEventListener('focus', refreshDailySessions) })
+onUnmounted(() => { clearInterval(dailyRefresh); window.removeEventListener('focus', refreshDailySessions) })
 // The uploaded page did not include StudyFlashcards.vue or studyService.
 // This adapter supports common card shapes; adjust here if your service differs.
 function cardRows(data) {
@@ -407,6 +446,10 @@ onUnmounted(() => document.removeEventListener('visibilitychange', resetRushOnVi
 async function startSurpriseBoss() {
   fastStreak = 0
   if (bossNavigating.value) return
+  if (!persistedStudy.ready.value) {
+    ratingMessage.value = 'Your study session is still saving. Please try again.'
+    return
+  }
   const availableQuestions = makeQuestions(cards.value)
   const questions = availableQuestions.length ? Array.from({length:5}, (_,i)=>availableQuestions[i % availableQuestions.length]) : []
   if (!questions.length) return // Image-only/one-answer decks cannot form a fair MCQ.
@@ -418,6 +461,7 @@ async function startSurpriseBoss() {
   const encounter = {
     id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
     xpEventId:newExperienceId(),
+    studySessionId: persistedStudy.state.value?.session.id,
     createdAt: Date.now(), owner: profile.value?.id, topic: topic.value?.id,
     topicName: topic.value?.name, questions, status: 'pending',
     index: 0, choice: null, score: 0, finished: false,
@@ -507,8 +551,12 @@ async function rateCard(rating) {
   }
   reviewQueue.value = next
   if (!next.length && cards.value.length) {
-    topicCompletion.markComplete(topic.value?.id)
-    rewardExperience({ id:flashcardRoundId, type:'flashcards' })
+    try {
+      if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
+      const saved = await persistedStudy.action('complete')
+      await showSavedExperience(saved?.xp)
+      await topicCompletion.refresh()
+    } catch { /* saved-state error remains retryable */ }
   }
   answerVisible.value = false
   cardShownAt = performance.now()
@@ -516,6 +564,7 @@ async function rateCard(rating) {
   if (fastStreak >= FAST_CARD_STREAK) await startSurpriseBoss()
 }
 function restartCards() {
+  if (persistedStudy.ready.value && persistedStudy.state.value.session.status === 'completed') void persistedStudy.restart().catch(() => {})
   flashcardRoundId = newExperienceId()
   cardShownAt = performance.now()
   fastStreak = 0
@@ -546,10 +595,11 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
 />
   <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
+  <p v-if="persistedStudy.error.value" class="lab-state" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().then(result => showSavedExperience(result?.xp)).catch(() => {})">Retry saving</button></p>
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
-      <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
       <button type="button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="openLearn">Learn</button>
+      <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
     </nav>
     <header class="study-header">
       <StudyPageNavigation @topics="returnToSelection" />
@@ -605,7 +655,30 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
               <p>Your cards loaded, but this view could not read their format.</p>
             </div>
             <div v-else-if="!cards.length" class="screen-message"><h2>No flashcards yet</h2><p>Choose another topic using the Topics button.</p></div>
-            <div v-else-if="!currentCard" class="screen-message" role="status"><h2>Round complete!</h2><p>All {{ cards.length }} cards marked Easy.</p><button @click="restartCards">Study again</button></div>
+            <div v-else-if="!currentCard" class="screen-message" role="status">
+              <h2>Round complete!</h2>
+              <p>All {{ cards.length }} cards marked Easy.</p>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                <button type="button" @click="restartCards">
+                  Study again
+                </button>
+
+                <button
+                  type="button"
+                  :disabled="!topic"
+                  @click="router.push({
+                    name: 'quiz-battle',
+                    query: {
+                      subject: topic.subject_id,
+                      topic: topic.id
+                    }
+                  })"
+                >
+                  Take topic quiz →
+                </button>
+              </div>
+            </div>
             <div v-else class="answer-content" aria-live="polite">
               <template v-if="answerVisible">
                 <p class="question-reminder">{{ currentCard.front }}</p>
@@ -625,13 +698,16 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
         <aside class="buddy-chamber" :class="{ 'has-pokemon': !!buddySprite }" aria-label="Your study buddy">
           <div v-if="buddySprite" class="buddy-contact-shadow" aria-hidden="true"></div>
           <div class="buddy-sprite" @error.capture="nextBuddySprite">
-            <PokemonBuddy
+            <PokeSprite
               v-if="activePokemon && buddySprite"
               ref="pokemonBuddy"
+              embedded
               class="lab-pokemon-buddy"
               :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }"
               :active-pokemon="activePokemon"
+              :fallback-src="buddySprite"
               @update-pokemon="updateStudyPokemon"
+              progress-position="top"
             />
             <span v-else class="chamber-status" role="status">{{ spriteLoading ? 'Loading…' : spriteError ? 'Try again below' : 'Loading companion…' }}</span>
           </div>
@@ -655,7 +731,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
         <span role="status">{{ ratingMessage }}</span>
         <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
         <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
-        <p v-if="!savedInBrowser" role="status">Progress can only be kept for this visit because browser storage is unavailable.</p>
+        <p v-if="!savedInBrowser" role="status">Saved topic progress could not be loaded. Please retry.</p>
         <p v-if="backgroundFailed" role="alert">Room image missing. Put poke-lab-interior.png in public/poke-lab/.</p>
       </footer>
     </template>
@@ -1182,27 +1258,27 @@ input:focus-visible {
 
 /* Embed the shared buddy in the lab chamber without its standalone card layout. */
 .lab-pokemon-buddy {
+  /* Adjust these to place the sprite's feet within the chamber. */
+  --sprite-left: 50%;
+  --sprite-bottom: 0%;
   width: 100%; height: 100%; padding: 0; gap: 0;
   min-width: 0; min-height: 0; position: relative;
 }
+.lab-pokemon-buddy :deep(h3) {
+  display: none;
+}
+.lab-pokemon-buddy :deep(.buddy-stage) {
+  height: 100%; min-height: 0; flex: 1 1 0;
+}
 .lab-pokemon-buddy :deep(.buddy-image-container) {
-  width: 100%; height: 100%; min-height: 0; align-items: flex-end;
+  left: var(--sprite-left);
+  bottom: var(--sprite-bottom);
+  transform: translateX(-50%);
+  align-items: flex-end;
 }
-/* Adjust the size of the buddy sprite within the chamber. */
+/* Keep the XP panel above the sprite, with its feet anchored below. */
 .lab-pokemon-buddy :deep(.buddy-image-container .buddy-sprite) {
-  width: auto; height: 72%; max-width: 60%;
-}
-/* Keep status text accessible without covering the chamber's artwork. */
-.lab-pokemon-buddy :deep(h2),
-.lab-pokemon-buddy :deep(h3),
-.lab-pokemon-buddy :deep(.buddy-level),
-.lab-pokemon-buddy :deep(.buddy-status),
-.lab-pokemon-buddy :deep(.buddy-message),
-.lab-pokemon-buddy :deep(.buddy-error),
-.lab-pokemon-buddy :deep(.buddy-xp) {
-  position: absolute; width: 1px; height: 1px; padding: 0;
-  margin: -1px; overflow: hidden; clip-path: inset(50%);
-  white-space: nowrap; border: 0;
+  width: auto; height: 92%; max-width: 60%; max-height: 100%;
 }
 
 /* Coordinates measured against the supplied 1672 x 941 room image. */
@@ -1224,7 +1300,9 @@ input:focus-visible {
   .timer-screen .focus-digits { font-size: clamp(24px, 2.7cqw, 48px); }
 }
 .study-content .lab-stage .buddy-chamber {
-  left: 74.5%; top: 39.7%; width: 15%; height: 30.8%;
+  /* Increase this offset to move the buddy and its XP panel further down. */
+  --buddy-offset-y: 4%;
+  left: 74.5%; top: calc(39.7% + var(--buddy-offset-y)); width: 15%; height: 30.8%;
   padding: 0; box-sizing: border-box;
 }
 .buddy-sprite { width: 96%; height: 94%; }
@@ -1234,7 +1312,10 @@ input:focus-visible {
 .focus-session-count { color: #adcbe5; font-size: clamp(9px, .65cqw, 12px); line-height: 1.2; }
 @media (max-width: 1000px) {
   .study-content .lab-stage .timer-frame { display: none; }
-  .study-content .lab-stage .buddy-chamber { top: 22.34cqw; height: 17.33cqw; }
+  .study-content .lab-stage .buddy-chamber {
+    --buddy-offset-y: 2.25cqw;
+    top: calc(22.34cqw + var(--buddy-offset-y)); height: 17.33cqw;
+  }
 }
 /* Learn entry uses the existing console's final row, keeping ratings in place. */
 .console-learning-row { display:flex; justify-content:center; align-items:center; gap:.7cqw; min-width:0; }

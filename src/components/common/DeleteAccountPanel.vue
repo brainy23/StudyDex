@@ -14,12 +14,32 @@ const password = ref('')
 const confirmation = ref('')
 const deleting = ref(false)
 const error = ref('')
+const mfaRequest = ref(null)
+const mfaCode = ref('')
+let resolveMfa
+function requestMfaCode(request) {
+  mfaRequest.value = request
+  mfaCode.value = ''
+  return new Promise(resolve => { resolveMfa = resolve })
+}
+function submitMfaCode() {
+  if (!/^\d{6,10}$/.test(mfaCode.value.trim())) return
+  const resolve = resolveMfa
+  resolveMfa = null
+  mfaRequest.value = null
+  resolve?.(mfaCode.value.trim())
+  mfaCode.value = ''
+}
 let active = true
 const ready = computed(
   () => !props.disabled && !deleting.value && password.value && confirmation.value === 'DELETE',
 )
 
 function clear() {
+  resolveMfa?.(null)
+  resolveMfa = null
+  mfaRequest.value = null
+  mfaCode.value = ''
   password.value = ''
   confirmation.value = ''
   error.value = ''
@@ -52,6 +72,7 @@ async function confirm() {
       password: currentPassword,
       confirmation: confirmation.value,
       expectedUserId: owner,
+      requestMfaCode,
     })
     if (!active || props.userId !== owner) return
     dialog.value?.close()
@@ -94,7 +115,7 @@ onUnmounted(() => {
       @cancel="cancel"
       @close="clear"
     >
-      <form @submit.prevent="confirm">
+      <form @submit.prevent="mfaRequest ? submitMfaCode() : confirm()">
         <h2 id="delete-confirm-heading">Permanently delete your account?</h2>
         <p>
           Account: <strong>{{ email }}</strong>
@@ -122,8 +143,15 @@ onUnmounted(() => {
             required
           />
         </fieldset>
+        <fieldset v-if="mfaRequest" :disabled="disabled">
+          <label for="delete-mfa-code">{{ mfaRequest.type === 'phone' ? 'Enter the code sent to your phone' : 'Enter the code from your authenticator app' }}</label>
+          <p>{{ mfaRequest.name }}</p>
+          <input id="delete-mfa-code" v-model="mfaCode" inputmode="numeric" autocomplete="one-time-code" autofocus />
+          <button type="submit" :disabled="!/^\d{6,10}$/.test(mfaCode.trim())">Verify and delete account</button>
+          <button type="button" @click="clear">Cancel deletion</button>
+        </fieldset>
         <p v-if="error" class="delete-error" role="alert">{{ error }}</p>
-        <p v-if="deleting" role="status">Deleting your account… Please keep this page open.</p>
+        <p v-if="deleting && !mfaRequest" role="status">Deleting your account… Please keep this page open.</p>
         <div class="delete-actions">
           <button type="button" :disabled="deleting" @click="cancel">Keep my account</button>
           <button type="submit" class="delete-button" :disabled="!ready">

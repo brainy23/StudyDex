@@ -57,8 +57,8 @@ async function selectMode(mode) {
 <template>
   <LoadingScreen :show="loading" message="Opening your Modes…" />
 <main v-if="!loading" class="sd-picker" :style="{ '--page-art': `url(${asset('subjects-white.png')})` }">
-  <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-topics', query:{ flow:'study', subject:topic?.subject_id || route.query.subject } }">← {{ selectedSubject?.name || 'Study' }} topics</RouterLink></nav>
-  <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · POKÉ LAB · {{ selectedSubject?.name || 'STUDY' }}</p><h1>How would you like to begin?</h1><p>{{ topic?.name || 'Choose your learning adventure' }}</p></header>
+  <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-topics', query:{ flow:'study', subject:topic?.subject_id || route.query.subject } }">← <span class="sd-subject-name">{{ selectedSubject?.name || 'Study' }}</span> topics</RouterLink></nav>
+  <header class="sd-picker-heading"><p class="sd-eyebrow">Poké Lab</p><h1>How would you like to begin?</h1><p>{{ topic?.name || 'Choose your learning adventure' }}</p></header>
   <p v-if="navigationError" class="sd-page-state" role="alert">{{ navigationError }}</p>
     <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
     <div v-else-if="!profile?.school_level_id" class="sd-page-state"><p>Set your school level to see the right topics.</p><RouterLink to="/account">Account settings</RouterLink></div>
