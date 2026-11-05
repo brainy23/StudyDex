@@ -10,7 +10,6 @@ import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '
 import { signOutCurrentSession } from '../services/authService'
 import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
-import { usePokemonTransition } from '../composables/usePokemonTransition'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
@@ -19,7 +18,6 @@ import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
 const router = useRouter()
-const pokemonTransition = usePokemonTransition()
 const buildingNavigationError = ref('')
 
 
@@ -115,31 +113,10 @@ const buildingButtons = [
 ]
 
 async function selectBuilding(building) {
-  if (pokemonTransition.state.active) return
   buildingNavigationError.value = ''
   try {
-    if (building.id === 'laboratory' || building.id === 'arena') {
-      const flow = building.id === 'arena' ? 'quiz' : 'study'
-      await pokemonTransition.run({
-        source: 'Town',
-        destination: building.title,
-        title: flow === 'quiz' ? 'A Challenge Awaits!' : 'Ready to learn?',
-        description: flow === 'quiz' ? 'Your next quiz adventure is getting ready.' : 'Your next study adventure is getting ready.',
-        waitFor: `${flow}-subjects`,
-        durationMs: 2500,
-        task: async (signal) => {
-          const failure = await router.push(building.path)
-          if (signal.aborted) throw signal.reason
-          const target = router.currentRoute.value
-          if (failure || target.name !== 'selection-subjects' || target.query.flow !== flow) {
-            throw new Error(`Could not open ${building.title}. Please try again.`)
-          }
-        },
-      })
-    } else {
-      const failure = await router.push(building.path)
-      if (failure) throw new Error('Could not open this building. Please try again.')
-    }
+    const failure = await router.push(building.path)
+    if (failure) throw new Error('Could not open this building. Please try again.')
   } catch (error) {
     if (error.name !== 'AbortError') buildingNavigationError.value = error.message || 'Could not open this building. Please try again.'
   }
