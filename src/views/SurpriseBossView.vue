@@ -21,6 +21,17 @@ import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 
+const audio = new Audio("/sounds/bossfight.wav");
+audio.loop = true;
+const isMuted = ref(true);
+
+
+function toggleMute() {
+  audio.play();
+  isMuted.value = !isMuted.value
+  audio.muted = isMuted.value
+}
+
 const profile = ref(null)
 const selectedRewardBuddy=ref(null)
 const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience }=useExperiencePrompt(selectedRewardBuddy, async ()=>{
@@ -730,6 +741,7 @@ watch([demoFinished,enteredArena],([finished,entered])=>{
   rewardExperience({id:encounter.value.xpEventId,type:'boss',health:bossHp.value})
 })
 async function finishEncounter() {
+  toggleMute();
   if (!demoFinished.value || !encounter.value || experiencePrompt.value) return
   persistBattle()
   encounter.value.outcome = demoScore.value >= hitsRequired.value ? 'won' : 'lost'
@@ -744,6 +756,7 @@ async function finishEncounter() {
 const battleOptions = computed(() =>
   (demoQuestion.value?.[1] || []).map((text, index) => ({ id: index, text })),
 )
+
 </script>
 <template>
   <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
@@ -811,6 +824,7 @@ const battleOptions = computed(() =>
 
     <header class="arena-hud">
       <ClockWeather :use-device-location="true" @rain-change="rainActive = $event" />
+      <button @click="toggleMute()">{{isMuted?'Unmute':'Mute'}}</button>
     </header>
 
 
