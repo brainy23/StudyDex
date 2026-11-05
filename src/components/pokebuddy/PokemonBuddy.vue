@@ -25,7 +25,7 @@ const emit = defineEmits([
 ])
 
 const API = 'https://pokeapi.co/api/v2'
-const MAX_XP = 100
+const MAX_XP = 200
 
 // Component state
 const busy = ref(false)

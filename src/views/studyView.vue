@@ -618,6 +618,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
               :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }"
               :active-pokemon="activePokemon"
               @update-pokemon="updateStudyPokemon"
+              progressPosition="top"
             />
             <span v-else class="chamber-status" role="status">{{ spriteLoading ? 'Loading…' : spriteError ? 'Try again below' : 'Loading companion…' }}</span>
           </div>
