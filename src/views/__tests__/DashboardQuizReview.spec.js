@@ -34,7 +34,7 @@ beforeEach(() => {
   getDashboardData.mockResolvedValue(data())
   getQuizReview.mockResolvedValue(review)
 })
-afterEach(() => wrapper?.unmount())
+afterEach(() => { wrapper?.unmount(); vi.useRealTimers() })
 async function open() {
   wrapper = mount(DashboardView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' }, GoBackBtn: true, PokeSprite: true, teleport: true } } })
   await flushPromises()
@@ -79,4 +79,46 @@ it('closes and discards a pending review when the authenticated account changes'
   resolve(review)
   await flushPromises()
   expect(wrapper.find('.quiz-review-modal').exists()).toBe(false)
+})
+
+const studySessionCard = () => wrapper.findAll('.stat-card').find(card => card.get('.stat-label').text() === 'Study sessions')
+it('counts every completed focus block today in Singapore time, including blocks without XP', async () => {
+  vi.setSystemTime(new Date('2026-11-06T04:00:00Z'))
+  const dashboard = data()
+  dashboard.studySessions = ready([
+    { id: 'active-session', mode: 'flashcards', status: 'in_progress', xp_change: 0 },
+    { id: 'lesson', mode: 'learn', status: 'completed', completed_at: '2026-11-06T00:00:00Z', xp_change: 0 },
+  ])
+  dashboard.pomodoroBlocks = ready([
+    // Midnight SGT falls on the previous UTC date; this still counts today.
+    ...Array.from({ length: 5 }, (_, i) => ({ id: `block-${i}`, session_id: 'active-session',
+      focus_completed_at: `2026-11-05T${16 + i}:00:00Z`, focus_seconds: 1500,
+      xp_earned: i < 4 ? 10 : 0, xp_awarded_at: i < 4 ? `2026-11-05T${16 + i}:00:00Z` : null })),
+    { id: 'yesterday', session_id: 'active-session', focus_completed_at: '2026-11-05T15:59:59Z', focus_seconds: 1500, xp_earned: 10 },
+    { id: 'incomplete', session_id: 'active-session', focus_completed_at: null, focus_seconds: 1000, break_completed_at: '2026-11-06T02:00:00Z', xp_earned: 0 },
+  ])
+  getDashboardData.mockResolvedValue(dashboard)
+  await open()
+  expect(studySessionCard().get('.stat-value').text()).toBe('5')
+  expect(studySessionCard().text()).toContain('Focus blocks completed today')
+})
+it('shows unavailable instead of a misleading zero when completed blocks cannot load', async () => {
+  const dashboard = data()
+  dashboard.pomodoroBlocks = { status: 'error', data: null, message: 'Unable to load blocks' }
+  getDashboardData.mockResolvedValue(dashboard)
+  await open()
+  expect(studySessionCard().get('.stat-value').text()).toBe('—')
+})
+it('resets the displayed daily block count after midnight in Singapore', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-11-06T15:59:45Z'))
+  const dashboard = data()
+  dashboard.studySessions = ready([{ id: 'session', status: 'in_progress', xp_change: 0 }])
+  dashboard.pomodoroBlocks = ready([{ id: 'block', session_id: 'session',
+    focus_completed_at: '2026-11-06T15:59:40Z', focus_seconds: 1500, xp_earned: 10 }])
+  getDashboardData.mockResolvedValue(dashboard)
+  await open()
+  expect(studySessionCard().get('.stat-value').text()).toBe('1')
+  await vi.advanceTimersByTimeAsync(60000)
+  expect(studySessionCard().get('.stat-value').text()).toBe('0')
 })

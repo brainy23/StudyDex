@@ -207,9 +207,14 @@ const quizLink = topic => ({ name: 'quiz', query: { subject: topic.subject_id, t
 const quizXP = computed(() => attempts.value.reduce((sum, row) => sum + row.xp_change, 0))
 const studyXP = computed(() => sessions.value.reduce((sum, row) => sum + (row.xp_change || 0), 0) + blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
 const average = computed(() => regularAttempts.value.length ? Math.round(regularAttempts.value.reduce((sum, row) => sum + percentage(row), 0) / regularAttempts.value.length) : null)
+// A study session in this card means one completed focus block, regardless
+// of XP earned or whether its enclosing study session has been finished.
+const todaysStudyBlocks = computed(() => blocks.value.filter(block =>
+  block.focus_completed_at && dayKey(block.focus_completed_at) === dayKey(now.value),
+).length)
 const stats = computed(() => [
   { title: 'Total earned XP', value: quizAvailable.value && blocksAvailable.value ? quizXP.value + studyXP.value : '—', description: 'Quiz XP and recorded study XP', color: 'yellow', icon: '⭐' },
-  { title: 'Study sessions', value: sessionsAvailable.value ? completedSessions.value.length : '—', description: 'Completed sessions', color: 'blue', icon: '📚' },
+  { title: 'Study sessions', value: blocksAvailable.value ? todaysStudyBlocks.value : '—', description: 'Focus blocks completed today · Singapore time', color: 'blue', icon: '📚' },
   { title: 'Quiz average', value: quizAvailable.value && average.value !== null ? `${average.value}%` : '—', description: quizAvailable.value && !regularAttempts.value.length ? 'No quizzes completed yet' : 'Regular quizzes only', color: 'pink', icon: '🎯' },
 ])
 const notices = computed(() => [quizSection.value, sessionSection.value, blockSection.value].filter(section => section && !readable(section)))

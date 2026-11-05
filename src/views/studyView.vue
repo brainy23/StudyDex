@@ -3,14 +3,14 @@
 import GoBackBtn from '@/components/common/goBackbtn.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
-import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+import { newExperienceId } from '../services/experienceService'
 import { useStudySession } from '../composables/useStudySession'
-import { useFocusTimer } from '../composables/useFocusTimer'
+import { useFloatingStudyTimer } from '../composables/useFloatingStudyTimer'
 // import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { onBeforeRouteLeave, RouterLink, useRoute, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import {
   getStudentStudyCatalogue,
@@ -44,16 +44,12 @@ const router = useRouter()
 const pokemonTransition = usePokemonTransition()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
-const focusTimer = useFocusTimer()
-const {
-  seconds: focusSeconds, running: timerRunning, finished: timerFinished,
-  display: focusTime, pendingRewards,
-  start: coreStart, pause: corePause, reset: coreReset, consumeReward,
-} = focusTimer
+const floatingTimer = useFloatingStudyTimer()
+const focusTimer = floatingTimer.timer
+const { seconds: focusSeconds, running: timerRunning, finished: timerFinished } = focusTimer
 const profile = ref(null)
 const selectedBuddyRecord = ref(null)
 const { prompt:experiencePrompt, showSaved:showSavedExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async () => {
-  completedFocusSessions.value = await getRewardedTimerCount(profile.value.id)
   selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
 })
 const catalogue = ref({ subjects: [], topics: [] })
@@ -79,36 +75,17 @@ const topic = computed(() =>
     : availableTopics.value[0] || null,
 )
 const currentResources = computed(() => resources[topic.value?.id])
-const persistedStudy = useStudySession(profile, topic, 'flashcards')
-// A session can finish while another page is open; pay it out once this page is ready
-const rewarding = new Set()
-// watch([pendingRewards, loading, profile], ([ids]) => {
-//   if (loading.value || !profile.value) return
-//   for (const id of [...ids]) {
-//     if (rewarding.has(id)) continue
-//     rewarding.add(id)
-//     Promise.resolve(rewardExperience({ id, type: 'timer' }))
-//       .then(() => consumeReward(id))
-//       .catch(() => rewarding.delete(id))
-//   }
-// }, { immediate: true, deep: true })
-async function recordFocusCompletion() {
+const persistedStudy = useStudySession(profile, topic, 'flashcards', 'flashcard-round')
+watch([profile, topic], ([student, selectedTopic]) => floatingTimer.attach(student, selectedTopic), { immediate: true })
+watch(floatingTimer.rewardSequence, async () => {
+  const id = profile.value?.id
+  const request = generation
+  if (!id) return
   try {
-    const saved = await persistedStudy.action('complete_block')
-    if (saved?.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
-    return !!saved
-  } catch { return false }
-}
-watch([pendingRewards, loading, profile, () => persistedStudy.ready.value], ([ids]) => {
-  if (loading.value || !profile.value || !persistedStudy.ready.value) return
-  for (const id of [...ids]) {
-    if (rewarding.has(id)) continue
-    rewarding.add(id)
-    recordFocusCompletion()
-      .then((ok) => { if (ok) consumeReward(id) })
-      .finally(() => rewarding.delete(id))
-  }
-}, { immediate: true, deep: true })
+    const buddy = await getSelectedStudyBuddy(id)
+    if (alive && request === generation && profile.value?.id === id) selectedBuddyRecord.value = buddy
+  } catch { /* Keep the last loaded buddy if the refresh is unavailable. */ }
+})
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -121,7 +98,6 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
-    focusTimer.bind(student.id)
     topicCompletion.bindStudent(student.id, student.school_level_id)
     const [data, selectedBuddy] = await Promise.all([
       student.school_level_id
@@ -223,12 +199,7 @@ onMounted(() => {
   if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'study' } })
   else initialise()
 })
-onBeforeRouteLeave(async () => {
-  // pauseFocusTimer()
-  // if (persistedStudy.ready.value) {
-  //   try { await persistedStudy.action(to.name === 'learn' || to.name === 'surprise-boss' ? 'pause' : 'abandon') } catch { /* last confirmed heartbeat remains saved */ }
-  // }
-})
+
 onUnmounted(() => {
   alive = false
   generation++
@@ -352,124 +323,10 @@ const answerVisible = ref(false)
 const completedCards = ref(0)
 const ratingMessage = ref('')
 
-// Rewarded focus sessions are counted by the Supabase XP ledger.
-const SESSION_REWARD_LIMIT = 4
-const completedFocusSessions = ref(0)
-watch(() => profile.value?.id, async (id, _, onCleanup) => {
-  let cancelled=false; onCleanup(()=>{cancelled=true})
-  if (!id) { completedFocusSessions.value=0; return }
-  try { const count=await getRewardedTimerCount(id); if(!cancelled) completedFocusSessions.value=count }
-  catch { /* Saving a reward will show an actionable error if SQL is missing. */ }
-}, {immediate:true})
-// async function recordFocusCompletion() {
-//   try {
-//     const saved = await persistedStudy.action('complete_block')
-//     if (!saved) return
-//     if (saved.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
-//     else if (saved.block?.running_since) {
-//       focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
-//       timerFinished.value = false
-//       timerDeadline = Date.now() + focusSeconds.value * 1000
-//       timerRunning.value = true
-//       focusInterval = setInterval(tickFocusTimer, 250)
-//     }
-//   } catch { /* persistedStudy.error offers retry */ }
-// }
-
-// Paused/idle/completed is always red, even when fewer than two minutes remain.
 const timerBorderColor = computed(() => !timerRunning.value ? '#ff4057' : focusSeconds.value <= 120 ? '#ffd43b' : '#34e782')
 const timerBorderStyle = computed(() => ({ '--timer-border': timerBorderColor.value }))
-// let timerDeadline = 0
-// let focusInterval
-// const focusTime = computed(() => `${String(Math.floor(focusSeconds.value / 60)).padStart(2, '0')}:${String(focusSeconds.value % 60).padStart(2, '0')}`)
-// function tickFocusTimer() {
-//   if (!timerRunning.value) return
-//   focusSeconds.value = Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000))
-//   if (!focusSeconds.value) {
-//     timerRunning.value = false
-//     timerFinished.value = true
-//     clearInterval(focusInterval)
-//     recordFocusCompletion()
-//   }
-// }
-// function pauseFocusTimer() {
-//   tickFocusTimer()
-//   timerRunning.value = false
-//   clearInterval(focusInterval)
-//   if (persistedStudy.state.value?.block?.running_since) void persistedStudy.action('pause').catch(() => {})
-// }
-// async function startFocusTimer() {
-//   if (timerRunning.value || persistedStudy.busy.value || !persistedStudy.ready.value) return
-//   try {
-//     if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
-//     const block = persistedStudy.state.value?.block
-//     const saved = await persistedStudy.action(block && !block.focus_completed_at ? 'resume' : 'start', newExperienceId())
-//     if (!saved?.block) return
-//     focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
-//   } catch { return }
-//   timerFinished.value = false
-//   timerDeadline = Date.now() + focusSeconds.value * 1000
-//   timerRunning.value = true
-//   focusInterval = setInterval(tickFocusTimer, 250)
-// }
-// async function resetFocusTimer() {
-//   pauseFocusTimer()
-//   if (persistedStudy.ready.value) {
-//     try { await persistedStudy.action('reset') } catch { return }
-//   }
-//   focusSeconds.value = 25 * 60
-//   timerFinished.value = false
-// }
-// watch(() => persistedStudy.state.value?.block, block => {
-//   if (!block) return
-//   focusSeconds.value = Math.max(0, Math.ceil((1500000 - block.active_ms) / 1000))
-//   timerFinished.value = !!block.focus_completed_at
-//   if (!block.running_since) { timerRunning.value = false; clearInterval(focusInterval) }
-// })
-function pauseFocusTimer() {
-  corePause()
-  if (persistedStudy.state.value?.block?.running_since) void persistedStudy.action('pause').catch(() => {})
-}
-async function startFocusTimer() {
-  if (timerRunning.value || persistedStudy.busy.value || !persistedStudy.ready.value) return
-  try {
-    if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
-    const block = persistedStudy.state.value?.block
-    const saved = await persistedStudy.action(block && !block.focus_completed_at ? 'resume' : 'start', newExperienceId())
-    if (!saved?.block) return
-    focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
-    coreStart()
-  } catch { /* persistedStudy.error offers retry */ }
-}
-// async function resetFocusTimer() {
-//   coreReset()
-//   if (persistedStudy.ready.value) { try { await persistedStudy.action('reset') } catch { /* retry offered */ } }
-// }
-function whenStudyReady() {
-  if (persistedStudy.ready.value) return Promise.resolve()
-  return new Promise(resolve => {
-    const stop = watch(persistedStudy.ready, ready => {
-      if (ready) { stop(); resolve() }
-    })
-  })
-}
-
-async function resetFocusTimer() {
-  coreReset()
-  focusSeconds.value = 25 * 60
-  timerFinished.value = false
-  await whenStudyReady()
-  try { await persistedStudy.action('reset') } catch { /* retry offered */ }
-  focusSeconds.value = 25 * 60
-  timerFinished.value = false
-}
-async function refreshDailySessions() {
-  if (!profile.value?.id) return
-  try { completedFocusSessions.value = await getRewardedTimerCount(profile.value.id) } catch { /* next save reports errors */ }
-}
-let dailyRefresh
-onMounted(() => { dailyRefresh = setInterval(refreshDailySessions, 30000); window.addEventListener('focus', refreshDailySessions) })
-onUnmounted(() => { clearInterval(dailyRefresh); window.removeEventListener('focus', refreshDailySessions) })
+const pauseFocusTimer = floatingTimer.pause
+const resetFocusTimer = floatingTimer.reset
 // The uploaded page did not include StudyFlashcards.vue or studyService.
 // This adapter supports common card shapes; adjust here if your service differs.
 function cardRows(data) {
@@ -695,25 +552,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
       <section  class="lab-stage" :class="{ 'missing-background': backgroundFailed, 'selection-blur': !enteredLab }" :inert="!enteredLab" :aria-hidden="!enteredLab" :style="timerBorderStyle" aria-label="Poké Lab study room">
         <TownBackground scene="lab" @image-error="backgroundFailed = true" />
 
-        <!-- This coloured ring follows the lower-left monitor in the new room artwork. -->
-        <div class="timer-frame" aria-hidden="true"></div>
-        <!-- Timer screen: paused red, running green, final two minutes yellow. -->
-        <section class="lab-screen prompt-screen timer-screen" aria-label="25-minute focus timer">
-          <div class="focus-session-progress" role="img"
-            :aria-label="`${completedFocusSessions} of ${SESSION_REWARD_LIMIT} study sessions completed`">
-            <span v-for="session in SESSION_REWARD_LIMIT" :key="session"
-              class="focus-session-dot" :class="{ 'is-complete': session <= completedFocusSessions }"
-              aria-hidden="true"></span>
-          </div>
-          <span class="focus-session-count" role="status">{{ completedFocusSessions }} / {{ SESSION_REWARD_LIMIT }} sessions</span>
-          <strong class="focus-digits" role="timer" aria-label="Time remaining">{{ focusTime }}</strong>
-          <div class="focus-actions">
-            <button @click="timerRunning ? pauseFocusTimer() : startFocusTimer()">{{ timerRunning ? 'Pause' : 'Start' }}</button>
-          </div>
-          <span v-if="timerFinished" class="focus-finished" role="status">Session complete — take a break!</span>
-        </section>
-
-
+        <!-- Focus timer is hosted by App.vue so it survives page navigation. -->
         <!-- Blue screen: question and answer on the same display. -->
         <section class="lab-screen answer-screen" aria-label="Flashcard answer and learning content" tabindex="0" @keydown="handleCardKey">
           <template v-if="true">

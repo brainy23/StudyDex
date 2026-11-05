@@ -1,14 +1,14 @@
 import { computed, onMounted, onUnmounted, ref, unref, watch } from 'vue'
 import { studyAction } from '../services/learningService'
 
-export function useStudySession(profile, topic, mode) {
+export function useStudySession(profile, topic, mode, storageNamespace = 'study-session') {
   const state = ref(null)
   const error = ref('')
   const busy = ref(false)
   let owner, topicId, sessionId, generation = 0, alive = true, heartbeat
   let pending = Promise.resolve()
   let failedAction = null
-  const storageKey = () => `studydex:study-session:${owner}:${mode}:${topicId}`
+  const storageKey = () => `studydex:${storageNamespace}:${owner}:${mode}:${topicId}`
   async function perform(request, version) {
     if (!alive || version !== generation) return null
     if (!request.userId || !request.topicId || !request.sessionId) throw new Error('Your study session is still loading. Please retry.')

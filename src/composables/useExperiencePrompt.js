@@ -89,5 +89,6 @@ export function useExperiencePrompt(buddy, onSaved = () => {}) {
     catch (cause) { job.progressionError = cause?.message || 'Progress refresh failed.' }
     return job
   }
-  return { prompt, reward, dismiss, showSaved }
+  function clear() { queue.value = []; jobs.clear() }
+  return { prompt, reward, dismiss, showSaved, clear }
 }

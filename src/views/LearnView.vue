@@ -15,6 +15,7 @@ import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import { useStudySession } from '../composables/useStudySession'
+import { useFloatingStudyTimer } from '../composables/useFloatingStudyTimer'
 import { onBeforeRouteLeave } from 'vue-router'
 import '../assets/study.css'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
@@ -60,6 +61,11 @@ const topic = computed(() =>
 )
 const currentResources = computed(() => resources[topic.value?.id])
 const persistedStudy = useStudySession(profile, topic, 'learn')
+const floatingTimer = useFloatingStudyTimer()
+watch([profile, topic], ([student, selectedTopic]) => floatingTimer.attach(student, selectedTopic), { immediate: true })
+watch(floatingTimer.rewardSequence, () => {
+  if (profile.value?.id) void loadLearnBuddy(profile.value.id, generation)
+})
 const lessonCompleted = ref(false)
 async function finishLesson() {
   try { await persistedStudy.action('complete'); lessonCompleted.value = true } catch { /* visible retry */ }
