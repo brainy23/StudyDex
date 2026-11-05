@@ -6,14 +6,12 @@ const props = defineProps({
   graded: { type: Boolean, default: false },
   finished: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
-  allowAnswerChange: { type: Boolean, default: false },
   questionId: { type: String, default: 'arena-question' },
 })
 const emit = defineEmits(['select'])
 
 function selectOption(id) {
-  if (props.disabled || props.finished ||
-      (props.selectedId !== null && (!props.allowAnswerChange || props.graded))) return
+  if (props.disabled || props.finished || props.selectedId !== null) return
   emit('select', id)
 }
 </script>
@@ -40,7 +38,7 @@ function selectOption(id) {
           },
         ]"
         :aria-pressed="selectedId === option.id"
-        :disabled="disabled || (selectedId !== null && (!allowAnswerChange || graded))"
+        :disabled="disabled || selectedId !== null"
         @click="selectOption(option.id)"
       >
         <b class="choice-letter">{{ String.fromCharCode(65 + index) }}</b>

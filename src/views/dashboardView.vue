@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
 import BackToHome from '../components/common/BackToHome.vue'
-import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
 import { getDashboardData } from '@/services/dashboardService'
 import { studyErrorMessage, resolveStudyImage } from '@/services/studyService'
@@ -47,16 +47,10 @@ async function loadDashboard() {
   }
 }
 const readable = section => ['ready', 'empty'].includes(section?.status)
-const capitalizedName = name => {
-  const text = String(name ?? '').trim()
-  return text.charAt(0).toUpperCase() + text.slice(1)
-}
 const profile = computed(() => dashboard.value?.profile)
 const catalogue = computed(() => dashboard.value?.catalogue)
-const subjects = computed(() => (catalogue.value?.data?.subjects ?? [])
-  .map(subject => ({ ...subject, name: capitalizedName(subject.name) })))
-const topics = computed(() => (catalogue.value?.data?.topics ?? [])
-  .map(topic => ({ ...topic, name: capitalizedName(topic.name) })))
+const subjects = computed(() => catalogue.value?.data?.subjects ?? [])
+const topics = computed(() => catalogue.value?.data?.topics ?? [])
 const subject = computed(() => subjects.value.find(item => item.id === selectedSubjectId.value))
 const quizSection = computed(() => dashboard.value?.quizAttempts)
 const sessionSection = computed(() => dashboard.value?.studySessions)
@@ -66,11 +60,7 @@ const sessionsAvailable = computed(() => readable(sessionSection.value))
 const blocksAvailable = computed(() => readable(blockSection.value) && sessionsAvailable.value)
 const attempts = computed(() => quizAvailable.value ? quizSection.value.data ?? [] : [])
 const sessions = computed(() => sessionsAvailable.value ? sessionSection.value.data ?? [] : [])
-const completedSessions = computed(() => sessions.value.flatMap(row => {
-  if (row.status === 'completed' && row.completed_at) return [row]
-  const dates = blocks.value.filter(block => block.session_id === row.id && block.focus_completed_at).map(block => block.focus_completed_at).sort()
-  return dates.length ? [{ ...row, completed_at: dates.at(-1) }] : []
-}))
+const completedSessions = computed(() => sessions.value.filter(row => row.status === 'completed' && row.completed_at))
 const blocks = computed(() => blocksAvailable.value ? blockSection.value.data ?? [] : [])
 const buddySection = computed(() => dashboard.value?.buddy)
 const buddy = computed(() => buddySection.value?.data)
@@ -169,12 +159,21 @@ const nextChallenge = computed(() => {
 })
 const quizLink = topic => ({ name: 'quiz', query: { subject: topic.subject_id, topic: topic.id } })
 const quizXP = computed(() => attempts.value.reduce((sum, row) => sum + row.xp_change, 0))
-const studyXP = computed(() => sessions.value.reduce((sum, row) => sum + (row.xp_change || 0), 0) + blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
+const studyXP = computed(() => blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
 const average = computed(() => regularAttempts.value.length ? Math.round(regularAttempts.value.reduce((sum, row) => sum + percentage(row), 0) / regularAttempts.value.length) : null)
+const streak = computed(() => {
+  const days = new Set(completedSessions.value.map(row => dayKey(row.completed_at)))
+  let day = dayKey(now.value)
+  if (!days.has(day)) day = shiftDay(day, -1)
+  let count = 0
+  while (days.has(day)) { count++; day = shiftDay(day, -1) }
+  return count
+})
 const stats = computed(() => [
   { title: 'Total earned XP', value: quizAvailable.value && blocksAvailable.value ? quizXP.value + studyXP.value : '—', description: 'Quiz XP and recorded study XP', color: 'yellow', icon: '⭐' },
   { title: 'Study sessions', value: sessionsAvailable.value ? completedSessions.value.length : '—', description: 'Completed sessions', color: 'blue', icon: '📚' },
   { title: 'Quiz average', value: quizAvailable.value && average.value !== null ? `${average.value}%` : '—', description: quizAvailable.value && !regularAttempts.value.length ? 'No quizzes completed yet' : 'Regular quizzes only', color: 'pink', icon: '🎯' },
+  { title: 'Study streak', value: sessionsAvailable.value ? streak.value : '—', description: 'Consecutive study days · SGT', color: 'purple', icon: '🔥' },
 ])
 const notices = computed(() => [quizSection.value, sessionSection.value, blockSection.value].filter(section => section && !readable(section)))
 const chartDays = computed(() => Array.from({ length: Number(selectedPeriod.value) }, (_, index) => shiftDay(dayKey(now.value), index - Number(selectedPeriod.value) + 1)))
@@ -197,15 +196,13 @@ const history = computed(() => {
   const topicName = id => topics.value.find(topic => topic.id === id)?.name ?? 'Topic unavailable'
   return [
     ...attempts.value.map(row => ({ id: `quiz-${row.id}`, title: topicName(row.topic_id), type: row.attempt_type === 'boss_battle' ? 'Boss battle' : 'Quiz', badge: 'quiz', score: percentage(row), xp: row.xp_change, date: row.completed_at })),
-    ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: row.mode === 'learn' ? 'Learn' : 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? (row.xp_change || 0) + blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
+    ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))
 })
 const visibleHistory = computed(() => showAllProgress.value ? history.value : history.value.slice(0, 5))
 const signed = value => value === null ? '—' : `${value >= 0 ? '+' : ''}${value}`
 onMounted(() => {
   loadDashboard()
-  window.addEventListener('focus', loadDashboard)
-  window.addEventListener('studydex:activity', loadDashboard)
   clockInterval = setInterval(() => { now.value = new Date() }, 60000)
   try {
     // Defer service calls outside the Supabase auth callback.
@@ -224,8 +221,6 @@ onUnmounted(() => {
   requestId++
   subscription?.unsubscribe()
   clearInterval(clockInterval)
-  window.removeEventListener('focus', loadDashboard)
-  window.removeEventListener('studydex:activity', loadDashboard)
 })
 </script>
 
@@ -249,8 +244,7 @@ onUnmounted(() => {
           </div>
           <div class="dashboard-buddy">
             <h3 class="town-buddy-heading">Your Town Buddy Progress</h3>
-            <PokeSprite v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy"
-              :active-pokemon="activeBuddy" :fallback-src="activeBuddy.static_img" embedded progress-position="right" />
+            <PokemonBuddy v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy" :active-pokemon="activeBuddy" />
             <p v-else :role="buddySection?.status === 'error' ? 'alert' : 'status'">{{ buddySection?.message }}</p>
           </div>
         </header>
@@ -481,7 +475,7 @@ summary:focus-visible,
 /* STATISTICS */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 22px;
 }
@@ -1199,27 +1193,89 @@ summary:focus-visible,
   text-align: center;
 }
 
-.dashboard-pokemon-buddy {
-  height: auto;
+.dashboard-buddy :deep(.pokemon-buddy) {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
   padding: 0;
-  gap: 6px;
+  text-align: left;
 }
 
-.dashboard-pokemon-buddy :deep(.buddy-stage) {
-  height: 110px;
-  min-height: 0;
-  flex: none;
-}
-
-.dashboard-pokemon-buddy :deep(.buddy-sprite) {
-  width: auto;
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-}
-
-.dashboard-pokemon-buddy :deep(h3) {
+.dashboard-buddy :deep(.pokemon-buddy > h2) {
   display: none;
+}
+
+.dashboard-buddy :deep(.buddy-image-container) {
+  grid-column: 1;
+  grid-row: 1 / 4;
+  width: 90px;
+  height: 110px;
+}
+
+.dashboard-buddy :deep(.buddy-sprite) {
+  width: auto;
+  height: 75px;
+  max-width: 100%;
+}
+
+.dashboard-buddy :deep(.pokemon-buddy > h3),
+.dashboard-buddy :deep(.buddy-details > h3) {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: end;
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.3;
+}
+
+.dashboard-buddy :deep(.buddy-level) {
+  grid-column: 2;
+  grid-row: 2;
+  margin: 0;
+  font-size: 16px;
+}
+
+/* Allow XP text to wrap without overlapping. */
+.dashboard-buddy :deep(.buddy-xp) {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: none;
+  margin-top: 4px;
+}
+
+.dashboard-buddy :deep(.buddy-xp > p) {
+  margin: 0;
+  color: #647394;
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-buddy :deep(.buddy-xp .xp-track) {
+  width: 100%;
+  height: 9px;
+  margin: 0;
+  border-radius: 999px;
+  background: #e5e9df;
+}
+
+.dashboard-buddy :deep(.buddy-xp .xp-fill) {
+  background: #78c98b;
+  border-radius: inherit;
+}
+
+.dashboard-buddy :deep(.buddy-message),
+.dashboard-buddy :deep(.buddy-error),
+.dashboard-buddy :deep(.buddy-status) {
+  grid-column: 1 / -1;
+  font-size: 14px;
+  text-align: center;
 }
 
 /* RESPONSIVE LAYOUT */

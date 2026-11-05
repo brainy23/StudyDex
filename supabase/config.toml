@@ -1,11 +1,2 @@
-project_id = "studydex"
-
-[db]
-major_version = 17
-
-[db.seed]
-enabled = true
-sql_paths = ["./seed.sql"]
-
 [functions.delete-account]
 verify_jwt = true

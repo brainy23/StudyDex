@@ -14,8 +14,6 @@ import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
-import { useStudySession } from '../composables/useStudySession'
-import { onBeforeRouteLeave } from 'vue-router'
 import '../assets/study.css'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
@@ -59,16 +57,6 @@ const topic = computed(() =>
     : availableTopics.value[0] || null,
 )
 const currentResources = computed(() => resources[topic.value?.id])
-const persistedStudy = useStudySession(profile, topic, 'learn')
-const lessonCompleted = ref(false)
-async function finishLesson() {
-  try { await persistedStudy.action('complete'); lessonCompleted.value = true } catch { /* visible retry */ }
-}
-onBeforeRouteLeave(async () => {
-  if (persistedStudy.ready.value && !lessonCompleted.value) {
-    try { await persistedStudy.action('abandon') } catch { /* saved session is retained */ }
-  }
-})
 async function initialise() {
   activeBuddyController?.abort()
   activeBuddyController = null
@@ -322,8 +310,8 @@ async function backToFlashcards() {
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab, 'is-learning': true }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
-      <button type="button" class="is-current" aria-current="page" disabled>Learn</button>
       <button type="button" :disabled="!topic || learningNavigationBusy" @click="backToFlashcards">Flashcards</button>
+      <button type="button" class="is-current" aria-current="page" disabled>Learn</button>
     </nav>
     <header class="study-header">
       <StudyPageNavigation @topics="returnToSelection" />
@@ -387,8 +375,6 @@ async function backToFlashcards() {
                 <div v-if="concept.example_text" class="inline-example"><h3>Example</h3><p class="learn-copy">{{ concept.example_text }}</p></div>
               </section>
               <p v-if="!lessonConcepts.length">No lesson content has been added for this topic yet.</p>
-              <button v-if="lessonConcepts.length" type="button" :disabled="persistedStudy.busy.value || lessonCompleted" @click="finishLesson">{{ lessonCompleted ? 'Lesson completion saved' : 'Finish lesson' }}</button>
-              <p v-if="persistedStudy.error.value" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().catch(() => {})">Retry</button></p>
             </template>
             <p v-else>No lesson content is available yet.</p>
           </article>

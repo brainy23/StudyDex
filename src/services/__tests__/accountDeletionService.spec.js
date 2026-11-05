@@ -1,8 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { clearDeletedAccountBrowserData, deleteOwnAccount } from '../accountDeletionService'
 
-const { getUser, getSession, signOut, signIn, temporarySignOut, invoke, listFactors, challenge, verify } = vi.hoisted(() => ({
-  listFactors: vi.fn(), challenge: vi.fn(), verify: vi.fn(),
+const { getUser, getSession, signOut, signIn, temporarySignOut, invoke } = vi.hoisted(() => ({
   getUser: vi.fn(),
   getSession: vi.fn(),
   signOut: vi.fn(),
@@ -13,7 +12,7 @@ const { getUser, getSession, signOut, signIn, temporarySignOut, invoke, listFact
 vi.mock('../../lib/supabase', () => ({
   getSupabase: () => ({ auth: { getUser, getSession, signOut }, functions: { invoke } }),
   createTransientAuthClient: () => ({
-    auth: { signInWithPassword: signIn, signOut: temporarySignOut, mfa: { listFactors, challenge, verify } },
+    auth: { signInWithPassword: signIn, signOut: temporarySignOut },
   }),
 }))
 const fields = {
@@ -23,7 +22,6 @@ const fields = {
 }
 beforeEach(() => {
   vi.resetAllMocks()
-  listFactors.mockResolvedValue({ data: { all: [] }, error: null })
   localStorage.clear()
   sessionStorage.clear()
   getUser.mockResolvedValue({
@@ -122,23 +120,4 @@ it('does not sign out a different account that became active after the deletion 
 it('does not turn confirmed server deletion into failure because cleanup/session reads fail', async () => {
   getSession.mockRejectedValue(new Error('network unavailable'))
   expect((await deleteOwnAccount(fields)).deleted).toBe(true)
-})
-it('steps up the isolated confirmation session before deleting an MFA-enrolled account', async () => {
-  listFactors.mockResolvedValue({ data: { all: [{ id:'factor-a', status:'verified', factor_type:'totp' }] } })
-  challenge.mockResolvedValue({ data: { id:'challenge-a' } })
-  verify.mockResolvedValue({ data: { access_token:'verified-aal2-token' } })
-  const requestMfaCode = vi.fn(async () => '123456')
-  await deleteOwnAccount({ ...fields, requestMfaCode })
-  expect(challenge).toHaveBeenCalledWith({ factorId:'factor-a' })
-  expect(verify).toHaveBeenCalledWith({ factorId:'factor-a', challengeId:'challenge-a', code:'123456' })
-  expect(invoke.mock.calls[0][1].headers.Authorization).toBe('Bearer verified-aal2-token')
-})
-it('does not delete after a rejected or cancelled MFA challenge', async () => {
-  listFactors.mockResolvedValue({ data: { all: [{ id:'factor-a', status:'verified', factor_type:'phone' }] } })
-  challenge.mockResolvedValue({ data: { id:'challenge-a' } })
-  await expect(deleteOwnAccount({ ...fields, requestMfaCode: async () => null })).rejects.toThrow('cancelled')
-  expect(invoke).not.toHaveBeenCalled()
-  verify.mockResolvedValue({ error: new Error('invalid code') })
-  await expect(deleteOwnAccount({ ...fields, requestMfaCode: async () => '123456' })).rejects.toThrow('not accepted')
-  expect(invoke).not.toHaveBeenCalled()
 })

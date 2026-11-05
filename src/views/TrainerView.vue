@@ -12,9 +12,7 @@ import { avatarOptions, findAvatar } from '../data/avatarOptions'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import BackToHome from '../components/common/BackToHome.vue'
 import StudydexBubbleNav from '../components/common/StudydexBubbleNav.vue'
-
-import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
-
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
@@ -287,7 +285,7 @@ watch(
 
     const fallback = activeBuddy.value?.static_img || ''
     // Keep a visible sprite while an evolved form's GIF is loading.
-    // This also avoids unnecessary PokeSprite remounts.
+    // This also avoids unnecessary PokemonBuddy remounts.
     buddySprite.value = spriteCache.get(id) || fallback || buddySprite.value
 
     try {
@@ -321,7 +319,7 @@ watch(
 )
 
 // =====================================================
-// RECEIVE EVOLUTION / XP EVENTS FROM POKESPRITE
+// RECEIVE EVOLUTION / XP EVENTS FROM POKEMONBUDDY
 // =====================================================
 
 function receivePokemonUpdate({ pokemon, changes } = {}) {
@@ -561,9 +559,9 @@ const roomLinks = [
     outline: 'M 2 2 L 98 2 L 98 98 L 2 98 Z'
   },
   {
-    id: 'pokedex',
-    label: 'Pokédex',
-    path: '/collection',
+    id: 'studydecks',
+    label: 'Visit Poké Lab in town',
+    path: '/home',
     left: '12%',
     top: '49.6%',
     width: '11.3%',
@@ -654,7 +652,6 @@ onUnmounted(() => {
 
     <xpPrompt
       :result="experienceResult"
-      offer-gift
       @close="experienceResult = null"
       @open-gift="handleOpenGift"
     />
@@ -709,30 +706,18 @@ onUnmounted(() => {
               {{ buddyError }}
             </span>
 
-
-            <div class="trainer-pokemon" v-else-if="roomPokemon && buddySprite">
-
-            <PokeSprite
+            <PokemonBuddy
               ref="pokemonBuddyRef"
+              v-else-if="roomPokemon && buddySprite"
               :key="roomPokemon.ownedId || roomPokemon.id"
               class="room-pokemon"
               :active-pokemon="roomPokemon"
-              :fallback-src="roomPokemon.static_img"
-              progress-position="bottom"
-              facing="front"
-              :max-xp="200"
               @update-pokemon="receivePokemonUpdate"
-              @xp-overflow="receiveXpOverflow"
             />
-
-
-            </div>
 
             <span v-else class="scene-message">
               No active buddy yet
             </span>
-
-
           </div>
 
           <!-- <div class="buddy-figure" aria-live="polite">
@@ -883,6 +868,10 @@ onUnmounted(() => {
       </div>
 
      <header class="trainer-hud">
+      <div class="title-card">
+        <span class="title-eyebrow">STUDYDEX</span>
+        <h1>Trainer Home</h1>
+      </div>
       <div class="trainer-clock">
         <ClockWeather
           :use-device-location="true"
@@ -1148,29 +1137,19 @@ onUnmounted(() => {
   .door-outline { transition: none; }
 }
 
-/* =========================================
-   POKÉMON — ALWAYS-VISIBLE XP PANEL BELOW
-   ========================================= */
+/* Poke component */
+/* Image-only Pokémon component inside the room */
 
 .room-pokemon {
   position: relative;
-  isolation: isolate;
   display: block;
   width: 100%;
   min-width: 0;
   padding: 0;
-  overflow: visible;
 }
 
-/* Remove the old hover-panel background. */
-.room-pokemon::before {
-  content: none;
-}
-
-/* Hide standalone headings and extra text.
-   The shared panel already displays the level and XP. */
+/* Hide the heading and extra messages only */
 .room-pokemon :deep(h2),
-.room-pokemon :deep(h3),
 .room-pokemon :deep(.buddy-message),
 .room-pokemon :deep(.buddy-error),
 .room-pokemon :deep(.buddy-status),
@@ -1178,14 +1157,97 @@ onUnmounted(() => {
   display: none;
 }
 
-/* Keep positioning controlled by PokeSprite. */
-.room-pokemon :deep(.buddy-image-container) {
-  width: 100%;
+/* Pokémon name */
+.room-pokemon :deep(h3) {
+  position: absolute;
+  bottom: calc(100% + 68px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 180px;
   margin: 0;
-  cursor: default;
+  color: #26365b;
+  font-size: 17px;
+  font-weight: 800;
+  text-align: center;
 }
 
-/* Preserve the Pokémon sprite styling. */
+/* Pokémon level */
+.room-pokemon :deep(.buddy-level) {
+  position: absolute;
+  bottom: calc(100% + 48px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 180px;
+  margin: 0;
+  color: #493c2e;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* XP information above the sprite */
+.room-pokemon :deep(.buddy-xp) {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 8px;
+
+  width: 160px;
+  max-width: none;
+  margin: 0;
+}
+
+.room-pokemon :deep(.buddy-xp > p) {
+  margin: 0;
+  color: #493c2e;
+  font-size: 10px;
+}
+
+.room-pokemon :deep(.buddy-xp > p:first-child) {
+  grid-column: 1;
+  grid-row: 1;
+  text-align: left;
+}
+
+.room-pokemon :deep(.buddy-xp > p:last-child) {
+  grid-column: 2;
+  grid-row: 1;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.room-pokemon :deep(.xp-track) {
+  grid-column: 1 / -1;
+  grid-row: 2;
+
+  width: 100%;
+  height: 9px;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e9df;
+  image-rendering: pixelated;
+}
+
+.room-pokemon :deep(.xp-fill) {
+  height: 100%;
+  border-radius: inherit;
+  background: #78c98b;
+}
+
+/* Preserve the sprite size and evolution effects */
+.room-pokemon :deep(.buddy-image-container) {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  margin: 0;
+}
+
 .room-pokemon :deep(.buddy-sprite) {
   display: block;
   width: 100%;
@@ -1195,22 +1257,107 @@ onUnmounted(() => {
   object-fit: contain;
   image-rendering: pixelated;
   user-select: none;
-  cursor: default;
-}
-
-/* Apply the shadow only while idle so evolution
-   and defeated-state filters remain available. */
-.room-pokemon :deep(.buddy-sprite:not(.charging):not(.swapping):not(.revealing):not(.defeated)) {
   filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%));
 }
 
-/* Always show the shared level and XP panel.
-   Its colours, typography and bar stay consistent
-   with the other pages. */
-.room-pokemon :deep(.buddy-progress) {
+@media (max-width: 600px) {
+  .room-pokemon :deep(h3) {
+    width: 130px;
+    font-size: 14px;
+  }
+
+  .room-pokemon :deep(.buddy-level) {
+    width: 130px;
+    font-size: 11px;
+  }
+
+  .room-pokemon :deep(.buddy-xp) {
+    width: 130px;
+  }
+}
+
+.room-pokemon {
+  isolation: isolate;
+}
+
+.room-pokemon::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% - 2px);
+  left: 50%;
+  transform: translateX(-50%);
+
+  width: 200px;
+  height: 110px;
+  background: #fff0e8;
+  border-radius: 14px;
+
+  z-index: -1;
+  pointer-events: none;
+}
+
+@media (max-width: 600px) {
+  .room-pokemon::before {
+    width: 150px;
+  }
+}
+
+/* =========================================
+   PICHU — HOVER TO SHOW NAME, LEVEL AND XP
+   ========================================= */
+
+/* Allow mouse interaction with the Pokémon */
+.buddy-figure {
+  pointer-events: auto;
+}
+
+.room-pokemon {
+  pointer-events: auto;
+}
+
+/* Make the actual sprite hoverable */
+.room-pokemon :deep(.buddy-image-container),
+.room-pokemon :deep(.buddy-sprite) {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* Hide information by default */
+.room-pokemon :deep(h3),
+.room-pokemon :deep(.buddy-level),
+.room-pokemon :deep(.buddy-xp) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  transition:
+    opacity 0.25s ease,
+    visibility 0.25s ease;
+}
+
+/* Hide information background by default */
+.room-pokemon::before {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  transition:
+    opacity 0.25s ease,
+    visibility 0.25s ease;
+}
+
+/* Show information when hovering on Pokémon image */
+.room-pokemon:has(.buddy-image-container:hover) :deep(h3),
+.room-pokemon:has(.buddy-image-container:hover) :deep(.buddy-level),
+.room-pokemon:has(.buddy-image-container:hover) :deep(.buddy-xp) {
   opacity: 1;
   visibility: visible;
-  pointer-events: none;
+}
+
+/* Show the information panel background */
+.room-pokemon:has(.buddy-image-container:hover)::before {
+  opacity: 1;
+  visibility: visible;
 }
 
 .trainer-clock {
@@ -1222,11 +1369,6 @@ onUnmounted(() => {
   .trainer-clock {
     max-width: calc(100vw - 24px);
   }
-}
-
-.trainer-pokemon {
-  width: 250px;
-  height: 250px;
 }
 
 </style>
