@@ -3,6 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { PGlite } from '@electric-sql/pglite'
+import { calculateQuizReward } from '../src/utils/quizRewards.js'
 
 // PostgreSQL in an isolated WASM process. Never connects to the live project.
 const db = new PGlite()
@@ -134,6 +135,41 @@ try {
     }
     assert.equal((await db.query('SELECT count(*)::int n FROM pomodoro_blocks')).rows[0].n, 0)
     assert.equal((await db.query('SELECT count(*)::int n FROM quiz_attempt_answers')).rows[0].n, 0)
+  })
+  await check('quiz XP matches all score bands, rounds percentages, and applies each attempt once', async () => {
+    const student = randomUUID()
+    await db.query('INSERT INTO auth.users VALUES($1,$2,$3)', [student, `${student}@example.invalid`, { display_name: 'Quiz rewards fixture', school_level_number: 3 }])
+    await call(student, 'SELECT public.claim_starter(4) AS result')
+    const recipient = (await db.query('SELECT id FROM user_pokemon WHERE user_id=$1', [student])).rows[0].id
+    const bank = (await db.query(`SELECT q.id,a.correct_option_id,
+      (SELECT o.id FROM question_options o WHERE o.question_id=q.id AND o.id<>a.correct_option_id ORDER BY o.id LIMIT 1) AS wrong_option_id
+      FROM questions q JOIN question_answers a ON a.question_id=q.id
+      WHERE q.question_purpose='quiz' ORDER BY q.id LIMIT 200`)).rows
+    assert.equal(bank.length, 200)
+    const scores = [...Array.from({ length: 101 }, (_, n) => [n,100]), [1,200], [199,200], [1,3], [2,3]]
+    for (const [index, [correctCount, totalCount]] of scores.entries()) {
+      const items = bank.slice(0,totalCount)
+      const id = randomUUID()
+      const questions = items.map(q => ({ id:q.id, options:[{ id:q.correct_option_id },{ id:q.wrong_option_id }] }))
+      const keys = Object.fromEntries(items.map(q => [q.id,{ correct_option_id:q.correct_option_id }]))
+      const choices = Object.fromEntries(items.map((q,i) => [q.id,i<correctCount ? q.correct_option_id : q.wrong_option_id]))
+      // Trusted question snapshots normally come from start_learning_quiz.
+      // Construct longer fixture attempts to exercise percentage rounding and
+      // interior band values beyond the production five-question sample.
+      await db.query(`INSERT INTO private.learning_quiz_runs(id,user_id,topic_id,buddy_id,quiz_day,attempt_number,questions,answer_key)
+        VALUES($1,$2,$3,$4,date '2000-01-01'+$5::integer,1,$6,$7)`, [id,student,topic,recipient,index,questions,keys])
+      const result = await call(student,'SELECT submit_learning_quiz($1,$2) AS result',[id,choices])
+      const expected = calculateQuizReward(correctCount,totalCount)
+      assert.equal(result.scorePercent,expected.scorePercent,`${correctCount}/${totalCount} percentage`)
+      assert.equal(result.delta,expected.xp,`${correctCount}/${totalCount} reward`)
+      const repeated = await call(student,'SELECT submit_learning_quiz($1,$2) AS result',[id,choices])
+      assert.equal(repeated.duplicate,true)
+      assert.equal(repeated.xp,result.xp)
+    }
+    const events = (await db.query('SELECT count(*)::int n FROM studydex_xp_events WHERE user_id=$1 AND reward_type=\'quiz\'',[student])).rows[0].n
+    assert.equal(events,scores.length)
+    const attempts = (await db.query('SELECT count(*)::int n FROM quiz_attempts WHERE user_id=$1',[student])).rows[0].n
+    assert.equal(attempts,scores.length)
   })
   console.log(`${checks} database integration checks passed`)
 } catch (error) { console.error('FAIL', error.message); process.exitCode = 1 }

@@ -23,7 +23,7 @@ import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import '../assets/study.css'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
@@ -218,7 +218,7 @@ const buddyApiKey = computed(() => {
     ? name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
     : null
 })
-// PokemonBuddy owns presentation and evolution animations; the parent owns data.
+// PokeSprite owns presentation and evolution animations; the parent owns data.
 const pokemonBuddy = ref(null)
 const activePokemon = ref(null)
 function updateStudyPokemon({ pokemon, changes }) {
@@ -251,7 +251,7 @@ watch([apiPokemon, selectedBuddyRecord, buddySprite], ([data, record, sprite]) =
     xp: record.xp ?? 0,
     level: record.level ?? 1,
     evolution_stage: 0,
-    isDefeated: false,
+    isDefeated: record.is_defeated ?? false,
     animated_img: sprite || savedSprite,
     static_img: data?.sprites?.front_default || savedSprite,
   }
@@ -675,13 +675,16 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
         <aside class="buddy-chamber" :class="{ 'has-pokemon': !!buddySprite }" aria-label="Your study buddy">
           <div v-if="buddySprite" class="buddy-contact-shadow" aria-hidden="true"></div>
           <div class="buddy-sprite" @error.capture="nextBuddySprite">
-            <PokemonBuddy
+            <PokeSprite
               v-if="activePokemon && buddySprite"
               ref="pokemonBuddy"
+              embedded
               class="lab-pokemon-buddy"
               :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }"
               :active-pokemon="activePokemon"
+              :fallback-src="buddySprite"
               @update-pokemon="updateStudyPokemon"
+              progress-position="top"
             />
             <span v-else class="chamber-status" role="status">{{ spriteLoading ? 'Loading…' : spriteError ? 'Try again below' : 'Loading companion…' }}</span>
           </div>
@@ -1232,27 +1235,27 @@ input:focus-visible {
 
 /* Embed the shared buddy in the lab chamber without its standalone card layout. */
 .lab-pokemon-buddy {
+  /* Adjust these to place the sprite's feet within the chamber. */
+  --sprite-left: 50%;
+  --sprite-bottom: 0%;
   width: 100%; height: 100%; padding: 0; gap: 0;
   min-width: 0; min-height: 0; position: relative;
 }
+.lab-pokemon-buddy :deep(h3) {
+  display: none;
+}
+.lab-pokemon-buddy :deep(.buddy-stage) {
+  height: 100%; min-height: 0; flex: 1 1 0;
+}
 .lab-pokemon-buddy :deep(.buddy-image-container) {
-  width: 100%; height: 100%; min-height: 0; align-items: flex-end;
+  left: var(--sprite-left);
+  bottom: var(--sprite-bottom);
+  transform: translateX(-50%);
+  align-items: flex-end;
 }
-/* Adjust the size of the buddy sprite within the chamber. */
+/* Keep the XP panel above the sprite, with its feet anchored below. */
 .lab-pokemon-buddy :deep(.buddy-image-container .buddy-sprite) {
-  width: auto; height: 72%; max-width: 60%;
-}
-/* Keep status text accessible without covering the chamber's artwork. */
-.lab-pokemon-buddy :deep(h2),
-.lab-pokemon-buddy :deep(h3),
-.lab-pokemon-buddy :deep(.buddy-level),
-.lab-pokemon-buddy :deep(.buddy-status),
-.lab-pokemon-buddy :deep(.buddy-message),
-.lab-pokemon-buddy :deep(.buddy-error),
-.lab-pokemon-buddy :deep(.buddy-xp) {
-  position: absolute; width: 1px; height: 1px; padding: 0;
-  margin: -1px; overflow: hidden; clip-path: inset(50%);
-  white-space: nowrap; border: 0;
+  width: auto; height: 92%; max-width: 60%; max-height: 100%;
 }
 
 /* Coordinates measured against the supplied 1672 x 941 room image. */
@@ -1274,7 +1277,9 @@ input:focus-visible {
   .timer-screen .focus-digits { font-size: clamp(24px, 2.7cqw, 48px); }
 }
 .study-content .lab-stage .buddy-chamber {
-  left: 74.5%; top: 39.7%; width: 15%; height: 30.8%;
+  /* Increase this offset to move the buddy and its XP panel further down. */
+  --buddy-offset-y: 4%;
+  left: 74.5%; top: calc(39.7% + var(--buddy-offset-y)); width: 15%; height: 30.8%;
   padding: 0; box-sizing: border-box;
 }
 .buddy-sprite { width: 96%; height: 94%; }
@@ -1284,7 +1289,10 @@ input:focus-visible {
 .focus-session-count { color: #adcbe5; font-size: clamp(9px, .65cqw, 12px); line-height: 1.2; }
 @media (max-width: 1000px) {
   .study-content .lab-stage .timer-frame { display: none; }
-  .study-content .lab-stage .buddy-chamber { top: 22.34cqw; height: 17.33cqw; }
+  .study-content .lab-stage .buddy-chamber {
+    --buddy-offset-y: 2.25cqw;
+    top: calc(22.34cqw + var(--buddy-offset-y)); height: 17.33cqw;
+  }
 }
 /* Learn entry uses the existing console's final row, keeping ratings in place. */
 .console-learning-row { display:flex; justify-content:center; align-items:center; gap:.7cqw; min-width:0; }

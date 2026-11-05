@@ -70,7 +70,7 @@ const locationLabel = computed(() => {
   }
 
   if (savedLocation.value) {
-    return 'Singapore (default)'
+    return 'Singapore'
   }
 
   return 'Choose location'

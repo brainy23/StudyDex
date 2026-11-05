@@ -10,10 +10,14 @@ const router = useRouter()
 import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
+
+
+
 import { getStudentStudyCatalogue } from '../services/studyService'
 import { startQuiz, submitQuiz } from '../services/quizService'
 import XpPrompt from '../components/common/xpPrompt.vue'
-import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
+import { quizExperienceResult } from '../utils/quizRewards'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
@@ -21,6 +25,13 @@ const profile = ref(null)
 const activeBuddy = ref(null)
 const activeBuddyMessage = ref('')
 const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
+const playerPokemon = computed(() => activeBuddy.value?.pokemon ? {
+  ...activeBuddy.value.pokemon,
+  ownedId: activeBuddy.value.id,
+  xp: activeBuddy.value.xp ?? 0,
+  level: activeBuddy.value.level ?? 1,
+  is_defeated: activeBuddy.value.is_defeated ?? false,
+} : null)
 const loading = ref(true)
 const error = ref(null)
 let alive = true
@@ -337,7 +348,7 @@ function groundArenaSprite(event, fighter) {
 onUnmounted(() => spriteController?.abort())
 
 
-// Public question previews only. No grading, attempts, XP or rewards are written.
+// The server grades and saves each submitted attempt and its rewards.
 const selectedPreviewTopic = ref(null)
 const previewSubject = ref(null)
 const previewIndex = ref(0)
@@ -358,8 +369,11 @@ function resetPreview() {
   answers.value = {}
   quizResult.value = null
   submitError.value = ''
+  xpResult.value = null
+  submitting.value = false
 }
 async function newAttempt() {
+  if (submitting.value || xpResult.value?.animating) return
   try { sessionStorage.removeItem(`studydex:quiz:${profile.value.id}:${selectedPreviewTopic.value.id}:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())}`) } catch { /* optional recovery */ }
   await initialise()
 }
@@ -370,23 +384,41 @@ function choosePreview(optionId) {
   answers.value[previewQuestion.value.id] = optionId
 }
 async function nextPreview() {
-  if (previewChoice.value === null || submitting.value) return
+  if (previewChoice.value === null || submitting.value || previewFinished.value) return
   if (previewIndex.value + 1 >= previewQuestions.value.length) {
     submitting.value = true
     submitError.value = ''
+    const request = generation
+    const runId = quizRun.value.run_id
+    const pendingResult = {
+      id: runId, rewardType: 'quiz', title: 'Checking your quiz…', saving: true, error: '',
+      pokemonName: activeBuddy.value?.pokemon?.name || 'Your Pokémon',
+      retry: nextPreview,
+    }
+    xpResult.value = pendingResult
     try {
       const owner = profile.value.id
-      const result = await submitQuiz(quizRun.value.run_id, { ...answers.value }, owner)
-      if (!alive || profile.value?.id !== owner) return
+      const result = await submitQuiz(runId, { ...answers.value }, owner)
+      if (!alive || request !== generation || profile.value?.id !== owner || quizRun.value?.run_id !== runId) return
       quizResult.value = result
       previewFinished.value = true
       void topicCompletion.refresh()
-      xpResult.value = { ...result, title: 'Quiz complete!', saving: false }
+      xpResult.value = quizExperienceResult(result)
       void loadSavedBuddy(owner, generation)
-    } catch (cause) { if (alive) submitError.value = cause.message || 'Your answers could not be saved. Try again.' }
-    finally { submitting.value = false }
+    } catch (cause) {
+      if (alive && request === generation) {
+        submitError.value = cause.message || 'Your answers could not be saved. Try again.'
+        xpResult.value = { ...pendingResult, title: 'Quiz submission failed', saving: false, error: submitError.value }
+      }
+    } finally {
+      if (alive && request === generation) submitting.value = false
+    }
   }
   else { previewIndex.value++; previewChoice.value = null }
+}
+
+function showSavedReward() {
+  if (quizResult.value) xpResult.value = quizExperienceResult({ ...quizResult.value, duplicate: true })
 }
 
 
@@ -506,6 +538,7 @@ const battleOptions = computed(() =>
           <template v-if="previewFinished">
             <span class="dialogue-kicker">RESULT SAVED</span>
             <p>Your result is saved in Study History.</p>
+            <button type="button" class="battle-next" @click="showSavedReward">View XP reward</button>
             <details><summary>Review answers</summary><p v-for="(item,index) in quizResult.review" :key="item.question_id">{{ index + 1 }}. {{ item.selected_option_id === item.correct_option_id ? 'Correct' : 'Incorrect' }} — {{ item.explanation || 'Review this topic in Poké Lab.' }}</p></details>
           </template>
           <template v-else-if="previewChoice === null">
@@ -525,7 +558,7 @@ const battleOptions = computed(() =>
       </BattleAnswerPanel>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="index === 0 ? 'player-fighter' : 'opponent-fighter'">
         <div class="fighter-shadow"></div>
-        <Pokemon_Backwards v-if="index === 0 && activeBuddy?.pokemon?.name" class="player-back-sprite" :pokename="activeBuddy.pokemon.name" :fallback-src="activeBuddySprite" />
+        <PokeSprite v-if="index === 0 && playerPokemon" class="player-back-sprite" :active-pokemon="playerPokemon" :fallback-src="activeBuddySprite" facing="back" embedded progress-position="hidden" />
         <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, front view`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
         <span v-else class="fighter-unavailable">{{ index === 0 ? activeBuddyMessage : 'Sprite unavailable' }}</span>
 
@@ -871,6 +904,10 @@ input:focus-visible {
 .player-fighter { left: 23%; top: 68%; width: 11%; }
 .opponent-fighter { left: 77%; top: 68%; width: 10.5%; }
 .arena-fighter > .player-back-sprite { position: absolute; bottom: 0; left: 0; width: 100%; height: 11cqw; }
+.player-back-sprite :deep(h3) { display: none; }
+.player-back-sprite :deep(.buddy-stage) { height: 100%; min-height: 0; flex: 1 1 0; }
+.player-back-sprite :deep(.buddy-image-container) { align-items: flex-end; }
+.player-back-sprite :deep(.buddy-sprite) { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-position: center bottom; filter: drop-shadow(0 3px 1px #1b253044); }
 .arena-fighter > img { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; image-rendering: pixelated; filter: drop-shadow(0 3px 1px #1b253044); }
 .fighter-shadow { position: absolute; top: -.3cqw; left: 23%; width: 54%; height: 1cqw; border-radius: 50%; background: #31221466; filter: blur(3px); }
 .fighter-name { position: absolute; top: 1cqw; left: 50%; transform: translateX(-50%); border: 1px solid #e6bf60; border-radius: 20px; padding: 4px 12px; color: #fff4d0; background: #182c43e8; text-transform: capitalize; font-size: clamp(10px, .9cqw, 14px); white-space: nowrap; }
