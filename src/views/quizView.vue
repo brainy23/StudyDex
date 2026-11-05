@@ -1060,7 +1060,42 @@ input:focus-visible {
 @media(max-width:600px) { .arena-hud button.home-link { padding: 8px 10px; } }
 
 
-.arena-picker.redesigned-picker { position:fixed; inset:0; padding:0; background:#fff; color:#303557; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; }
+.redesigned-picker div {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 104px 28px 32px;
+  border: 3px solid #1f3a93;
+  border-radius: 24px;
+  background: #fffaf0 url('/favicon/favicon.svg') center 28px / 64px no-repeat;
+  box-shadow: 0 6px 0 #1f3a93, 0 16px 30px rgba(7, 37, 120, 0.2);
+  color: #17324d;
+  font-size: 18px;
+  line-height: 1.5;
+}
+
+.redesigned-picker button,
+.redesigned-picker a {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 12px 28px;
+  border: 0;
+  border-radius: 999px;
+  background: #ffd000;
+  color: #072578;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 0 4px 0 #b78f00;
+  cursor: pointer;
+}
+
+.redesigned-picker button:hover,
+.redesigned-picker a:hover {
+  background: #1f3a93;
+  color: white;
+}
+
+
 .arena-with-preview { grid-template-rows:minmax(0,1fr); }
 .picker-course { display:flex; align-items:center; gap:12px; color:#684180; font-weight:700; font-size:13px; }
 .picker-course select { padding:8px; border:1px solid #b394c7; border-radius:8px; background:#fff; color:#684180; }
