@@ -5,6 +5,9 @@ import { getSupabase } from './lib/supabase'
 import { usePokemonTransition } from './composables/usePokemonTransition'
 import { provideWeatherLocation } from './composables/useWeatherLocation'
 import PokemonTransition from './components/common/PokemonTransition.vue'
+import TimePreview from './components/common/TimePreview.vue'
+
+const showTimePreview = import.meta.env.DEV
 
 const weather = provideWeatherLocation()
 const router = useRouter()
@@ -29,6 +32,7 @@ onUnmounted(() => { subscription?.unsubscribe(); clearTimeout(redirect) })
 </script>
 
 <template>
+  <TimePreview v-if="showTimePreview" />
   <RouterView v-if="authReady" v-slot="{ Component }">
     <component :is="Component" :key="accountId || 'signed-out'" />
   </RouterView>
