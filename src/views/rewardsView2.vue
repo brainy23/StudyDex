@@ -1,16 +1,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 
-let leaving = false
-
-function goBack() {
-  if (leaving) return
-  leaving = true
-  history.back()
-}
 const rewardsBuddy = ref(null)
 const buddyLoading = ref(true)
 const buddyError = ref('')
@@ -498,8 +492,8 @@ function backToPacks() {
 
 <template>
   <main :class="{ browsing: stage === 'browse' }" :style="theme" @pointermove="onMove">
-    <div>
-        <button type="button" class="back" @click="goBack">Back</button>
+    <div v-if="stage === 'browse'" class="rewards-back-navigation">
+      <GoBackBtn />
     </div>
     <div v-if="stage !== 'browse'" class="backdrop" :class="{ on: flipped }"></div>
 
@@ -735,6 +729,7 @@ function backToPacks() {
     .to-left.away{ translate: -150% 0; }
     .to-right.away{ translate: 150% 0; }
 
+    .rewards-back-navigation,
     .back{
         position: fixed;
         top: 24px;
