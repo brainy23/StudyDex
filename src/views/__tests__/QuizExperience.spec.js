@@ -7,6 +7,7 @@ import { startQuiz, submitQuiz } from '../../services/quizService'
 import { getCurrentProfile } from '../../services/profileService'
 import { getStudentStudyCatalogue, getSelectedStudyBuddy } from '../../services/studyService'
 import { awardExperience } from '../../services/experienceService'
+import { getTopicCompletions } from '../../services/learningService'
 import { studentProfile, studyCatalogue } from '../../test/studyFixtures'
 import { pokemonFetch } from '../../test/pokemonFixtures'
 vi.mock('../../../scripts/soundEffect', () => ({ default: vi.fn() }))
@@ -28,6 +29,7 @@ let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
   sessionStorage.clear()
+  getTopicCompletions.mockImplementation(async (_userId, flow) => flow === 'study' ? [{ topic_id: 'topic-1' }] : [])
   getCurrentProfile.mockResolvedValue(structuredClone(studentProfile))
   getStudentStudyCatalogue.mockResolvedValue(structuredClone(studyCatalogue))
   getSelectedStudyBuddy.mockResolvedValue({ id: 'owned', xp: 100, level: 1, pokemon: { name: 'Charmander' } })
@@ -184,4 +186,78 @@ it('allows skipping questions but prevents final submission until every question
   await button('Go to first unanswered').trigger('click')
   expect(wrapper.get('#arena-question').text()).toBe('Question 1')
   expect(submitQuiz).not.toHaveBeenCalled()
+})
+
+it('returns Continue to quiz topics with the same subject selected', async () => {
+  const router = await open()
+  await answerAll()
+  await flushPromises()
+  await wrapper.get('.xp-prompt .action-button').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('selection-topics')
+  expect(router.currentRoute.value.query).toEqual({ flow: 'quiz', subject: 'maths' })
+  expect(submitQuiz).toHaveBeenCalledTimes(1)
+})
+
+it('only dismisses the XP popup when its close button is clicked', async () => {
+  const router = await open()
+  await answerAll()
+  await flushPromises()
+  await wrapper.get('.xp-close').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('quiz-battle')
+  expect(wrapper.findComponent(XpPrompt).props('result')).toBeNull()
+})
+
+it('keeps a return button and reports a cancelled topic navigation', async () => {
+  const router = await open()
+  router.beforeEach(to => to.name === 'selection-topics' ? false : true)
+  await answerAll()
+  await flushPromises()
+  await wrapper.get('.xp-prompt .action-button').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('quiz-battle')
+  expect(wrapper.text()).toContain('Could not return to topics')
+  expect(button('Choose topic')).toBeDefined()
+})
+
+it('opens a reusable review with every question and saved selection without awarding again', async () => {
+  const review = questions.map((q, i) => ({ question_id: q.id, selected_option_id: i === 4 ? `b${i}` : `a${i}`,
+    correct_option_id: `a${i}`, explanation: `Explanation ${i + 1}` }))
+  startQuiz.mockResolvedValueOnce({ run_id: 'attempt-1', questions, result: { ...savedResult, review }, attempt_number: 1, attempt_limit: 3 })
+  await open()
+  expect(wrapper.find('.quiz-review-modal').exists()).toBe(false)
+  await button('Review answers').trigger('click')
+  await flushPromises()
+  expect(wrapper.findAll('.review-question')).toHaveLength(5)
+  expect(wrapper.get('.quiz-review-modal').attributes('open')).toBeDefined()
+  expect(wrapper.get('.review-header h2').text()).toContain(studyCatalogue.topics[0].name)
+  const last = wrapper.findAll('.review-question')[4]
+  expect(last.text()).toContain('Question 5')
+  expect(last.text()).toContain('Your answer: Second answer')
+  expect(last.text()).toContain('Wrong')
+  expect(last.text()).toContain('Correct answer: First answer')
+  expect(last.text()).toContain('Explanation 5')
+  await wrapper.get('[aria-label="Close quiz review"]').trigger('click')
+  expect(wrapper.find('.quiz-review-modal').exists()).toBe(false)
+  expect(submitQuiz).not.toHaveBeenCalled()
+  expect(awardExperience).not.toHaveBeenCalled()
+})
+
+it('blocks a direct quiz link until study completion is saved, without consuming an attempt', async () => {
+  getTopicCompletions.mockResolvedValue([])
+  await open()
+  expect(wrapper.text()).toContain('Complete this topic in Study to unlock its quiz.')
+  expect(wrapper.findAll('a').some(link => link.text().includes('Go to Study'))).toBe(true)
+  expect(startQuiz).not.toHaveBeenCalled()
+  expect(submitQuiz).not.toHaveBeenCalled()
+})
+it('does not start a quiz if study progress cannot be verified', async () => {
+  getTopicCompletions.mockImplementation(async (_userId, flow) => {
+    if (flow === 'study') throw Error('Study progress unavailable')
+    return []
+  })
+  await open()
+  expect(wrapper.text()).toContain('Study progress unavailable')
+  expect(startQuiz).not.toHaveBeenCalled()
 })

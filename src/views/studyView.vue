@@ -1,5 +1,6 @@
 <script setup>
-import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
+// import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
+import GoBackBtn from '@/components/common/goBackbtn.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
@@ -602,8 +603,9 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
       <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
     </nav>
     <header class="study-header">
-      <StudyPageNavigation @topics="returnToSelection" />
-      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather /></div>
+      <!-- <StudyPageNavigation @topics="returnToSelection" /> -->
+      <nav class="study-navigation" aria-label="Page navigation"><GoBackBtn /></nav>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
