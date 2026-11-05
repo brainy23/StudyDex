@@ -64,8 +64,7 @@ onMounted(() => {
       </h1>
 
       <p>
-        The study app for primary school kids. Focus in short study sessions
-        and grow your Pokémon buddy along the way.
+       The MOE-aligned study app for primary school students. Learn in short, focused sessions and grow your Pokémon buddy along the way.
       </p>
 
       <a href="/signup" class="button">

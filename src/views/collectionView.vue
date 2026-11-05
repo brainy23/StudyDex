@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import playSound from '../../scripts/soundEffect';
 
 // Pokemon the user owns (replace with a Supabase fetch of the user's collection)
 const collection = ref([
@@ -188,6 +189,7 @@ onUnmounted(() => {
             :aria-pressed="id === selectedId"
             :title="nameOf(id)"
             @click="select(id)"
+            @mouseenter="playSound('selectingPokemon');"
           >
             <img :src="tileSprite(id)" :alt="nameOf(id)" loading="lazy" />
             <span v-if="id === activeId" class="star" aria-label="Active Pokémon">★</span>
@@ -224,7 +226,7 @@ onUnmounted(() => {
             <span v-for="t in detail.types" :key="t" class="chip" :style="{ '--tc': TYPE_COLORS[t] }">{{ t }}</span>
           </div>
 
-          <button class="activate" :disabled="selectedId === activeId" @click="makeActive">
+          <button class="activate" :disabled="selectedId === activeId" @click="makeActive; playSound('selectedPokemon');">
             {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
           </button>
         </template>
