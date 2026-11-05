@@ -15,10 +15,7 @@ import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
-import { usePokemonTransition } from '../composables/usePokemonTransition'
 
-
-const pokemonTransition = usePokemonTransition()
 
 const pageLoading = computed(() =>
   loading.value ||
