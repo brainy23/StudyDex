@@ -8,6 +8,8 @@ import { getCurrentProfile } from '../../services/profileService'
 import { getStudentStudyCatalogue, getSelectedStudyBuddy } from '../../services/studyService'
 import { awardExperience } from '../../services/experienceService'
 import { studentProfile, studyCatalogue } from '../../test/studyFixtures'
+import { pokemonFetch } from '../../test/pokemonFixtures'
+vi.mock('../../../scripts/soundEffect', () => ({ default: vi.fn() }))
 
 vi.mock('../../services/profileService', () => ({ getCurrentProfile: vi.fn() }))
 vi.mock('../../services/quizService', () => ({ startQuiz: vi.fn(), submitQuiz: vi.fn() }))
@@ -34,7 +36,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: 'raichu', sprites: { front_default: '/mentor.png' } }) })))
 })
 afterEach(() => { wrapper?.unmount(); vi.unstubAllGlobals() })
-async function open() {
+async function open(realSprite = false) {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: '/quiz', name: 'quiz-battle', component: QuizView },
     { path: '/home', name: 'home', component: { template: '<div />' } },
@@ -42,7 +44,7 @@ async function open() {
   ] })
   await router.push('/quiz?subject=maths&topic=topic-1')
   wrapper = mount({ template: '<RouterView />' }, { global: {
-    plugins: [router], stubs: { teleport: true, PokeSprite: true, ClockWeather: true, StudydexBubbleNav: true },
+    plugins: [router], stubs: { teleport: true, PokeSprite: !realSprite, ClockWeather: true, StudydexBubbleNav: true },
   } })
   await flushPromises()
   return router
@@ -114,4 +116,72 @@ it('discards a late submission response after the quiz topic changes', async () 
   await flushPromises()
   expect(wrapper.findComponent(XpPrompt).props('result')).toBeNull()
   expect(wrapper.text()).toContain('school level')
+})
+
+it('plays the saved Vue evolution plan in the front-facing quiz prompt', async () => {
+  vi.useFakeTimers()
+  try {
+    submitQuiz.mockResolvedValueOnce({ ...savedResult, delta: 50, xp: 40, level: 2,
+      pokemonName: 'Charmeleon', evolved: true,
+      originalPokemon: { name: 'Charmander', xp: 190, level: 1 },
+      pokemon: { name: 'Charmeleon', xp: 40, level: 2 },
+      evolutions: [{ from: 'charmander', to: 'charmeleon', direction: 'evolve' }],
+    })
+    fetch.mockImplementation(url => /charmander|charmeleon|evolution-chain/.test(String(url))
+      ? pokemonFetch(url)
+      : Promise.resolve({ ok: true, json: async () => ({ name: 'raichu', sprites: { front_default: '/mentor.png' } }) }))
+    await open(true)
+    await answerAll()
+    await flushPromises()
+    expect(wrapper.get('.evolution-preview .buddy-sprite').attributes('src')).toContain('charmander-front')
+    await vi.advanceTimersByTimeAsync(1800)
+    await flushPromises()
+    expect(wrapper.get('.evolution-preview .buddy-sprite').attributes('src')).toContain('charmeleon-front')
+    expect(wrapper.text()).toContain('Charmeleon evolved!')
+    expect(awardExperience).not.toHaveBeenCalled()
+  } finally { vi.useRealTimers() }
+})
+
+it('keeps answers editable and restores selections when moving backwards and forwards', async () => {
+  await open()
+  const choose = index => wrapper.findAll('.demo-answers button')[index].trigger('click')
+  await choose(0)
+  await choose(1)
+  expect(wrapper.findAll('.demo-answers button')[1].attributes('aria-pressed')).toBe('true')
+  await button('Next question').trigger('click')
+  await choose(1)
+  await button('Previous question').trigger('click')
+  expect(wrapper.get('#arena-question').text()).toBe('Question 1')
+  expect(wrapper.findAll('.demo-answers button')[1].attributes('aria-pressed')).toBe('true')
+  await choose(0)
+  await button('Next question').trigger('click')
+  expect(wrapper.findAll('.demo-answers button')[1].attributes('aria-pressed')).toBe('true')
+  await button('Next question').trigger('click')
+  await choose(0)
+  await button('Next question').trigger('click')
+  await choose(1)
+  await button('Next question').trigger('click')
+  await choose(0)
+  await button('Previous question').trigger('click')
+  expect(wrapper.findAll('.demo-answers button')[1].attributes('aria-pressed')).toBe('true')
+  await choose(0)
+  await button('Next question').trigger('click')
+  expect(submitQuiz).not.toHaveBeenCalled()
+  await button('Submit quiz').trigger('click')
+  await flushPromises()
+  expect(submitQuiz).toHaveBeenCalledExactlyOnceWith('attempt-1', {
+    q0: 'a0', q1: 'b1', q2: 'a2', q3: 'a3', q4: 'a4',
+  }, studentProfile.id)
+})
+
+it('allows skipping questions but prevents final submission until every question is answered', async () => {
+  await open()
+  expect(button('Previous question').attributes('disabled')).toBeDefined()
+  for (let i = 0; i < 4; i++) await button('Next question').trigger('click')
+  expect(wrapper.get('#arena-question').text()).toBe('Question 5')
+  expect(button('Submit quiz').attributes('disabled')).toBeDefined()
+  expect(wrapper.text()).toContain('5 questions still need an answer')
+  await button('Go to first unanswered').trigger('click')
+  expect(wrapper.get('#arena-question').text()).toBe('Question 1')
+  expect(submitQuiz).not.toHaveBeenCalled()
 })

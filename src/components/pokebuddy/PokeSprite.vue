@@ -35,7 +35,7 @@ const props = defineProps({
     type: String,
     default: 'top',
     validator: value =>
-      ['top', 'bottom', 'hidden'].includes(value)
+      ['top', 'bottom', 'right', 'hidden'].includes(value)
   },
 
   embedded: {
@@ -713,6 +713,7 @@ onBeforeUnmount(() => {
           class="buddy-progress"
           :class="{ 'buddy-progress--max': isMaxed }"
         >
+          <div class="buddy-progress__name">{{ displayedName }}</div>
           <div class="buddy-progress__heading">
             <span class="buddy-progress__level">
               {{ isMaxed ? 'MAX' : `Lv. ${displayedLevel}` }}
@@ -885,7 +886,7 @@ onBeforeUnmount(() => {
   justify-content: center;
 
   width: 100%;
-  height: calc(100% - 64px);
+  height: calc(100% - 90px);
 
   overflow: visible;
   isolation: isolate;
@@ -948,6 +949,15 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
+.buddy-progress__name {
+  margin-bottom: 6px;
+  font-size: clamp(12px, 1.2vw, 16px);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
 .buddy-progress__heading {
   display: flex;
   justify-content: space-between;
@@ -1008,6 +1018,41 @@ onBeforeUnmount(() => {
 .buddy-stage--bottom .buddy-image-container {
   top: 0;
   bottom: auto;
+}
+
+/* Progress beside the Pokémon */
+
+.buddy-stage--right {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.buddy-stage--right .buddy-image-container {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  height: 100%;
+  min-height: 0;
+}
+
+.buddy-stage--right .buddy-progress {
+  position: static;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  min-width: 0;
+  transform: none;
+}
+
+.buddy-stage--right .buddy-progress__heading {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.buddy-stage--right .buddy-progress__value {
+  overflow-wrap: anywhere;
 }
 
 /* Hide the progress panel entirely */

@@ -352,7 +352,6 @@ onUnmounted(() => spriteController?.abort())
 const selectedPreviewTopic = ref(null)
 const previewSubject = ref(null)
 const previewIndex = ref(0)
-const previewChoice = ref(null)
 const previewFinished = ref(false)
 const previewQuestions = ref([])
 const quizRun = ref(null)
@@ -362,9 +361,12 @@ const submitting = ref(false)
 const submitError = ref('')
 const xpResult = ref(null)
 const previewQuestion = computed(() => previewQuestions.value[previewIndex.value])
+const previewChoice = computed(() => answers.value[previewQuestion.value?.id] ?? null)
+const unansweredQuestions = computed(() => previewQuestions.value.filter(question =>
+  !question.options.some(option => option.id === answers.value[question.id]),
+))
 function resetPreview() {
   previewIndex.value = 0
-  previewChoice.value = null
   previewFinished.value = false
   answers.value = {}
   quizResult.value = null
@@ -378,14 +380,23 @@ async function newAttempt() {
   await initialise()
 }
 function choosePreview(optionId) {
-  if (previewChoice.value !== null || previewFinished.value ||
+  if (submitting.value || previewFinished.value ||
     !previewQuestion.value?.options.some(option => option.id === optionId)) return
-  previewChoice.value = optionId
   answers.value[previewQuestion.value.id] = optionId
+  submitError.value = ''
+}
+function previousQuestion() {
+  if (!submitting.value && !previewFinished.value && previewIndex.value > 0) previewIndex.value--
+}
+function firstUnansweredQuestion() {
+  if (submitting.value || previewFinished.value) return
+  const index = previewQuestions.value.findIndex(question => question.id === unansweredQuestions.value[0]?.id)
+  if (index >= 0) previewIndex.value = index
 }
 async function nextPreview() {
-  if (previewChoice.value === null || submitting.value || previewFinished.value) return
+  if (submitting.value || previewFinished.value) return
   if (previewIndex.value + 1 >= previewQuestions.value.length) {
+    if (unansweredQuestions.value.length) return
     submitting.value = true
     submitError.value = ''
     const request = generation
@@ -414,7 +425,7 @@ async function nextPreview() {
       if (alive && request === generation) submitting.value = false
     }
   }
-  else { previewIndex.value++; previewChoice.value = null }
+  else previewIndex.value++
 }
 
 function showSavedReward() {
@@ -533,6 +544,7 @@ const battleOptions = computed(() =>
         :selected-id="previewChoice"
         :finished="previewFinished"
         :disabled="submitting"
+        allow-answer-change
         @select="choosePreview">
         <template #dialogue>
           <template v-if="previewFinished">
@@ -541,14 +553,21 @@ const battleOptions = computed(() =>
             <button type="button" class="battle-next" @click="showSavedReward">View XP reward</button>
             <details><summary>Review answers</summary><p v-for="(item,index) in quizResult.review" :key="item.question_id">{{ index + 1 }}. {{ item.selected_option_id === item.correct_option_id ? 'Correct' : 'Incorrect' }} — {{ item.explanation || 'Review this topic in Poké Lab.' }}</p></details>
           </template>
-          <template v-else-if="previewChoice === null">
-            <p>Choose your answer.</p><small>Attempt {{ quizRun.attempt_number }} of {{ quizRun.attempt_limit }} today · Singapore time</small>
-          </template>
           <template v-else>
-            <p class="battle-explanation">{{ submitting ? 'Saving your result…' : 'Answer selected.' }}</p>
+            <p class="battle-explanation">{{ submitting ? 'Saving your result…' : previewChoice === null ? 'Choose your answer.' : 'Answer selected. You can change it before submitting.' }}</p>
+            <small>Attempt {{ quizRun.attempt_number }} of {{ quizRun.attempt_limit }} today · Singapore time</small>
             <p v-if="submitError" role="alert">{{ submitError }}</p>
             <button v-if="submitError && Date.parse(quizRun.expires_at) < Date.now()" type="button" @click="newAttempt">Start a new attempt</button>
-            <button type="button" class="battle-next" :disabled="submitting" @click="nextPreview">{{ previewIndex + 1 === previewQuestions.length ? 'Submit quiz' : 'Next question' }} →</button>
+            <div class="quiz-question-navigation">
+              <button type="button" class="battle-next" :disabled="submitting || previewIndex === 0" @click="previousQuestion">← Previous question</button>
+              <button type="button" class="battle-next"
+                :disabled="submitting || (previewIndex + 1 === previewQuestions.length && unansweredQuestions.length > 0)"
+                @click="nextPreview">{{ previewIndex + 1 === previewQuestions.length ? 'Submit quiz' : 'Next question' }} →</button>
+            </div>
+            <p v-if="previewIndex + 1 === previewQuestions.length && unansweredQuestions.length" class="quiz-unanswered">
+              {{ unansweredQuestions.length }} question{{ unansweredQuestions.length === 1 ? ' still needs' : 's still need' }} an answer.
+              <button type="button" class="battle-next" :disabled="submitting" @click="firstUnansweredQuestion">Go to first unanswered</button>
+            </p>
           </template>
         </template>
         <template #actions>
@@ -590,6 +609,9 @@ const battleOptions = computed(() =>
 </template>
 
 <style scoped>
+.quiz-question-navigation { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.quiz-question-navigation button:disabled { opacity: .55; cursor: default; }
+.quiz-unanswered { font-size: 12px; }
 .arena-page {
   position: fixed;
   inset: 0;

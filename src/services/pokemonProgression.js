@@ -1,5 +1,5 @@
 // Shared frontend progression rules used by PokeSprite and saved activity rewards.
-const API = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
+const API = (import.meta.env?.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 const evolutionCache = new Map()
 
 export function normaliseName(value) {

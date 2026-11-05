@@ -51,8 +51,10 @@ constraint on `(user_id, pokemon_id)` also remains in force: evolving into a
 species already owned by that user produces a save error and rolls back the
 whole event; it does not merge or delete another owned Pokémon.
 
-The quiz view uses the server-graded result from `submit_learning_quiz` and shows
-that saved reward in the shared XP prompt without making another award call.
+The quiz view grades with `prepare_learning_quiz_progression`, calculates its
+evolution using `planPokemonXp` in Vue, and commits the final `user_pokemon` state
+with `submit_learning_quiz_progression`. It then plays the saved evolution plan
+in the shared XP prompt without making another award call.
 See `docs/quiz-xp-rewards.md` for its 5–50 XP score scale and retry behavior. Gift
 creation remains TrainerView's existing preview feature; activity popups do not
 offer a gift button without a configured gift handler.
