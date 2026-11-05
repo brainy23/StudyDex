@@ -4,6 +4,8 @@ import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
 import { useStudySession } from '../composables/useStudySession'
+import { useFocusTimer } from '../composables/useFocusTimer'
+// import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -41,6 +43,12 @@ const router = useRouter()
 const pokemonTransition = usePokemonTransition()
 const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
+const focusTimer = useFocusTimer()
+const {
+  seconds: focusSeconds, running: timerRunning, finished: timerFinished,
+  display: focusTime, pendingRewards,
+  start: coreStart, pause: corePause, reset: coreReset, consumeReward,
+} = focusTimer
 const profile = ref(null)
 const selectedBuddyRecord = ref(null)
 const { prompt:experiencePrompt, showSaved:showSavedExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async () => {
@@ -71,6 +79,35 @@ const topic = computed(() =>
 )
 const currentResources = computed(() => resources[topic.value?.id])
 const persistedStudy = useStudySession(profile, topic, 'flashcards')
+// A session can finish while another page is open; pay it out once this page is ready
+const rewarding = new Set()
+// watch([pendingRewards, loading, profile], ([ids]) => {
+//   if (loading.value || !profile.value) return
+//   for (const id of [...ids]) {
+//     if (rewarding.has(id)) continue
+//     rewarding.add(id)
+//     Promise.resolve(rewardExperience({ id, type: 'timer' }))
+//       .then(() => consumeReward(id))
+//       .catch(() => rewarding.delete(id))
+//   }
+// }, { immediate: true, deep: true })
+async function recordFocusCompletion() {
+  try {
+    const saved = await persistedStudy.action('complete_block')
+    if (saved?.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
+    return !!saved
+  } catch { return false }
+}
+watch([pendingRewards, loading, profile, () => persistedStudy.ready.value], ([ids]) => {
+  if (loading.value || !profile.value || !persistedStudy.ready.value) return
+  for (const id of [...ids]) {
+    if (rewarding.has(id)) continue
+    rewarding.add(id)
+    recordFocusCompletion()
+      .then((ok) => { if (ok) consumeReward(id) })
+      .finally(() => rewarding.delete(id))
+  }
+}, { immediate: true, deep: true })
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -83,6 +120,7 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
+    focusTimer.bind(student.id)
     topicCompletion.bindStudent(student.id, student.school_level_id)
     const [data, selectedBuddy] = await Promise.all([
       student.school_level_id
@@ -137,7 +175,7 @@ const learningNavigationBusy = ref(false)
 const learnSnapshotKey = computed(() => `studydex-learn-return-v1:${profile.value?.id}:${topic.value?.id}`)
 async function openLearn() {
   if (!topic.value || learningNavigationBusy.value || bossNavigating.value) return
-  pauseFocusTimer()
+  // pauseFocusTimer()
   fastStreak = 0
   learningNavigationError.value = ''
   learningNavigationBusy.value = true
@@ -170,8 +208,8 @@ function restoreLearnProgress() {
       flashcardRoundId = saved.roundId || flashcardRoundId
       reviewQueue.value = saved.queue
       completedCards.value = saved.completed
-      focusSeconds.value = saved.seconds
-      timerFinished.value = saved.finished === true
+      // focusSeconds.value = saved.seconds
+      // timerFinished.value = saved.finished === true
       answerVisible.value = saved.answerVisible === true
       ratingMessage.value = 'Welcome back! Your place is saved. Press Start to resume your timer.'
     }
@@ -184,11 +222,11 @@ onMounted(() => {
   if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'study' } })
   else initialise()
 })
-onBeforeRouteLeave(async to => {
-  pauseFocusTimer()
-  if (persistedStudy.ready.value) {
-    try { await persistedStudy.action(to.name === 'learn' || to.name === 'surprise-boss' ? 'pause' : 'abandon') } catch { /* last confirmed heartbeat remains saved */ }
-  }
+onBeforeRouteLeave(async () => {
+  // pauseFocusTimer()
+  // if (persistedStudy.ready.value) {
+  //   try { await persistedStudy.action(to.name === 'learn' || to.name === 'surprise-boss' ? 'pause' : 'abandon') } catch { /* last confirmed heartbeat remains saved */ }
+  // }
 })
 onUnmounted(() => {
   alive = false
@@ -302,7 +340,7 @@ watch([buddyApiKey, spriteRetry], async ([key], previous, onCleanup) => {
 const backgroundFailed = ref(false)
 const enteredLab = ref(false)
 function returnToSelection() {
-  pauseFocusTimer()
+  // pauseFocusTimer()
   router.push({ name:'selection-topics', query:{ flow:'study', subject:subject.value?.id } })
 }
 
@@ -312,10 +350,7 @@ const cardIndex = computed(() => reviewQueue.value[0] ?? -1)
 const answerVisible = ref(false)
 const completedCards = ref(0)
 const ratingMessage = ref('')
-// A local, independent 25-minute focus session. No server timer API is assumed.
-const focusSeconds = ref(25 * 60)
-const timerRunning = ref(false)
-const timerFinished = ref(false)
+
 // Rewarded focus sessions are counted by the Supabase XP ledger.
 const SESSION_REWARD_LIMIT = 4
 const completedFocusSessions = ref(0)
@@ -325,41 +360,73 @@ watch(() => profile.value?.id, async (id, _, onCleanup) => {
   try { const count=await getRewardedTimerCount(id); if(!cancelled) completedFocusSessions.value=count }
   catch { /* Saving a reward will show an actionable error if SQL is missing. */ }
 }, {immediate:true})
-async function recordFocusCompletion() {
-  try {
-    const saved = await persistedStudy.action('complete_block')
-    if (!saved) return
-    if (saved.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
-    else if (saved.block?.running_since) {
-      focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
-      timerFinished.value = false
-      timerDeadline = Date.now() + focusSeconds.value * 1000
-      timerRunning.value = true
-      focusInterval = setInterval(tickFocusTimer, 250)
-    }
-  } catch { /* persistedStudy.error offers retry */ }
-}
+// async function recordFocusCompletion() {
+//   try {
+//     const saved = await persistedStudy.action('complete_block')
+//     if (!saved) return
+//     if (saved.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
+//     else if (saved.block?.running_since) {
+//       focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+//       timerFinished.value = false
+//       timerDeadline = Date.now() + focusSeconds.value * 1000
+//       timerRunning.value = true
+//       focusInterval = setInterval(tickFocusTimer, 250)
+//     }
+//   } catch { /* persistedStudy.error offers retry */ }
+// }
 
 // Paused/idle/completed is always red, even when fewer than two minutes remain.
 const timerBorderColor = computed(() => !timerRunning.value ? '#ff4057' : focusSeconds.value <= 120 ? '#ffd43b' : '#34e782')
 const timerBorderStyle = computed(() => ({ '--timer-border': timerBorderColor.value }))
-let timerDeadline = 0
-let focusInterval
-const focusTime = computed(() => `${String(Math.floor(focusSeconds.value / 60)).padStart(2, '0')}:${String(focusSeconds.value % 60).padStart(2, '0')}`)
-function tickFocusTimer() {
-  if (!timerRunning.value) return
-  focusSeconds.value = Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000))
-  if (!focusSeconds.value) {
-    timerRunning.value = false
-    timerFinished.value = true
-    clearInterval(focusInterval)
-    recordFocusCompletion()
-  }
-}
+// let timerDeadline = 0
+// let focusInterval
+// const focusTime = computed(() => `${String(Math.floor(focusSeconds.value / 60)).padStart(2, '0')}:${String(focusSeconds.value % 60).padStart(2, '0')}`)
+// function tickFocusTimer() {
+//   if (!timerRunning.value) return
+//   focusSeconds.value = Math.max(0, Math.ceil((timerDeadline - Date.now()) / 1000))
+//   if (!focusSeconds.value) {
+//     timerRunning.value = false
+//     timerFinished.value = true
+//     clearInterval(focusInterval)
+//     recordFocusCompletion()
+//   }
+// }
+// function pauseFocusTimer() {
+//   tickFocusTimer()
+//   timerRunning.value = false
+//   clearInterval(focusInterval)
+//   if (persistedStudy.state.value?.block?.running_since) void persistedStudy.action('pause').catch(() => {})
+// }
+// async function startFocusTimer() {
+//   if (timerRunning.value || persistedStudy.busy.value || !persistedStudy.ready.value) return
+//   try {
+//     if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
+//     const block = persistedStudy.state.value?.block
+//     const saved = await persistedStudy.action(block && !block.focus_completed_at ? 'resume' : 'start', newExperienceId())
+//     if (!saved?.block) return
+//     focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+//   } catch { return }
+//   timerFinished.value = false
+//   timerDeadline = Date.now() + focusSeconds.value * 1000
+//   timerRunning.value = true
+//   focusInterval = setInterval(tickFocusTimer, 250)
+// }
+// async function resetFocusTimer() {
+//   pauseFocusTimer()
+//   if (persistedStudy.ready.value) {
+//     try { await persistedStudy.action('reset') } catch { return }
+//   }
+//   focusSeconds.value = 25 * 60
+//   timerFinished.value = false
+// }
+// watch(() => persistedStudy.state.value?.block, block => {
+//   if (!block) return
+//   focusSeconds.value = Math.max(0, Math.ceil((1500000 - block.active_ms) / 1000))
+//   timerFinished.value = !!block.focus_completed_at
+//   if (!block.running_since) { timerRunning.value = false; clearInterval(focusInterval) }
+// })
 function pauseFocusTimer() {
-  tickFocusTimer()
-  timerRunning.value = false
-  clearInterval(focusInterval)
+  corePause()
   if (persistedStudy.state.value?.block?.running_since) void persistedStudy.action('pause').catch(() => {})
 }
 async function startFocusTimer() {
@@ -370,26 +437,13 @@ async function startFocusTimer() {
     const saved = await persistedStudy.action(block && !block.focus_completed_at ? 'resume' : 'start', newExperienceId())
     if (!saved?.block) return
     focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
-  } catch { return }
-  timerFinished.value = false
-  timerDeadline = Date.now() + focusSeconds.value * 1000
-  timerRunning.value = true
-  focusInterval = setInterval(tickFocusTimer, 250)
+    coreStart()
+  } catch { /* persistedStudy.error offers retry */ }
 }
 async function resetFocusTimer() {
-  pauseFocusTimer()
-  if (persistedStudy.ready.value) {
-    try { await persistedStudy.action('reset') } catch { return }
-  }
-  focusSeconds.value = 25 * 60
-  timerFinished.value = false
+  coreReset()
+  if (persistedStudy.ready.value) { try { await persistedStudy.action('reset') } catch { /* retry offered */ } }
 }
-watch(() => persistedStudy.state.value?.block, block => {
-  if (!block) return
-  focusSeconds.value = Math.max(0, Math.ceil((1500000 - block.active_ms) / 1000))
-  timerFinished.value = !!block.focus_completed_at
-  if (!block.running_since) { timerRunning.value = false; clearInterval(focusInterval) }
-})
 async function refreshDailySessions() {
   if (!profile.value?.id) return
   try { completedFocusSessions.value = await getRewardedTimerCount(profile.value.id) } catch { /* next save reports errors */ }
@@ -457,7 +511,7 @@ async function startSurpriseBoss() {
     ratingMessage.value = 'Boss battle route is not installed yet.'
     return
   }
-  pauseFocusTimer()
+  // pauseFocusTimer()
   const encounter = {
     id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
     xpEventId:newExperienceId(),
@@ -474,7 +528,7 @@ async function startSurpriseBoss() {
     return
   }
   bossNavigating.value = true
-  pauseFocusTimer()
+  // pauseFocusTimer()
   try {
     await pokemonTransition.run({
       animate: true,
@@ -512,13 +566,13 @@ function restoreBossProgress() {
   restoredBoss = encounter.id
   const won = encounter.outcome === 'won' || (!encounter.outcome && encounter.score >= Math.ceil(encounter.questions.length * .7))
   const sameCards = JSON.stringify(cards.value.map(card => String(card.id))) === JSON.stringify(encounter.snapshot.cardIds)
-  pauseFocusTimer()
+  // pauseFocusTimer()
   if (won && sameCards) {
     flashcardRoundId = encounter.snapshot.roundId || flashcardRoundId
     reviewQueue.value = encounter.snapshot.queue.filter(index => Number.isInteger(index) && index >= 0 && index < cards.value.length)
     completedCards.value = encounter.snapshot.completed
-    focusSeconds.value = Math.max(0, Number(encounter.snapshot.focusSeconds) || 0)
-    timerFinished.value = focusSeconds.value === 0
+    // focusSeconds.value = Math.max(0, Number(encounter.snapshot.focusSeconds) || 0)
+    // timerFinished.value = focusSeconds.value === 0
     ratingMessage.value = 'Boss defeated! Continue where you left off. Press Start to resume your timer.'
   } else {
     restartCards()
@@ -583,7 +637,7 @@ watch([() => flashResource.value?.data, () => route.query.bossReturn], restoreBo
 watch(() => topic.value?.id, id => {
   enteredLab.value = !!(id && route.query.topic)
 }, { immediate: true })
-onUnmounted(() => { clearInterval(focusInterval) })
+// onUnmounted(() => { clearInterval(focusInterval) })
 
 watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
 
