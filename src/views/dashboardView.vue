@@ -2,7 +2,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
-import BackToHome from '../components/common/BackToHome.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
 import { getDashboardData } from '@/services/dashboardService'
@@ -281,7 +281,7 @@ onUnmounted(() => {
       <template v-else-if="dashboard">
         <header class="dashboard-header">
           <div class="header-main welcome-copy">
-            <BackToHome variant="custom" class="back-button" />
+            <div class="dashboard-back-navigation"><GoBackBtn /></div>
             <span class="eyebrow">YOUR TRAINER JOURNEY</span>
             <div class="welcome-title-row"><h1>Hello, {{ profile.display_name }}!</h1><span v-if="profile.school_level" class="level-badge">{{ profile.school_level.name }}</span></div>
             <p class="welcome-message">Small steps today. Bigger wins tomorrow.</p>
@@ -419,19 +419,8 @@ summary:focus-visible,
   min-width: 0;
 }
 
-.back-button {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
+.dashboard-back-navigation {
   margin-bottom: 14px;
-  padding: 8px 12px;
-  border: 1px solid #e4cf87;
-  border-radius: 8px;
-  background: #fff4c9;
-  color: #715823;
-  font-size: 16px;
-  text-decoration: none;
 }
 
 .welcome-title-row {

@@ -1,40 +1,11 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon } from '../services/studyService'
 import { checkedRpc } from '../services/backendClient'
 import playSound from '../../scripts/soundEffect'
-
-const router = useRouter()
-const leaving = ref(false)
-const navigationError = ref('')
-
-function goBack() {
-  if (leaving.value) return
-
-  leaving.value = true
-  navigationError.value = ''
-
-  // Go back exactly one entry. Direct visits return to town.
-  if (window.history.state?.back) {
-    router.back()
-  } else {
-    router.replace('/home').catch(() => {
-      leaving.value = false
-      navigationError.value = 'Could not return to town. Please try again.'
-    })
-  }
-}
-
-// Allow retry if a route guard prevents navigation.
-const removeAfterEach = router.afterEach((_to, _from, failure) => {
-  if (failure) leaving.value = false
-})
-const removeRouterError = router.onError(() => {
-  leaving.value = false
-  navigationError.value = 'Could not go back. Please try again.'
-})
 
 const collection = ref([])
 const ownedRecords = ref([])
@@ -184,7 +155,7 @@ async function loadDetail(id) {
     if (alive && myToken === token) {
       detail.value = result
     }
-  } catch (error) {
+  } catch {
     if (alive && myToken === token) {
       detailError.value = 'This Pokémon could not load.'
     }
@@ -301,22 +272,13 @@ onUnmounted(() => {
   token++
   clearTimeout(toastTimer)
   clearTimeout(celebrateTimer)
-  removeAfterEach()
-  removeRouterError()
 })
 </script>
 
 <template>
   <main class="collection">
     <header class="topbar">
-      <button
-        type="button"
-        class="back"
-        :disabled="leaving"
-        @click.stop="goBack"
-      >
-        Back
-      </button>
+      <div class="collection-back-navigation"><GoBackBtn /></div>
 
       <h1 class="title">POKEDEX</h1>
 
@@ -328,10 +290,6 @@ onUnmounted(() => {
         </span>
       </div>
     </header>
-
-    <p v-if="navigationError" class="navigation-error" role="alert">
-      {{ navigationError }}
-    </p>
 
     <div class="body">
       <section class="list-panel" aria-label="Your Pokémon">
@@ -535,32 +493,16 @@ onUnmounted(() => {
   background: #fff;
 }
 
-.back {
+.collection-back-navigation {
   grid-column: 1;
   justify-self: start;
-  font-family: inherit;
-  font-size: 24px;
-  padding: 8px 20px;
-  border: 3px solid rgb(200, 160, 0);
-  border-radius: 12px;
-  background: rgb(255, 215, 37);
-  color: rgb(100, 45, 0);
-  box-shadow: 0 6px 0 rgb(200, 160, 0);
-  cursor: pointer;
 }
 
-.back:disabled {
-  opacity: 0.7;
-  cursor: default;
-}
-
-.back:focus-visible,
 .activate:focus-visible {
   outline: 3px solid #664298;
   outline-offset: 4px;
 }
 
-.navigation-error,
 .collection-error {
   padding: 12px;
   color: #8c253a;
@@ -885,11 +827,6 @@ onUnmounted(() => {
     grid-row: 2;
     justify-self: center;
     font-size: 14px;
-  }
-
-  .back {
-    padding: 8px 12px;
-    font-size: 18px;
   }
 
   .collection {

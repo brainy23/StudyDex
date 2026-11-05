@@ -7,6 +7,7 @@ import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { enterRoom } from '../composables/useRoomTransition'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
@@ -94,7 +95,7 @@ async function selectTopic(item) {
 <template>
   <LoadingScreen :show="loading" message="Opening your Topics…" />
 <main v-if="!loading" class="sd-picker sd-topics sd-colour-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
-  <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-subjects', query:{ flow } }">← All subjects</RouterLink></nav>
+  <nav class="sd-top-nav"><GoBackBtn /></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ selectedSubject?.name || 'STUDY' }}</p><h1>Your {{ selectedSubject?.name || 'study' }} adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
   <p v-if="navigationError" class="sd-page-state" role="alert">{{ navigationError }}</p>
     <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>

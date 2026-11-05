@@ -36,7 +36,7 @@ beforeEach(() => {
 })
 afterEach(() => wrapper?.unmount())
 async function open() {
-  wrapper = mount(DashboardView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' }, BackToHome: true, PokeSprite: true, teleport: true } } })
+  wrapper = mount(DashboardView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' }, GoBackBtn: true, PokeSprite: true, teleport: true } } })
   await flushPromises()
 }
 it('opens the completed quiz from history and topic attempts, but does not offer boss reviews', async () => {

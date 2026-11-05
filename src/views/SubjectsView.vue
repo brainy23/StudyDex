@@ -9,6 +9,7 @@ import {
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import '../assets/selection-pages.css'
 
 const route = useRoute()
@@ -130,9 +131,7 @@ function selectSubject(item) {
     }"
   >
     <nav class="sd-top-nav">
-      <RouterLink to="/home">
-        ‹ Back to town
-      </RouterLink>
+      <GoBackBtn />
     </nav>
 
     <header class="sd-picker-heading">
