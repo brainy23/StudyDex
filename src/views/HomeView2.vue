@@ -12,6 +12,7 @@ import { getTodos, saveTodo } from '../services/learningService'
 import { checkedRpc } from '../services/backendClient'
 import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
+import WelcomePackModal from '../components/common/welcomePack.vue'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
@@ -836,6 +837,7 @@ const homepagePokemon = computed(() => {
 })
 
 const unopenedPackCount = ref(0)
+const currentUserId = ref(null)
 
 // Trainer identity always comes from the authenticated student's saved profile.
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
@@ -853,6 +855,7 @@ async function refreshTrainerProfile() {
   try {
     const profile = await getCurrentProfile()
     if (!trainerProfileActive) return
+    currentUserId.value = profile.id
     trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
     try {
       const inventory = await checkedRpc('get_reward_inventory', undefined, profile.id)
@@ -1283,6 +1286,7 @@ watch(
 </script>
 
 <template>
+<WelcomePackModal v-if="!showTutorial" :user-id="currentUserId" />
 <!-- =================================================
        STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
        ================================================= -->
