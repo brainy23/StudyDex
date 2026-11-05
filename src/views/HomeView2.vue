@@ -8,36 +8,20 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { signOutCurrentSession } from '../services/authService'
+import { getTodos, saveTodo } from '../services/learningService'
+import { checkedRpc } from '../services/backendClient'
 import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
-import { getSupabase } from '../lib/supabase'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 import playSound from '../../scripts/soundEffect'
 
 const router = useRouter()
 const buildingNavigationError = ref('')
-async function openTownPage(to) {
-  buildingNavigationError.value = ''
-  try {
-    const target = router.resolve(to)
-    if (target.fullPath === router.currentRoute.value.fullPath) return
-    const failure = await router.push(to)
-    if (failure) throw new Error('Navigation was interrupted. Please try again.')
-  } catch (error) {
-    buildingNavigationError.value = error.message || 'This page could not open.'
-  }
-}
-const extraTownLinks = [
-  { label: 'Trainer House', to: '/trainer', icon: '⌂' },
-  { label: 'Progress', to: { name: 'studentdashboard' }, icon: '▥' },
-  { label: 'Poképacks', to: '/pokepacks', icon: '▣' },
-  { label: 'Account', to: { name: 'account' }, icon: '☺' },
-]
 
 
 
@@ -569,7 +553,9 @@ onUnmounted(() => {
 
 // TO-DOS — shared by the notepad and the quest screen.
 // To-do completion dates follow the device's local calendar.
-const TODO_STORAGE_KEY = 'studydex-todos-v1'
+const todoOwner = ref(null)
+const todoSaving = ref(false)
+let todosActive = true
 const todos = ref([])
 const todoDialog = ref(null)
 const todoInput = ref(null)
@@ -591,40 +577,42 @@ const remainingTodoLabel = computed(() =>
 )
 
 function localDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore', year:'numeric', month:'2-digit', day:'2-digit' }).format(date)
 }
 
 function removePastCompletedTodos() {
   const today = localDateKey()
-  const kept = todos.value.filter(todo => !todo.completedAt || todo.completedAt >= today)
+  const kept = todos.value.filter(todo => !todo.completedAt || localDateKey(new Date(todo.completedAt)) >= today)
   if (kept.length !== todos.value.length) todos.value = kept
 }
 
-function saveTodos() {
+async function loadTodos() {
   try {
-    localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(todos.value))
-    todoStorageNotice.value = ''
-  } catch {
-    todoStorageNotice.value = 'Browser storage is unavailable. Changes will only last for this visit.'
-  }
-}
-
-function loadTodos() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TODO_STORAGE_KEY) || '[]')
-    if (!Array.isArray(saved)) throw new Error('Invalid saved to-dos')
-    todos.value = saved.filter(todo =>
-      todo && typeof todo.id === 'string' && typeof todo.title === 'string' &&
-      todo.title.trim() && (todo.completedAt === null ||
-        (typeof todo.completedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todo.completedAt)))
-    )
+    const profile = await getCurrentProfile()
+    const records = await getTodos(profile.id)
+    if (!todosActive) return
+    todoOwner.value = profile.id
+    todos.value = records
     removePastCompletedTodos()
-  } catch {
-    todoStorageNotice.value = 'Saved to-dos could not be loaded in this browser.'
+    todoStorageNotice.value = ''
+  } catch (cause) {
+    if (todosActive) todoStorageNotice.value = cause.message || 'Your tasks could not load. Please retry.'
   }
 }
-
-watch(todos, saveTodos, { deep: true })
+async function persistTodo(todo, remove = false) {
+  if (!todoOwner.value || todoSaving.value) return false
+  const owner = todoOwner.value
+  todoSaving.value = true
+  try {
+    await saveTodo(todo, owner, remove)
+    if (!todosActive || owner !== todoOwner.value) return false
+    await loadTodos()
+    return true
+  } catch (cause) {
+    if (todosActive) todoStorageNotice.value = cause.message || 'Your task could not be saved. Try again.'
+    return false
+  } finally { todoSaving.value = false }
+}
 
 function scheduleTodoCleanup() {
   clearTimeout(todoMidnightTimer)
@@ -635,22 +623,22 @@ function scheduleTodoCleanup() {
 }
 
 function refreshTodosOnReturn() {
-  if (!document.hidden) scheduleTodoCleanup()
+  if (!document.hidden) { scheduleTodoCleanup(); if (!todoSaving.value) void loadTodos() }
 }
 
-function addTodo() {
+async function addTodo() {
   const title = newTodoTitle.value.trim()
   if (!title) return
   removePastCompletedTodos()
-  todos.value.push({ id: crypto.randomUUID(), title, completedAt: null })
+  if (!await persistTodo({ id: crypto.randomUUID(), title, completedAt: null })) return
   newTodoTitle.value = ''
   todoInput.value?.focus()
 }
 
-function toggleTodo(todo) {
+async function toggleTodo(todo) {
   removePastCompletedTodos()
   if (!todos.value.some(item => item.id === todo.id)) return
-  todo.completedAt = todo.completedAt ? null : localDateKey()
+  await persistTodo({ ...todo, completedAt: todo.completedAt ? null : new Date().toISOString() })
 }
 
 async function startEditingTodo(todo) {
@@ -662,15 +650,15 @@ async function startEditingTodo(todo) {
   input?.select()
 }
 
-function saveTodoEdit(todo) {
+async function saveTodoEdit(todo) {
   const title = editTodoTitle.value.trim()
   if (!title) return
-  todo.title = title
+  if (!await persistTodo({ ...todo, title })) return
   editingTodoId.value = null
 }
 
-function deleteTodo(todo) {
-  todos.value = todos.value.filter(item => item.id !== todo.id)
+async function deleteTodo(todo) {
+  if (!await persistTodo(todo, true)) return
   if (editingTodoId.value === todo.id) editingTodoId.value = null
 }
 
@@ -790,34 +778,29 @@ async function getPokeBall() {
 
 
 // Call this when a Pokémon is selected as the active buddy.
+const buddySelectionSaving = ref(false)
 async function setActiveBuddy(pokemon) {
   const selectedRecord = savedOwnedPokemon.value.find(record => record.id === pokemon.ownedId)
-  if (!selectedRecord) return
-  if (selectedRecord.is_selected) return   // already the buddy
-
-  // keep the old state so we can roll back if the save fails
+  if (!selectedRecord || selectedRecord.is_selected || buddySelectionSaving.value) return
+  buddySelectionSaving.value = true
   const previousRecords = savedOwnedPokemon.value
   const previousBuddy = savedActiveBuddy.value
-
-  // update the UI immediately
-  savedOwnedPokemon.value = savedOwnedPokemon.value.map(record => ({
-    ...record,
-    is_selected: record.id === selectedRecord.id,
+  savedOwnedPokemon.value = previousRecords.map(record => ({
+    ...record, is_selected: record.id === selectedRecord.id,
   }))
   savedActiveBuddy.value = savedOwnedPokemon.value.find(record => record.id === selectedRecord.id)
-
-  // save to Supabase
-  const supabase = getSupabase()
-  const { error } = await supabase.rpc('set_active_pokemon', {
-    p_row_id: selectedRecord.id,
-  })
-
-  if (error) {
-    console.error('Could not set town buddy', error)
-    // roll back
-    savedOwnedPokemon.value = previousRecords
-    savedActiveBuddy.value = previousBuddy
-  }
+  try {
+    const profile = await getCurrentProfile()
+    if (!trainerProfileActive) return
+    await checkedRpc('select_user_pokemon', { p_owned_id: selectedRecord.id }, profile.id)
+    await refreshTrainerProfile()
+  } catch (cause) {
+    if (trainerProfileActive) {
+      savedOwnedPokemon.value = previousRecords
+      savedActiveBuddy.value = previousBuddy
+      profileNotice.value = cause.message || 'Your buddy could not be saved.'
+    }
+  } finally { buddySelectionSaving.value = false }
 }
 
 const ballShaking = ref(false)
@@ -839,7 +822,7 @@ const townBuddyImage = computed(() => {
   return activeBuddyImage.value
 })
 
-// Convert the homepage record into the format PokemonBuddy uses.
+// Convert the homepage record into the format PokeSprite uses.
 const homepagePokemon = computed(() => {
   if (!activeBuddy.value.id) return null
 
@@ -852,14 +835,7 @@ const homepagePokemon = computed(() => {
   }
 })
 
-// Sample count — connect this to the user's inventory later.
-const unopenedPackCount = ref(3)
-
-const unopenedPackLabel = computed(() =>
-  unopenedPackCount.value > 99
-    ? '99+'
-    : String(unopenedPackCount.value)
-)
+const unopenedPackCount = ref(0)
 
 // Trainer identity always comes from the authenticated student's saved profile.
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
@@ -878,6 +854,10 @@ async function refreshTrainerProfile() {
     const profile = await getCurrentProfile()
     if (!trainerProfileActive) return
     trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
+    try {
+      const inventory = await checkedRpc('get_reward_inventory', undefined, profile.id)
+      if (trainerProfileActive) unopenedPackCount.value = inventory.unopened_count || 0
+    } catch { /* Keep the saved count or zero until the next refresh. */ }
 
     try {
       savedActiveBuddy.value = await getSelectedStudyBuddy(profile.id)
@@ -908,6 +888,8 @@ onMounted(() => {
   window.addEventListener('studydex:pokemon-xp', refreshTrainerProfile)
 })
 onUnmounted(() => {
+  todosActive = false
+  todoOwner.value = null
   trainerProfileActive = false
   window.removeEventListener('focus', refreshTrainerProfile)
   window.removeEventListener('studydex:pokemon-xp', refreshTrainerProfile)
@@ -1577,11 +1559,16 @@ watch(
                 />
 
                 <!-- Awake Pokémon uses the reusable component -->
-                <PokemonBuddy
+                <PokeSprite
                   v-else-if="homepagePokemon"
                   :key="homepagePokemon.ownedId"
                   class="homepage-pokemon"
                   :active-pokemon="homepagePokemon"
+                  :fallback-src="homepagePokemon.static_img"
+                  facing="front"
+                  embedded
+                  progress-position="hidden"
+                  :max-xp="MAX_XP"
                 />
               </Transition>
 
@@ -1797,7 +1784,7 @@ watch(
                   autocomplete="off"
                 />
 
-                <button type="submit" :disabled="!newTodoTitle.trim()">
+                <button type="submit" :disabled="todoSaving || !todoOwner || !newTodoTitle.trim()">
                   + Add
                 </button>
               </form>
@@ -1807,7 +1794,7 @@ watch(
                 class="todo-storage-note"
                 role="status"
               >
-                {{ todoStorageNotice }}
+                {{ todoStorageNotice }} <button type="button" @click="loadTodos">Retry</button>
               </p>
 
               <ul v-if="orderedTodos.length" class="todo-notepad-list">
@@ -3559,7 +3546,6 @@ watch(
 
 .homepage-pokemon :deep(.buddy-image-container) {
   width: 100%;
-  height: 100%;
   margin: 0;
 }
 

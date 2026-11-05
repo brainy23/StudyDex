@@ -39,6 +39,7 @@ it('passes the displayed owner identity and clears the password during deletion'
     password: 'synthetic-password',
     confirmation: 'DELETE',
     expectedUserId: 'student-a',
+    requestMfaCode: expect.any(Function),
   })
   expect(wrapper.get('#delete-password').element.value).toBe('')
   expect(wrapper.emitted('deleted')).toEqual([[{ deleted: true }]])
@@ -74,4 +75,21 @@ it('shows failure with a fresh password required for retry', async () => {
   expect(wrapper.get('#delete-password').element.value).toBe('')
   expect(wrapper.get('button[type="submit"]').element.disabled).toBe(true)
   expect(wrapper.emitted('deleted')).toBeUndefined()
+})
+it('collects an MFA code during the password-confirmed deletion flow', async () => {
+  let code
+  deleteOwnAccount.mockImplementation(async ({ requestMfaCode }) => {
+    code = await requestMfaCode({ type:'totp', name:'Authenticator' })
+    return { deleted:true }
+  })
+  await open()
+  await wrapper.get('#delete-password').setValue('synthetic-password')
+  await wrapper.get('#delete-confirmation').setValue('DELETE')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  await wrapper.get('#delete-mfa-code').setValue('123456')
+  await wrapper.get('form').trigger('submit')
+  await flushPromises()
+  expect(code).toBe('123456')
+  expect(wrapper.emitted('deleted')).toEqual([[{ deleted:true }]])
 })

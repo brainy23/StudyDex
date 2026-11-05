@@ -4,6 +4,10 @@ WAD2 Group Project
 For the current integration branch, setup steps and feedback checklist, see
 [Team testing](docs/team-testing.md).
 
+For the connected Quiz Room, daily progress, Study History, account isolation,
+deletion and reproducible Supabase setup, see
+[Backend connections](docs/BACKEND_CONNECTIONS.md).
+
 StudyDex/
 │
 ├── public/

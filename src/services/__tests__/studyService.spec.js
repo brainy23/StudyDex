@@ -47,7 +47,7 @@ it('loads only the signed-in user’s owned Pokémon with their display sprite',
   const { query } = requests.find((request) => request.table === 'user_pokemon')
   expect(query.eq).toHaveBeenCalledWith('user_id', 'user-1')
   expect(query.select).toHaveBeenCalledWith(
-    'id, user_id, pokemon_id, xp, level, is_selected, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)',
+    'id, user_id, pokemon_id, xp, level, is_selected, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, pokeapi_id, name, sprite_url)',
   )
   await expect(getOwnedStudyPokemon(null)).rejects.toThrow('log in')
 })

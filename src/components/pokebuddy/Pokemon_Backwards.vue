@@ -12,6 +12,7 @@ const props = defineProps({
   }
 })
 
+
 const POKE_API_URL = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
 
 const sprite = ref('')
