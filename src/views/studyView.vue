@@ -3,6 +3,7 @@
   import xpPrompt from '../components/common/xpPrompt.vue'
   import { useExperiencePrompt } from '../composables/useExperiencePrompt'
   import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+import { useStudySession } from '../composables/useStudySession'
 
   import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
   import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -24,7 +25,7 @@
   import { usePokemonTransition } from '../composables/usePokemonTransition'
   import { useRoomTransitionReady } from '../composables/useRoomTransition'
   import '../assets/study.css'
-  import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+  import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
   import LoadingScreen from '../components/common/LoadingScreen.vue'
   import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
@@ -56,7 +57,7 @@
   } = focusTimer
   const profile = ref(null)
   const selectedBuddyRecord = ref(null)
-  const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async result => {
+  const { prompt:experiencePrompt, showSaved:showSavedExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async () => {
     completedFocusSessions.value = await getRewardedTimerCount(profile.value.id)
     selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
   })
@@ -97,7 +98,8 @@
       : availableTopics.value[0] || null,
   )
   const currentResources = computed(() => resources[topic.value?.id])
-  async function initialise() {
+  const persistedStudy = useStudySession(profile, topic, 'flashcards')
+async function initialise() {
     const request = ++generation
     loading.value = true
     error.value = null
@@ -214,9 +216,12 @@
     if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'study' } })
     else initialise()
   })
-  // onBeforeRouteLeave(() => {
+  // onBeforeRouteLeave(async to => {
   //   pauseFocusTimer()
-  // })
+  //   if (persistedStudy.ready.value) {
+    try { await persistedStudy.action(to.name === 'learn' || to.name === 'surprise-boss' ? 'pause' : 'abandon') } catch { /* last confirmed heartbeat remains saved */ }
+  }
+})
   onUnmounted(() => {
     alive = false
     generation++
@@ -245,7 +250,7 @@
       ? name.toLowerCase().replace(/[.'’]/g, '').replace(/\s+/g, '-')
       : null
   })
-  // PokemonBuddy owns presentation and evolution animations; the parent owns data.
+  // PokeSprite owns presentation and evolution animations; the parent owns data.
   const pokemonBuddy = ref(null)
   const activePokemon = ref(null)
   function updateStudyPokemon({ pokemon, changes }) {
@@ -278,7 +283,7 @@
       xp: record.xp ?? 0,
       level: record.level ?? 1,
       evolution_stage: 0,
-      isDefeated: false,
+      isDefeated: record.is_defeated ?? false,
       animated_img: sprite || savedSprite,
       static_img: data?.sprites?.front_default || savedSprite,
     }
@@ -333,6 +338,39 @@
     router.push({ name:'selection-topics', query:{ flow:'study', subject:subject.value?.id } })
   }
 
+let flashcardRoundId = newExperienceId()
+const reviewQueue = ref([])
+const cardIndex = computed(() => reviewQueue.value[0] ?? -1)
+const answerVisible = ref(false)
+const completedCards = ref(0)
+const ratingMessage = ref('')
+// A local, independent 25-minute focus session. No server timer API is assumed.
+const focusSeconds = ref(25 * 60)
+const timerRunning = ref(false)
+const timerFinished = ref(false)
+// Rewarded focus sessions are counted by the Supabase XP ledger.
+const SESSION_REWARD_LIMIT = 4
+const completedFocusSessions = ref(0)
+watch(() => profile.value?.id, async (id, _, onCleanup) => {
+  let cancelled=false; onCleanup(()=>{cancelled=true})
+  if (!id) { completedFocusSessions.value=0; return }
+  try { const count=await getRewardedTimerCount(id); if(!cancelled) completedFocusSessions.value=count }
+  catch { /* Saving a reward will show an actionable error if SQL is missing. */ }
+}, {immediate:true})
+async function recordFocusCompletion() {
+  try {
+    const saved = await persistedStudy.action('complete_block')
+    if (!saved) return
+    if (saved.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
+    else if (saved.block?.running_since) {
+      focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+      timerFinished.value = false
+      timerDeadline = Date.now() + focusSeconds.value * 1000
+      timerRunning.value = true
+      focusInterval = setInterval(tickFocusTimer, 250)
+    }
+  } catch { /* persistedStudy.error offers retry */ }
+}
   let flashcardRoundId = newExperienceId()
   const reviewQueue = ref([])
   const cardIndex = computed(() => reviewQueue.value[0] ?? -1)
@@ -581,11 +619,12 @@
   />
     <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
     <div class="study-page">
-    <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
+    <p v-if="persistedStudy.error.value" class="lab-state" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().then(result => showSavedExperience(result?.xp)).catch(() => {})">Retry saving</button></p>
+  <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
       <nav class="study-mode-toggle" aria-label="Learning mode">
+          <button type="button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="openLearn">Learn</button>
         <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
-        <button type="button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="openLearn">Learn</button>
-      </nav>
+    </nav>
       <header class="study-header">
         <StudyPageNavigation @topics="returnToSelection" />
         <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
@@ -640,7 +679,30 @@
                 <p>Your cards loaded, but this view could not read their format.</p>
               </div>
               <div v-else-if="!cards.length" class="screen-message"><h2>No flashcards yet</h2><p>Choose another topic using the Topics button.</p></div>
-              <div v-else-if="!currentCard" class="screen-message" role="status"><h2>Round complete!</h2><p>All {{ cards.length }} cards marked Easy.</p><button @click="restartCards">Study again</button></div>
+              <div v-else-if="!currentCard" class="screen-message" role="status">
+              <h2>Round complete!</h2>
+              <p>All {{ cards.length }} cards marked Easy.</p>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                <button type="button" @click="restartCards">
+                  Study again
+                </button>
+
+                <button
+                  type="button"
+                  :disabled="!topic"
+                  @click="router.push({
+                    name: 'quiz-battle',
+                    query: {
+                      subject: topic.subject_id,
+                      topic: topic.id
+                    }
+                  })"
+                >
+                  Take topic quiz →
+                </button>
+              </div>
+            </div>
               <div v-else class="answer-content" aria-live="polite">
                 <template v-if="answerVisible">
                   <p class="question-reminder">{{ currentCard.front }}</p>
@@ -660,13 +722,16 @@
           <aside class="buddy-chamber" :class="{ 'has-pokemon': !!buddySprite }" aria-label="Your study buddy">
             <div v-if="buddySprite" class="buddy-contact-shadow" aria-hidden="true"></div>
             <div class="buddy-sprite" @error.capture="nextBuddySprite">
-              <PokemonBuddy
+              <PokeSprite
                 v-if="activePokemon && buddySprite"
                 ref="pokemonBuddy"
+              embedded
                 class="lab-pokemon-buddy"
                 :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }"
                 :active-pokemon="activePokemon"
+              :fallback-src="buddySprite"
                 @update-pokemon="updateStudyPokemon"
+              progress-position="top"
               />
               <span v-else class="chamber-status" role="status">{{ spriteLoading ? 'Loading…' : spriteError ? 'Try again below' : 'Loading companion…' }}</span>
             </div>
@@ -690,7 +755,7 @@
           <span role="status">{{ ratingMessage }}</span>
           <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
           <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
-          <p v-if="!savedInBrowser" role="status">Progress can only be kept for this visit because browser storage is unavailable.</p>
+          <p v-if="!savedInBrowser" role="status">Saved topic progress could not be loaded. Please retry.</p>
           <p v-if="backgroundFailed" role="alert">Room image missing. Put poke-lab-interior.png in public/poke-lab/.</p>
         </footer>
       </template>
@@ -1215,6 +1280,30 @@
     display: none;
   }
 
+/* Embed the shared buddy in the lab chamber without its standalone card layout. */
+.lab-pokemon-buddy {
+  /* Adjust these to place the sprite's feet within the chamber. */
+  --sprite-left: 50%;
+  --sprite-bottom: 0%;
+  width: 100%; height: 100%; padding: 0; gap: 0;
+  min-width: 0; min-height: 0; position: relative;
+}
+.lab-pokemon-buddy :deep(h3) {
+  display: none;
+}
+.lab-pokemon-buddy :deep(.buddy-stage) {
+  height: 100%; min-height: 0; flex: 1 1 0;
+}
+.lab-pokemon-buddy :deep(.buddy-image-container) {
+  left: var(--sprite-left);
+  bottom: var(--sprite-bottom);
+  transform: translateX(-50%);
+  align-items: flex-end;
+}
+/* Keep the XP panel above the sprite, with its feet anchored below. */
+.lab-pokemon-buddy :deep(.buddy-image-container .buddy-sprite) {
+  width: auto; height: 92%; max-width: 60%; max-height: 100%;
+}
   /* Embed the shared buddy in the lab chamber without its standalone card layout. */
   .lab-pokemon-buddy {
     width: 100%; height: 100%; padding: 0; gap: 0;
@@ -1240,83 +1329,88 @@
     white-space: nowrap; border: 0;
   }
 
-  /* Coordinates measured against the supplied 1672 x 941 room image. */
-  @media (min-width: 1001px) {
-    .study-content .lab-stage { width: 100%; height: 100%; aspect-ratio: auto; }
-    .study-content .lab-stage .timer-screen {
-      left: 8.9%; top: 43.95%; width: 15.5%; height: 14.3%;
-      padding: .45cqw .3cqw; box-sizing: border-box; gap: .2cqw;
-      justify-content: center; align-items: center;
-      background: linear-gradient(135deg, #153d73 0%, #09234c 100%);
-    }
-    .study-content .lab-stage .timer-frame {
-      left: 8.55%; top: 43.5%; width: 16.2%; height: 15.25%; box-sizing: border-box;
-      background: linear-gradient(135deg, #153d73 0%, #09234c 100%);
-      border-radius: 5%;
-    }
-    .study-content .lab-stage .answer-screen { left: 32.1%; top: 22%; width: 35.8%; height: 30.8%; box-sizing: border-box; }
-    .study-content .lab-stage .lab-console { left: 33.2%; top: 82.1%; width: 33.6%; height: 12.2%; }
-    .timer-screen .focus-digits { font-size: clamp(24px, 2.7cqw, 48px); }
+/* Coordinates measured against the supplied 1672 x 941 room image. */
+@media (min-width: 1001px) {
+  .study-content .lab-stage { width: 100%; height: 100%; aspect-ratio: auto; }
+  .study-content .lab-stage .timer-screen {
+    left: 8.9%; top: 43.95%; width: 15.5%; height: 14.3%;
+    padding: .45cqw .3cqw; box-sizing: border-box; gap: .2cqw;
+    justify-content: center; align-items: center;
+    background: linear-gradient(135deg, #153d73 0%, #09234c 100%);
   }
+  .study-content .lab-stage .timer-frame {
+    left: 8.55%; top: 43.5%; width: 16.2%; height: 15.25%; box-sizing: border-box;
+    background: linear-gradient(135deg, #153d73 0%, #09234c 100%);
+    border-radius: 5%;
+  }
+  .study-content .lab-stage .answer-screen { left: 32.1%; top: 22%; width: 35.8%; height: 30.8%; box-sizing: border-box; }
+  .study-content .lab-stage .lab-console { left: 33.2%; top: 82.1%; width: 33.6%; height: 12.2%; }
+  .timer-screen .focus-digits { font-size: clamp(24px, 2.7cqw, 48px); }
+}
+.study-content .lab-stage .buddy-chamber {
+  /* Increase this offset to move the buddy and its XP panel further down. */
+  --buddy-offset-y: 4%;
+  left: 74.5%; top: calc(39.7% + var(--buddy-offset-y)); width: 15%; height: 30.8%;
+  padding: 0; box-sizing: border-box;
+}
+.buddy-sprite { width: 96%; height: 94%; }
+.focus-session-progress { display: flex; justify-content: center; gap: clamp(7px, .8cqw, 14px); }
+.focus-session-dot { width: clamp(8px, .8cqw, 14px); aspect-ratio: 1; border-radius: 50%; border: 2px solid #718aa5; background: #102039; box-sizing: border-box; }
+.focus-session-dot.is-complete { border-color: #fff0ac; background: #ffcf52; box-shadow: 0 0 8px #ffc83db3; }
+.focus-session-count { color: #adcbe5; font-size: clamp(9px, .65cqw, 12px); line-height: 1.2; }
+@media (max-width: 1000px) {
+  .study-content .lab-stage .timer-frame { display: none; }
   .study-content .lab-stage .buddy-chamber {
-    left: 74.5%; top: 39.7%; width: 15%; height: 30.8%;
-    padding: 0; box-sizing: border-box;
+    --buddy-offset-y: 2.25cqw;
+    top: calc(22.34cqw + var(--buddy-offset-y)); height: 17.33cqw;
   }
-  .buddy-sprite { width: 96%; height: 94%; }
-  .focus-session-progress { display: flex; justify-content: center; gap: clamp(7px, .8cqw, 14px); }
-  .focus-session-dot { width: clamp(8px, .8cqw, 14px); aspect-ratio: 1; border-radius: 50%; border: 2px solid #718aa5; background: #102039; box-sizing: border-box; }
-  .focus-session-dot.is-complete { border-color: #fff0ac; background: #ffcf52; box-shadow: 0 0 8px #ffc83db3; }
-  .focus-session-count { color: #adcbe5; font-size: clamp(9px, .65cqw, 12px); line-height: 1.2; }
-  @media (max-width: 1000px) {
-    .study-content .lab-stage .timer-frame { display: none; }
-    .study-content .lab-stage .buddy-chamber { top: 22.34cqw; height: 17.33cqw; }
-  }
-  /* Learn entry uses the existing console's final row, keeping ratings in place. */
-  .console-learning-row { display:flex; justify-content:center; align-items:center; gap:.7cqw; min-width:0; }
-  .poke-lab-page .console-learn-button { background:#173e61; border:1px solid #8addff; color:#fff1b7; padding:.24cqw .65cqw; font-size:clamp(10px,.78cqw,14px); min-height:0; }
-  .poke-lab-page .console-learn-button:hover:not(:disabled) { background:#285b7f; border-color:#ffe39b; }
-  .poke-lab-page .return-flashcards { grid-column:2; grid-row:2; justify-self:end; pointer-events:auto; }
-  .classroom-entry { position:absolute; inset:0; overflow-y:auto; padding-top:220px; background:#101d30; }
-  .classroom-entry :deep(.learn-classroom) { min-width:0; }
-  .learn-navigation-error { position:absolute; z-index:25; bottom:12px; left:50%; transform:translateX(-50%); width:min(90%,600px); padding:12px; border-radius:12px; background:#552e3d; color:white; text-align:center; }
-  @media(min-width:1001px) {
-  .classroom-entry { padding-top:0; }
-  .classroom-entry :deep(.learn-classroom) { height:100%; aspect-ratio:auto; }
-  }
-  @media(max-width:1000px) {
-  .console-learning-row { gap:12px; flex-wrap:wrap; }
-  .poke-lab-page .console-learn-button { min-height:44px; }
-  }
-  /* All Learn presentation is local to this file. */
-  .inline-classroom { position:absolute; inset:0; overflow:hidden; background:#12233b; }
-  .inline-learn-scene { position:relative; width:100%; height:100%; container-type:inline-size; isolation:isolate; }
-  .inline-learn-sky { position:absolute; inset:0; overflow:hidden; z-index:0; }
-  .learn-celestial { position:absolute; width:10%; transform:translate(-50%,-50%); }
-  .learn-moon { width:7%; }
-  .learn-sky-layer { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; }
-  .learn-clouds { width:110%; left:-5%; }
-  .learn-landscape { position:absolute; left:0; bottom:0; width:100%; height:85%; object-fit:fill; }
-  .inline-learn-room { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; z-index:1; pointer-events:none; }
-  .inline-professor,.inline-learner { position:absolute; z-index:2; object-fit:contain; object-position:center bottom; image-rendering:pixelated; pointer-events:none; }
-  .inline-professor { left:73%; top:31%; width:27%; height:53%; object-fit:fill; }
-  .inline-learner { left:10%; top:60%; width:18%; height:28%; object-fit:fill; }
-  .inline-whiteboard { position:absolute; z-index:3; left:25%; top:11.5%; width:49%; height:41%; box-sizing:border-box; padding:clamp(12px,1.4cqw,28px); overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; background:#fffdf4f2; border-radius:8px; color:#24364c; font-size:clamp(15px,1.15cqw,22px); line-height:1.65; }
-  .poke-lab-page .inline-whiteboard h1 { font-size:clamp(22px,2cqw,36px); color:#24364c; margin:0 0 16px; }
-  .poke-lab-page .inline-whiteboard h2 { font-size:1.2em; color:#24364c; }
-  .poke-lab-page .inline-whiteboard h3 { font-size:1em; color:#24364c; }
-  .learn-copy { white-space:pre-line; color:#24364c; }
-  .learn-eyebrow { font-size:.7em; letter-spacing:.12em; font-weight:800; color:#886a35; }
-  .inline-concept { border-top:1px solid #d8cba9; padding:18px 0; }
-  .inline-example,.learn-goals { background:#f1eddf; border-radius:12px; padding:12px 16px; }
-  .learn-note { font-size:.8em; }
-  @media(max-width:1000px) {
-  .inline-classroom { overflow-y:auto; padding-top:220px; }
-  .inline-learn-scene { height:auto; min-height:0; padding-top:56.28%; }
-  .inline-learn-sky,.inline-learn-room,.classroom-play-floor { height:56.28cqw; }
-  .inline-professor { top:17.45cqw; height:29.83cqw; }
-  .inline-learner { top:33.77cqw; height:15.76cqw; }
-  .inline-whiteboard { position:relative; inset:auto; width:auto; height:auto; margin:12px; padding:20px; border:2px solid #c4ab6d; border-radius:16px; font-size:16px; }
-  }
+}
+/* Learn entry uses the existing console's final row, keeping ratings in place. */
+.console-learning-row { display:flex; justify-content:center; align-items:center; gap:.7cqw; min-width:0; }
+.poke-lab-page .console-learn-button { background:#173e61; border:1px solid #8addff; color:#fff1b7; padding:.24cqw .65cqw; font-size:clamp(10px,.78cqw,14px); min-height:0; }
+.poke-lab-page .console-learn-button:hover:not(:disabled) { background:#285b7f; border-color:#ffe39b; }
+.poke-lab-page .return-flashcards { grid-column:2; grid-row:2; justify-self:end; pointer-events:auto; }
+.classroom-entry { position:absolute; inset:0; overflow-y:auto; padding-top:220px; background:#101d30; }
+.classroom-entry :deep(.learn-classroom) { min-width:0; }
+.learn-navigation-error { position:absolute; z-index:25; bottom:12px; left:50%; transform:translateX(-50%); width:min(90%,600px); padding:12px; border-radius:12px; background:#552e3d; color:white; text-align:center; }
+@media(min-width:1001px) {
+ .classroom-entry { padding-top:0; }
+ .classroom-entry :deep(.learn-classroom) { height:100%; aspect-ratio:auto; }
+}
+@media(max-width:1000px) {
+ .console-learning-row { gap:12px; flex-wrap:wrap; }
+ .poke-lab-page .console-learn-button { min-height:44px; }
+}
+/* All Learn presentation is local to this file. */
+.inline-classroom { position:absolute; inset:0; overflow:hidden; background:#12233b; }
+.inline-learn-scene { position:relative; width:100%; height:100%; container-type:inline-size; isolation:isolate; }
+.inline-learn-sky { position:absolute; inset:0; overflow:hidden; z-index:0; }
+.learn-celestial { position:absolute; width:10%; transform:translate(-50%,-50%); }
+.learn-moon { width:7%; }
+.learn-sky-layer { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; }
+.learn-clouds { width:110%; left:-5%; }
+.learn-landscape { position:absolute; left:0; bottom:0; width:100%; height:85%; object-fit:fill; }
+.inline-learn-room { position:absolute; inset:0; width:100%; height:100%; object-fit:fill; z-index:1; pointer-events:none; }
+.inline-professor,.inline-learner { position:absolute; z-index:2; object-fit:contain; object-position:center bottom; image-rendering:pixelated; pointer-events:none; }
+.inline-professor { left:73%; top:31%; width:27%; height:53%; object-fit:fill; }
+.inline-learner { left:10%; top:60%; width:18%; height:28%; object-fit:fill; }
+.inline-whiteboard { position:absolute; z-index:3; left:25%; top:11.5%; width:49%; height:41%; box-sizing:border-box; padding:clamp(12px,1.4cqw,28px); overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; background:#fffdf4f2; border-radius:8px; color:#24364c; font-size:clamp(15px,1.15cqw,22px); line-height:1.65; }
+.poke-lab-page .inline-whiteboard h1 { font-size:clamp(22px,2cqw,36px); color:#24364c; margin:0 0 16px; }
+.poke-lab-page .inline-whiteboard h2 { font-size:1.2em; color:#24364c; }
+.poke-lab-page .inline-whiteboard h3 { font-size:1em; color:#24364c; }
+.learn-copy { white-space:pre-line; color:#24364c; }
+.learn-eyebrow { font-size:.7em; letter-spacing:.12em; font-weight:800; color:#886a35; }
+.inline-concept { border-top:1px solid #d8cba9; padding:18px 0; }
+.inline-example,.learn-goals { background:#f1eddf; border-radius:12px; padding:12px 16px; }
+.learn-note { font-size:.8em; }
+@media(max-width:1000px) {
+ .inline-classroom { overflow-y:auto; padding-top:220px; }
+ .inline-learn-scene { height:auto; min-height:0; padding-top:56.28%; }
+ .inline-learn-sky,.inline-learn-room,.classroom-play-floor { height:56.28cqw; }
+ .inline-professor { top:17.45cqw; height:29.83cqw; }
+ .inline-learner { top:33.77cqw; height:15.76cqw; }
+ .inline-whiteboard { position:relative; inset:auto; width:auto; height:auto; margin:12px; padding:20px; border:2px solid #c4ab6d; border-radius:16px; font-size:16px; }
+}
 
   /* A code-drawn pixel stool: touch, mouse and keyboard controls. */
   .classroom-play-floor { position:absolute; inset:0; z-index:4; pointer-events:none; }

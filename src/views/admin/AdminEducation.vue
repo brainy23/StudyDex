@@ -114,21 +114,6 @@ function arrow(key) {
   // flashcards
 
 
-/* ---------------- view deck panel ---------------- */
-
-const showViewPanel = ref(false)
-const selectedDeck = ref(null)
-
-function openViewPanel(deck) {
-  selectedDeck.value = deck
-  showViewPanel.value = true
-}
-
-function closeViewPanel() {
-  showViewPanel.value = false
-  selectedDeck.value = null
-}
-
 /* ---------------- remove deck ---------------- */
 
 function removeDeck(id) {
@@ -284,25 +269,7 @@ function removeDeck(id) {
                   <div class="action-buttons">
                     <router-link class="view-btn" :to="`/admin-education/${deck.id}`">View</router-link>
 
-                    <button
-                      class="action-btn unban-btn"
-                      :disabled="!deck.banned"
-
-                      @click="banUser(deck,false)"
-                    >
-                      Unban
-                    </button>
-
-                    <button
-                      class="action-btn ban-btn"
-                      :disabled="deck.banned"
-
-                      @click="banUser(deck,true)"
-                    >
-                      Ban
-                    </button>
-
-                    <button class="action-btn remove-btn">
+                    <button type="button" class="action-btn remove-btn" @click="removeDeck(deck.id)">
                       Remove
                     </button>
 
@@ -328,55 +295,7 @@ function removeDeck(id) {
             </div>
 
           </div>
-          <!-- overlay + panel -->
-          <div v-if="showViewPanel && selectedDeck" class="overlay" @click.self="closeViewPanel">
-            <div class="panel">
-              <h3>{{ selectedDeck.concept_title }}</h3>
 
-              <div class="detail-grid">
-                <span class="detail-label">Topic</span>
-                <span>{{ selectedDeck.topic_name }}</span>
-
-                <span class="detail-label">Subject</span>
-                <span>{{ selectedDeck.subjects }}</span>
-
-                <span class="detail-label">Level</span>
-                <span>{{ selectedDeck.school_level_id }}</span>
-
-                <span class="detail-label">Pages</span>
-                <span>{{ selectedDeck.pages }}</span>
-              </div>
-
-              <h4>Flashcards</h4>
-
-              <p v-if="!selectedDeck.flashcards?.length" class="muted">
-                This deck has no flashcards yet.
-              </p>
-
-              <div
-                v-for="(card, ci) in selectedDeck.flashcards ?? []"
-                :key="ci"
-                class="question-card"
-              >
-                <strong>Flashcard {{ ci + 1 }}</strong>
-
-                <div class="card-side">
-                  <span class="detail-label">Front</span>
-                  <p>{{ card.front_text }}</p>
-                </div>
-
-                <div class="card-side back">
-                  <span class="detail-label">Back</span>
-                  <p>{{ card.back_text }}</p>
-                </div>
-              </div>
-
-              <div class="actions">
-                <button class="cancel-button" @click="closeViewPanel">Close</button>
-              </div>
-            </div>
-          </div>
-          <!-- end -->
     </main>
 
   </div>

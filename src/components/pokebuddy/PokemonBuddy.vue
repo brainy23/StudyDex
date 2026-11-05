@@ -5,10 +5,19 @@ import playSound from '../../../scripts/soundEffect'
 
 
 const props = defineProps({
+  embedded: {
+    type: Boolean,
+    default: false,
+  },
   activePokemon: {
     type: Object,
-    required: true
-  }
+    required: true,
+  },
+  progressPosition: {
+    type: String,
+    default: 'top',
+    validator: value => ['top', 'bottom', 'hidden'].includes(value),
+  },
 })
 
 const emit = defineEmits([
@@ -17,7 +26,7 @@ const emit = defineEmits([
 ])
 
 const API = 'https://pokeapi.co/api/v2'
-const MAX_XP = 100
+const MAX_XP = 200
 
 // Component state
 const busy = ref(false)
@@ -53,7 +62,7 @@ const isMaxed = computed(() =>
 
 // Keep stored level numeric; MAX is a presentation label only.
 const displayedLevel = computed(() =>
-  isMaxed.value ? 'MAX' : numericStage(displayedPokemon.value) + 1
+  isMaxed.value ? 'MAX' : (displayedPokemon.value?.level ?? numericStage(displayedPokemon.value) + 1)
 )
 
 const xpPercentage = computed(() =>
@@ -472,7 +481,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="pokemon-buddy">
+  <section class="pokemon-buddy" :class="{ 'pokemon-buddy--embedded': embedded }">
     <h2>Battle Buddy</h2>
 
     <template v-if="activePokemon">
@@ -489,6 +498,26 @@ onBeforeUnmount(() => {
         aria-hidden="true"
         @animationend="xpFloat = null"
       >{{ xpFloat.amount > 0 ? '+' : '−' }}{{ Math.abs(xpFloat.amount) }} XP</span>
+      <div
+        class="buddy-stage"
+        :class="`buddy-stage--${progressPosition}`"
+      >
+        <div
+          v-if="progressPosition !== 'hidden'"
+          class="buddy-progress"
+          :class="{ 'buddy-progress--max': isMaxed }"
+        >
+          <div class="buddy-progress__heading">
+            <span class="buddy-progress__level">{{ isMaxed ? 'MAX' : `Lv. ${displayedLevel}` }}</span>
+            <span class="buddy-progress__value">{{ displayedPokemon?.xp ?? 0 }} / {{ MAX_XP }} <span>XP</span></span>
+          </div>
+          <div class="buddy-progress__track" role="progressbar"
+            :aria-label="`${displayedPokemon?.name} XP`"
+            :aria-valuenow="xpPercentage" :aria-valuemin="0" :aria-valuemax="100"
+            :aria-valuetext="`${displayedPokemon?.xp ?? 0} of ${MAX_XP} XP${isMaxed ? ', maximum evolution' : ''}`">
+            <div class="buddy-progress__fill" :style="{ width: `${xpPercentage}%` }"></div>
+          </div>
+        </div>
       <div
         class="buddy-image-container"
         :class="{ devolving: isDevolving }"
@@ -532,10 +561,8 @@ onBeforeUnmount(() => {
         </p>
       </div>
 
+      </div>
       <h3>{{ displayedPokemon?.name }}</h3>
-      <p class="buddy-level">
-        {{ isMaxed ? 'Level MAX' : `Lv. ${displayedLevel}` }}
-      </p>
 
       <p
         v-if="busy && !isAnimating"
@@ -553,29 +580,6 @@ onBeforeUnmount(() => {
         {{ error }}
       </p>
 
-      <div class="buddy-xp">
-        <p>
-          {{ isMaxed ? 'Maximum evolution reached!' : 'XP Progress' }}
-        </p>
-
-        <div
-          class="xp-track"
-          role="progressbar"
-          :aria-label="`${displayedPokemon?.name} XP`"
-          :aria-valuenow="xpPercentage"
-          :aria-valuemin="0"
-          :aria-valuemax="100"
-        >
-          <div
-            class="xp-fill"
-            :style="{ width: `${xpPercentage}%` }"
-          ></div>
-        </div>
-
-        <p>
-          {{ displayedPokemon?.xp ?? 0 }} / {{ MAX_XP }} XP
-        </p>
-      </div>
     </template>
 
     <p v-else class="buddy-placeholder">
@@ -676,25 +680,96 @@ onBeforeUnmount(() => {
   animation: buddy-reveal 0.6s ease-out;
 }
 
-/* XP progress */
-
-.buddy-xp {
+/* Shared level and XP display: page layouts should not override these internals. */
+.pokemon-buddy { container-type: inline-size; }
+.buddy-stage {
+  position: relative;
+  isolation: isolate;
   width: 100%;
-  max-width: 220px;
+  height: 240px;
+  min-height: 0;
+  flex-shrink: 0;
 }
-
-.xp-track {
-  height: 18px;
-  margin: 8px 0;
+.buddy-stage .buddy-image-container {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: calc(100% - 64px);
+}
+.buddy-progress {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: 6;
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  width: min(220px, 94%);
+  padding: 8px 10px;
+  border: 2px solid #263b5c;
+  border-radius: 14px;
+  background: #fffdf3;
+  color: #243653;
+  font-family: 'Fredoka', system-ui, sans-serif;
+  box-shadow: 0 3px 0 #263b5c33, inset 0 1px 0 #fff;
+  pointer-events: none;
+}
+.buddy-progress__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.buddy-progress__level {
+  padding: 3px 7px;
+  border-radius: 7px;
+  background: #263b5c;
+  color: #ffdf63;
+  font-size: clamp(10px, 6cqi, 13px);
+  font-weight: 700;
+}
+.buddy-progress__value { font-size: clamp(9px, 5.5cqi, 12px); font-weight: 600; }
+.buddy-progress__value > span { color: #62728a; font-size: .85em; }
+.buddy-progress__track {
+  height: 10px;
   overflow: hidden;
-  border-radius: 20px;
-  background: #dedede;
+  border: 1px solid #bbc6d3;
+  border-radius: 999px;
+  background: #e3e9ef;
+  box-shadow: inset 0 2px 2px #24365315;
 }
-
-.xp-fill {
+.buddy-progress__fill {
   height: 100%;
-  background: #4caf50;
-  transition: width 0.3s ease;
+  border-radius: inherit;
+  background: linear-gradient(180deg, #ffe989, #f4c542);
+  box-shadow: inset 0 2px 0 #ffffff80;
+  transition: width .35s ease;
+}
+.buddy-progress--max { border-color: #a47c25; background: #fff8dc; }
+.pokemon-buddy--embedded { height: 100%; padding: 0; gap: 0; }
+.pokemon-buddy--embedded .buddy-stage { height: 100%; flex: 1; }
+.pokemon-buddy--embedded .buddy-image-container { align-items: flex-end; }
+.pokemon-buddy--embedded > h2,
+.pokemon-buddy--embedded > h3,
+.pokemon-buddy--embedded > .buddy-status,
+.pokemon-buddy--embedded > .buddy-message,
+.pokemon-buddy--embedded > .buddy-error {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@container (max-width: 180px) {
+  .buddy-progress { padding: 5px 6px; border-radius: 10px; }
+  .buddy-progress__heading { margin-bottom: 4px; }
+  .buddy-progress__level { padding: 2px 5px; }
+  .buddy-progress__track { height: 7px; }
+  .buddy-stage .buddy-image-container { height: calc(100% - 50px); }
 }
 
 /* Evolution / devolution label */
@@ -947,12 +1022,37 @@ onBeforeUnmount(() => {
     animation: none;
   }
 
-  .xp-fill {
+  .buddy-progress__fill {
     transition: none;
   }
 
   .buddy-xp-float {
     animation-name: buddy-xp-fade;
+  }
+}
+
+/* Hide the panel and give the Pokémon the full stage. */
+.buddy-stage--hidden .buddy-image-container {
+  top: 0;
+  bottom: 0;
+  height: 100%;
+}
+
+/* Put the panel below the Pokémon, inside the stage. */
+.buddy-stage--bottom .buddy-progress {
+  top: auto;
+  bottom: 6px;
+}
+
+.buddy-stage--bottom .buddy-image-container {
+  top: 0;
+  bottom: auto;
+  height: calc(100% - 64px);
+}
+
+@container (max-width: 180px) {
+  .buddy-stage--bottom .buddy-image-container {
+    height: calc(100% - 50px);
   }
 }
 </style>

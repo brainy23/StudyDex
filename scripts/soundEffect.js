@@ -3,5 +3,5 @@ export default async function playSound(action) {
   if (action === 'bossfight'){
     audio.loop = true;
   }
-  await audio.play();
+  try { await audio.play(); } catch { /* Sound is optional when playback is blocked. */ }
 }
