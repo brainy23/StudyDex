@@ -242,6 +242,7 @@ watch([demoFinished,enteredArena],([finished,entered])=>{
   rewardExperience({id:encounter.value.xpEventId,type:'boss',health:bossHp.value,sessionId:encounter.value.studySessionId})
 })
 async function finishEncounter() {
+  isMuted.value = false;
   toggleMute();
   if (!demoFinished.value || !encounter.value || experiencePrompt.value) return
   persistBattle()
