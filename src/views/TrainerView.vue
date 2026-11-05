@@ -666,9 +666,6 @@ onUnmounted(() => {
 
     <!-- Overlays the room from md up; sits above the room in normal flow on phones. -->
     <header class="trainer-hud">
-      <div class="title-card">
-        <h1>Trainer Home</h1>
-      </div>
       <div class="trainer-clock">
         <ClockWeather
           :use-device-location="true"
@@ -902,14 +899,7 @@ onUnmounted(() => {
           <p v-else-if="saveMessage" role="status">{{ saveMessage }}</p>
         </section>
       </div>
-     <header class="trainer-hud">
-      <div class="trainer-clock">
-        <ClockWeather
-          :use-device-location="true"
-          @rain-change="rainActive = $event"
-        />
-      </div>
-    </header>
+
     </div>
 
     <!-- Below md: one large button per room action, so nothing depends on
@@ -987,20 +977,13 @@ onUnmounted(() => {
 
 .trainer-hud { position: absolute; top: 24px; left: 24px; z-index: 10; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
 
-.title-card { padding: 12px 18px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 18px; background: rgba(22, 39, 62, 0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 5px 16px rgba(5, 15, 30, 0.18); }
 
-.title-card h1 { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.2; }
 
 .image-errors { margin: 16px; padding: 16px; border: 1px solid #f39b9b; border-radius: 12px; background: #482631; color: #ffe5e5; font-size: var(--text-sm); line-height: 1.6; overflow-wrap: anywhere; }
 
 .image-errors ul { margin: 8px 0; padding-left: 20px; }
 
 .image-errors p { margin: 8px 0 0; }
-
-/* md to lg: clock beside the title, so the HUD clears the door and desk labels. */
-@media (min-width: 768px) and (max-width: 991.98px) {
-  .trainer-hud { flex-direction: row; align-items: flex-start; }
-}
 
 /* Below md: the HUD leaves the room overlay and sits above it in normal flow,
    so it can never cover a room button. */
@@ -1015,9 +998,7 @@ onUnmounted(() => {
     padding: 12px 16px;
   }
 
-  .title-card { padding: 8px 14px; border-radius: var(--radius-md); }
 
-  .title-card h1 { font-size: var(--text-lg); }
 }
 
 .room-characters { position: absolute; inset: 0; z-index: 6; pointer-events: none; --party-left: 51%; --party-feet: 85%;  }
