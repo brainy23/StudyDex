@@ -1,4 +1,5 @@
 <script setup>
+import { useTransitionPageReady } from '../composables/useTransitionPageReady'
 import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -341,6 +342,8 @@ const battleOptions = computed(() =>
     text: option.option_text,
   })),
 )
+
+useTransitionPageReady('arena:' + route.query.topic, () => !loading.value)
 </script>
 <template>
   <div class="arena-with-preview">

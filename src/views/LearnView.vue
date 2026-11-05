@@ -1,4 +1,5 @@
 <script setup>
+import { useTransitionPageReady } from '../composables/useTransitionPageReady'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
@@ -276,6 +277,8 @@ async function backToFlashcards() {
   } catch { learningNavigationError.value = 'Could not return to your flashcards. Please try again.' }
   finally { learningNavigationBusy.value = false }
 }
+
+useTransitionPageReady('learn:' + route.query.topic, () => !loading.value && (!!error.value || !topic.value || !!lessonResource.value && !lessonResource.value.loading))
 </script>
 <template>
   <div class="study-page">

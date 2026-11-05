@@ -12,6 +12,8 @@ import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
+const navigating = ref(false)
+import { navigateWithPokemon } from '../composables/navigateWithPokemon'
 const flow = computed(() => route.query.flow === 'quiz' ? 'quiz' : 'study')
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
 const profile = ref(null)
@@ -80,17 +82,30 @@ const topics = computed(() =>
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
 function disabled(item) { return flow.value === 'quiz' && !item.quiz_question_count }
 function actionText() { return flow.value === 'quiz' ? 'Preview questions →' : 'Choose Learn or Study →' }
-function selectTopic(item) {
-  if (disabled(item)) return
+async function selectTopic(item) {
+  if (disabled(item) || navigating.value) return
   const query = { subject:selectedSubject.value?.id, topic:item.id }
-  router.push(flow.value === 'quiz'
-    ? { name:'quiz-battle', query }
-    : { name:'study-mode', query })
+  navigating.value = true
+  try {
+    if (flow.value === 'quiz') {
+      await navigateWithPokemon(router, { name:'quiz-battle', query }, {
+        waitFor: 'arena:' + item.id,
+        source: 'Topics', destination: 'Poké Arena',
+        title: 'Enter the Poké Arena!',
+        description: 'Preparing your questions.',
+      })
+    } else {
+      await router.push({ name:'study-mode', query })
+    }
+  } catch (cause) {
+    error.value = cause.message || 'Could not open this topic. Please try again.'
+  } finally { navigating.value = false }
 }
+
 </script>
 <template>
   <LoadingScreen :show="loading" message="Opening your Topics…" />
-<main class="sd-picker sd-topics sd-colour-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
+<main v-if="!loading" class="sd-picker sd-topics sd-colour-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-subjects', query:{ flow } }">← All subjects</RouterLink></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ selectedSubject?.name || 'STUDY' }}</p><h1>Your {{ selectedSubject?.name || 'study' }} adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
     <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>

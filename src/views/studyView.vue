@@ -1,4 +1,5 @@
 <script setup>
+import { useTransitionPageReady } from '../composables/useTransitionPageReady'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
@@ -412,6 +413,7 @@ async function startSurpriseBoss() {
   pauseFocusTimer()
   try {
     await pokemonTransition.run({
+      animate: true,
       source: 'Poké Lab',
       destination: 'Boss Battle',
       title: 'A Boss Appears!',
@@ -512,6 +514,8 @@ watch(() => topic.value?.id, id => {
 onUnmounted(() => { clearInterval(focusInterval) })
 
 watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
+
+useTransitionPageReady('study-decks:' + route.query.topic, () => !loading.value && (!!error.value || !topic.value || !!flashResource.value && !flashResource.value.loading))
 </script>
 <template>
   <xpPrompt :result="experiencePrompt" @close="dismissExperience" />

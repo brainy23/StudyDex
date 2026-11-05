@@ -8,6 +8,8 @@ import LoadingScreen from '../components/common/LoadingScreen.vue'
 
 const route = useRoute()
 const router = useRouter()
+const navigating = ref(false)
+import { navigateWithPokemon } from '../composables/navigateWithPokemon'
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
@@ -43,18 +45,31 @@ const selectedSubject = computed(() =>
   catalogue.value.subjects.find(subject => subject.id === topic.value?.subject_id) || null
 )
 const choices = [{ mode:'learn', name:'Learn', icon:'learn', theme:'purple', detail:'Explore the lesson with Professor Mewtwo' }, { mode:'flashcards', name:'Study', icon:'study', theme:'green', detail:'Practise flashcards and start your focus timer' }]
-function selectMode(mode) {
-  if (!topic.value) return
-  router.push({ name: mode === 'learn' ? 'learn' : 'study-decks', query:{ subject:topic.value.subject_id, topic:topic.value.id } })
+async function selectMode(mode) {
+  if (!topic.value || navigating.value) return
+  navigating.value = true
+  const name = mode === 'learn' ? 'learn' : 'study-decks'
+  const query = { subject:topic.value.subject_id, topic:topic.value.id }
+  try {
+    await navigateWithPokemon(router, { name, query }, {
+      waitFor: name + ':' + topic.value.id,
+      source: 'Study Mode', destination: 'Poké Lab',
+      title: mode === 'learn' ? 'Learn with Professor Mewtwo!' : 'Time to study!',
+      description: mode === 'learn' ? 'Preparing your lesson.' : 'Preparing your flashcards.',
+    })
+  } catch (cause) {
+    error.value = cause.message || 'Could not open your Poké Lab. Please try again.'
+  } finally { navigating.value = false }
 }
+
 </script>
 <template>
   <LoadingScreen :show="loading" message="Opening your Modes…" />
-<main class="sd-picker" :style="{ '--page-art': `url(${asset('subjects-white.png')})` }">
+<main v-if="!loading" class="sd-picker" :style="{ '--page-art': `url(${asset('subjects-white.png')})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-topics', query:{ flow:'study', subject:topic?.subject_id || route.query.subject } }">← {{ selectedSubject?.name || 'Study' }} topics</RouterLink></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · POKÉ LAB · {{ selectedSubject?.name || 'STUDY' }}</p><h1>How would you like to begin?</h1><p>{{ topic?.name || 'Choose your learning adventure' }}</p></header>
-  <p v-if="loading" class="sd-page-state" role="status">Loading your subjects…</p>
-    <div v-else-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
+  
+    <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
     <div v-else-if="!profile?.school_level_id" class="sd-page-state"><p>Set your school level to see the right topics.</p><RouterLink to="/account">Account settings</RouterLink></div>
   <p v-else-if="!topic" class="sd-page-state">This topic is unavailable for your school level. Choose another topic.</p>
   <div v-else class="sd-paths">
