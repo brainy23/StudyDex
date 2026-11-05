@@ -1,32 +1,73 @@
 import { computed, reactive, ref, unref } from 'vue'
 import { awardExperience } from '../services/experienceService'
+
+function rewardTitle(result) {
+  switch (result.rewardType) {
+    case 'boss': return result.delta > 0 ? 'Boss defeated!' : 'Boss battle lost'
+    case 'quiz': return 'Quiz complete!'
+    case 'timer': return 'Study session complete!'
+    case 'flashcards': return 'Flashcards complete!'
+    default: return 'Activity complete!'
+  }
+}
+
 export function useExperiencePrompt(buddy, onSaved = () => {}) {
   const queue = ref([])
-  const seen = new Set()
+  const jobs = new Map()
   const prompt = computed(() => queue.value[0] || null)
+
   async function reward(event) {
-    if (seen.has(event.id)) return
-    seen.add(event.id)
+    if (!event?.id) throw Error('An activity ID is required.')
+    const existing = jobs.get(event.id)
+    if (existing) return existing
     const recipient = unref(buddy)
-    const job = reactive({ id:event.id, title:'Saving Pokémon XP…', saving:true,
-      pokemonName:recipient?.pokemon?.name || 'Your Pokémon', error:'' })
-    // Preserve recipient and event ID through retries.
-    const request = { ...event, pokemonId:recipient?.id }
+    // Capture recipient and result inputs before asynchronous work/retries.
+    const request = { ...event, pokemonId: event.pokemonId ?? recipient?.id }
+    const job = reactive({
+      id: event.id, title: 'Saving Pokémon XP…', saving: true,
+      pokemonName: recipient?.pokemon?.name || 'Your Pokémon', error: '',
+    })
+    jobs.set(event.id, job)
     queue.value.push(job)
+    let inFlight = false
+    let saved = false
+
     async function save() {
-      job.saving=true; job.error=''
+      if (inFlight || saved) return
+      inFlight = true
+      job.saving = true
+      job.error = ''
       try {
         const result = await awardExperience(request)
-        Object.assign(job, result, { saving:false, title: event.type==='boss' ? (event.health ? 'Boss battle lost' : 'Boss defeated!') : 'Activity complete!' })
-        // Do not treat a view-refresh failure as a failed award.
-        try { await onSaved(result) } catch { /* The committed award is reloaded on the next page visit. */ }
+        saved = true
+        // Old duplicate records may not contain rewardType.
+        const normalized = { ...result, rewardType: result.rewardType ?? request.type }
+        Object.assign(job, normalized, { title: rewardTitle(normalized) })
+        // Existing callback still receives the result. The optional second argument
+        // lets your progression handler update this SAME reactive modal result with
+        // reachedMaxEvolution/giftPokemon/etc. Do not award the XP a second time.
+        try {
+          await onSaved(normalized, job)
+        } catch (cause) {
+          job.progressionError = cause?.message || 'Progress refresh failed.'
+          console.warn('XP saved; progression/refresh callback failed.', cause)
+        }
       } catch (cause) {
-        job.saving=false; job.title='XP not saved yet'; job.error=cause.message || 'Please retry.'
+        job.title = 'XP not saved yet'
+        job.error = cause?.message || 'Please retry.'
+      } finally {
+        job.saving = false
+        inFlight = false
       }
     }
-    job.retry=save
+    job.retry = save
     await save()
+    return job
   }
-  function dismiss() { if (prompt.value && !prompt.value.saving && !prompt.value.error) queue.value.shift() }
+
+  function dismiss() {
+    if (prompt.value && !prompt.value.saving && !prompt.value.error &&
+        !prompt.value.giftOpening && !prompt.value.giftLoading) queue.value.shift()
+  }
   return { prompt, reward, dismiss }
 }

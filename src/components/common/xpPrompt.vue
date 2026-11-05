@@ -238,7 +238,7 @@ onBeforeUnmount(() => dialog.value?.close())
               </p>
 
               <p v-if="result.delta === 0" class="info-note">
-                All four focus-timer rewards have been earned.
+                All four focus-timer rewards for today have been earned.
               </p>
               <p v-if="hasAdjustedDeduction" class="info-note">
                 XP stops at zero. Actual deduction:

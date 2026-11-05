@@ -1566,6 +1566,8 @@ watch(
                   :key="homepagePokemon.ownedId"
                   class="homepage-pokemon"
                   :active-pokemon="homepagePokemon"
+                  embedded
+                  progress-position="hidden"
                 />
               </Transition>
 
@@ -3525,7 +3527,6 @@ watch(
 
 .homepage-pokemon :deep(.buddy-image-container) {
   width: 100%;
-  height: 100%;
   margin: 0;
 }
 

@@ -602,6 +602,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
             <PokemonBuddy
               v-if="activePokemon && buddySprite"
               ref="pokemonBuddy"
+              embedded
               class="lab-pokemon-buddy"
               :class="{ 'is-artwork': buddySprite === apiPokemon?.sprites?.other?.['official-artwork']?.front_default }"
               :active-pokemon="activePokemon"
@@ -1158,24 +1159,9 @@ input:focus-visible {
   width: 100%; height: 100%; padding: 0; gap: 0;
   min-width: 0; min-height: 0; position: relative;
 }
-.lab-pokemon-buddy :deep(.buddy-image-container) {
-  width: 100%; height: 100%; min-height: 0; align-items: flex-end;
-}
-/* Adjust the size of the buddy sprite within the chamber. */
+/* The shared component owns its level / XP styling and layout. */
 .lab-pokemon-buddy :deep(.buddy-image-container .buddy-sprite) {
-  width: auto; height: 72%; max-width: 60%;
-}
-/* Keep status text accessible without covering the chamber's artwork. */
-.lab-pokemon-buddy :deep(h2),
-.lab-pokemon-buddy :deep(h3),
-.lab-pokemon-buddy :deep(.buddy-level),
-.lab-pokemon-buddy :deep(.buddy-status),
-.lab-pokemon-buddy :deep(.buddy-message),
-.lab-pokemon-buddy :deep(.buddy-error),
-.lab-pokemon-buddy :deep(.buddy-xp) {
-  position: absolute; width: 1px; height: 1px; padding: 0;
-  margin: -1px; overflow: hidden; clip-path: inset(50%);
-  white-space: nowrap; border: 0;
+  width: auto; height: 92%; max-width: 60%;
 }
 
 /* Coordinates measured against the supplied 1672 x 941 room image. */

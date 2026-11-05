@@ -8,6 +8,11 @@ import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
 import { getQuizTopicPreview } from '../services/quizPreviewService'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
+
+import xpPrompt from '../components/common/xpPrompt.vue'
+import { useExperiencePrompt } from '../composables/useExperiencePrompt'
+
+
 const profile = ref(null)
 const activeBuddy = ref(null)
 const activeBuddyMessage = ref('')
@@ -16,6 +21,13 @@ const loading = ref(true)
 const error = ref(null)
 let alive = true
 let generation = 0
+
+const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async result => {
+  completedFocusSessions.value = await getRewardedTimerCount(profile.value.id)
+  selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
+})
+
+
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -337,6 +349,7 @@ function nextPreview() {
 <template>
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
+    <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
       <!-- SKY -->
       <div
