@@ -2,6 +2,7 @@
 // import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import GoBackBtn from '@/components/common/goBackbtn.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
+import PokedexRewardModal from '../components/pokebuddy/PokedexRewardModal.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId } from '../services/experienceService'
 import { useStudySession } from '../composables/useStudySession'
@@ -49,6 +50,14 @@ const focusTimer = floatingTimer.timer
 const { seconds: focusSeconds, running: timerRunning, finished: timerFinished } = focusTimer
 const profile = ref(null)
 const selectedBuddyRecord = ref(null)
+const pokedexRewards = ref(null)
+async function refreshStudyBuddy() {
+  if (profile.value?.id) selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
+}
+async function closeExperience() {
+  dismissExperience()
+  if (!experiencePrompt.value) await pokedexRewards.value?.openIfNeeded()
+}
 const { prompt:experiencePrompt, showSaved:showSavedExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async () => {
   selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
 })
@@ -523,7 +532,8 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
   :show="pageLoading && !pokemonTransition.state.active"
   message="Opening your Flashcards…"
 />
-  <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
+  <xpPrompt :result="experiencePrompt" @close="closeExperience" />
+  <PokedexRewardModal ref="pokedexRewards" :user-id="profile?.id" @saved="refreshStudyBuddy" />
   <div class="study-page">
   <p v-if="persistedStudy.error.value" class="lab-state" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().then(result => showSavedExperience(result?.xp)).catch(() => {})">Retry saving</button></p>
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">

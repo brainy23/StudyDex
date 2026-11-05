@@ -27,7 +27,7 @@ export async function learningFixture(page) {
     json: { results: species.map(row => ({ name:row.name.toLowerCase() })) },
   }))
   const tables = new Set(['subjects','topics','topic_learning_goals','topic_concepts','questions','question_options','flashcards','user_pokemon','studydex_xp_events','study_sessions','pomodoro_blocks','quiz_attempts','quiz_attempt_answers','topic_completions','todos'])
-  const rpcs = new Set(['start_learning_quiz','submit_learning_quiz','prepare_learning_quiz_progression','submit_learning_quiz_progression','study_session_action','get_daily_learning_progress','save_learning_todo','select_user_pokemon','get_device_location_preference','set_device_location_preference','get_reward_inventory'])
+  const rpcs = new Set(['start_learning_quiz','submit_learning_quiz','prepare_learning_quiz_progression','submit_learning_quiz_progression','study_session_action','get_daily_learning_progress','save_learning_todo','select_user_pokemon','get_device_location_preference','set_device_location_preference','get_reward_inventory','get_study_pokemon_rewards','resolve_study_pokemon_reward'])
   const failures = new Set(), requests = []
   await page.route('https://studydex-fixture.invalid/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), name = url.pathname.split('/').at(-1)
