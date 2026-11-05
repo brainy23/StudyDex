@@ -1,6 +1,6 @@
 <script setup>
 import { RouterView, useRouter } from 'vue-router'
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { getSupabase } from './lib/supabase'
 import { usePokemonTransition } from './composables/usePokemonTransition'
 import { provideWeatherLocation } from './composables/useWeatherLocation'
@@ -12,8 +12,9 @@ import { provideFloatingStudyTimer } from './composables/useFloatingStudyTimer'
 const weather = provideWeatherLocation()
 const router = useRouter()
 const studyTimer = provideFloatingStudyTimer()
-watch([() => router.currentRoute.value.name, studyTimer.session.ready], ([name]) => {
-  if (name === 'surprise-boss') void studyTimer.pause()
+const showStudyTimer = computed(() => ['learn', 'study-decks'].includes(router.currentRoute.value.name))
+watch([showStudyTimer, studyTimer.session.ready], ([shown]) => {
+  if (!shown) void studyTimer.pause()
 })
 const accountId = ref(null)
 const authReady = ref(false)
@@ -41,7 +42,7 @@ onUnmounted(() => { subscription?.unsubscribe(); clearTimeout(redirect) })
   <RouterView v-if="authReady" v-slot="{ Component }">
     <component :is="Component" :key="accountId || 'signed-out'" />
   </RouterView>
-  <FloatingStudyTimer v-if="authReady && studyTimer.visible.value && router.currentRoute.value.name !== 'surprise-boss'"
+  <FloatingStudyTimer v-if="authReady && studyTimer.visible.value && showStudyTimer"
     :key="accountId" :controller="studyTimer" />
   <PokemonTransition />
 </template>
