@@ -19,7 +19,7 @@ import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, getStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
-import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 
 const audio = new Audio("/sounds/bossfight.wav");
 audio.loop = true;
@@ -36,6 +36,7 @@ const profile = ref(null)
 const selectedRewardBuddy=ref(null)
 const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience }=useExperiencePrompt(selectedRewardBuddy, async ()=>{
   selectedRewardBuddy.value=await getSelectedStudyBuddy(profile.value.id)
+  await loadArenaFighters()
 })
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
@@ -178,8 +179,17 @@ async function loadArenaFighters() {
   spriteController = controller
   spriteError.value = ''
   const selected = readArenaBuddy()
-  // The shared component accepts a PokéAPI name or ID as text.
-  fighters.value = [{ name: selected.name || 'Your buddy', pokename: String(selected.id) }]
+  fighters.value = [{
+    name: selected.name || 'Your buddy',
+    pokename: String(selected.id),
+    pokemon: {
+      name: String(selected.id),
+      ownedId: selectedRewardBuddy.value?.id,
+      xp: selectedRewardBuddy.value?.xp ?? 0,
+      level: selectedRewardBuddy.value?.level ?? 1,
+      is_defeated: selectedRewardBuddy.value?.is_defeated ?? false,
+    },
+  }]
   // Curated legendary-only pool; retain the same opponent when retrying sprites.
   const pool = [144, 145, 146, 150, 243, 244, 245, 249, 250, 382, 383, 384]
     .filter(id => id !== selected.id)
@@ -808,11 +818,14 @@ const battleOptions = computed(() =>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
         <div class="fighter-shadow"></div>
         <span v-if="index === 1" class="boss-name">{{ fighter.name }} · Boss HP {{ bossHp }} / {{ hitsRequired }}</span>
-        <Pokemon_Backwards
+        <PokeSprite
           v-if="index === 0"
           :key="fighter.pokename"
           class="player-back-sprite"
-          :pokename="fighter.pokename"
+          :active-pokemon="fighter.pokemon"
+          facing="back"
+          embedded
+          progress-position="hidden"
         />
         <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, ${index === 0 ? 'rear view' : 'front view'}`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
         <span v-else class="fighter-unavailable">Sprite unavailable</span>
@@ -1055,14 +1068,18 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   bottom: 0;
   left: 0;
   width: 100%;
-  height: auto;
+  height: 11cqw;
   min-height: 0;
   color: white;
 }
-.player-back-sprite :deep(.pokemon-back-sprite) {
+.player-back-sprite :deep(h3) { display: none; }
+.player-back-sprite :deep(.buddy-stage) { height: 100%; min-height: 0; flex: 1 1 0; }
+.player-back-sprite :deep(.buddy-image-container) { align-items: flex-end; }
+.player-back-sprite :deep(.buddy-sprite) {
   width: 100%;
-  height: auto;
+  height: 100%;
   max-width: 100%;
+  max-height: 100%;
   object-position: center bottom;
   image-rendering: pixelated;
   filter: drop-shadow(0 3px 1px #1b253044);

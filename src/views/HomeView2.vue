@@ -13,7 +13,7 @@ import Tutorialguide from '../components/common/tutorialguide.vue'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
@@ -800,7 +800,7 @@ const townBuddyImage = computed(() => {
   return activeBuddyImage.value
 })
 
-// Convert the homepage record into the format PokemonBuddy uses.
+// Convert the homepage record into the format PokeSprite uses.
 const homepagePokemon = computed(() => {
   if (!activeBuddy.value.id) return null
 
@@ -1538,13 +1538,16 @@ watch(
                 />
 
                 <!-- Awake Pokémon uses the reusable component -->
-                <PokemonBuddy
+                <PokeSprite
                   v-else-if="homepagePokemon"
                   :key="homepagePokemon.ownedId"
                   class="homepage-pokemon"
                   :active-pokemon="homepagePokemon"
+                  :fallback-src="homepagePokemon.static_img"
+                  facing="front"
                   embedded
                   progress-position="hidden"
+                  :max-xp="MAX_XP"
                 />
               </Transition>
 

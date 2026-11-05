@@ -1,4 +1,6 @@
 import { getSupabase } from '../lib/supabase'
+import { planPokemonXp } from './pokemonProgression'
+import { resolveStudyImage } from './studyService'
 
 // Generate ONCE when starting an activity; persist and reuse through retries.
 // For quiz/boss attempts, use the saved attempt UUID instead where possible.
@@ -52,14 +54,56 @@ export async function getRewardedTimerCount(userId) {
   return Math.min(4, count || 0)
 }
 
+// The database stores the final state atomically; all progression rules run here.
 export async function awardExperience(event) {
-  const { data, error } = await getSupabase().rpc('award_studydex_xp', toRewardPayload(event))
+  toRewardPayload(event)
+  const client = getSupabase()
+  const { data: previous, error: previousError } = await client.from('studydex_xp_events')
+    .select('pokemon_record_id, reward_type, result').eq('event_id', event.id).maybeSingle()
+  if (previousError) throw previousError
+  if (previous) {
+    if (previous.pokemon_record_id !== event.pokemonId || previous.reward_type !== event.type) {
+      throw new Error('This activity was already used for another reward.')
+    }
+    return { ...previous.result, duplicate: true }
+  }
+
+  const { data: buddy, error: buddyError } = await client.from('user_pokemon')
+    .select('id, user_id, pokemon_id, xp, level, is_defeated, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)')
+    .eq('id', event.pokemonId).single()
+  if (buddyError) throw buddyError
+  if (!buddy?.pokemon) throw new Error('Your selected Pokémon could not load.')
+  let delta
+  switch (event.type) {
+    case 'boss': delta = event.health === 0 ? 50 : -50; break
+    case 'timer': delta = await getRewardedTimerCount(buddy.user_id) < 4 ? 10 : 0; break
+    case 'flashcards': delta = 10; break
+    case 'quiz': throw new Error('Quiz rewards are not configured yet.')
+  }
+  const originalPokemon = {
+    name: buddy.pokemon.name, ownedId: buddy.id, xp: buddy.xp, level: buddy.level,
+    is_defeated: buddy.is_defeated,
+    static_img: resolveStudyImage(buddy.pokemon.sprite_url),
+  }
+  const plan = await planPokemonXp(originalPokemon, { delta })
+  const result = {
+    pokemonRecordId: buddy.id, pokemonName: plan.result.name,
+    delta, appliedDelta: plan.appliedDelta, xp: plan.result.xp, level: plan.result.level,
+    rewardType: event.type, duplicate: false,
+    originalPokemon, pokemon: plan.result, evolutions: plan.evolutions,
+    evolved: plan.evolved, devolved: plan.devolved,
+    reachedMaxEvolution: plan.reachedMaxEvolution, overflowXP: plan.overflowXP,
+  }
+  const { data, error } = await client.rpc('save_studydex_progression', {
+    p_event_id: event.id, p_pokemon_record_id: buddy.id, p_reward_type: event.type,
+    p_expected: { pokemon_id: buddy.pokemon_id, xp: buddy.xp, level: buddy.level },
+    p_result: result,
+  })
   if (error) throw error
-  // UI refresh failures must not turn a committed award into a failed save.
   try {
     window.dispatchEvent(new CustomEvent('studydex:pokemon-xp', { detail: data }))
   } catch (cause) {
-    console.warn('XP saved; Pokémon refresh notification failed.', cause)
+    console.warn('Progress saved; Pokémon refresh notification failed.', cause)
   }
   return data
 }

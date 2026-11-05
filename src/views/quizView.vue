@@ -9,7 +9,7 @@ import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
 import { getQuizTopicPreview } from '../services/quizPreviewService'
-import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
@@ -22,8 +22,19 @@ import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 const pokemonTransition = usePokemonTransition()
 const profile = ref(null)
 const activeBuddy = ref(null)
+const { prompt: experiencePrompt, dismiss: dismissExperience } = useExperiencePrompt(activeBuddy, async () => {
+  activeBuddy.value = await getSelectedStudyBuddy(profile.value.id)
+  await loadArenaFighters()
+})
 const activeBuddyMessage = ref('')
 const activeBuddySprite = computed(() => resolveStudyImage(activeBuddy.value?.pokemon?.sprite_url))
+const playerPokemon = computed(() => activeBuddy.value?.pokemon ? {
+  ...activeBuddy.value.pokemon,
+  ownedId: activeBuddy.value.id,
+  xp: activeBuddy.value.xp ?? 0,
+  level: activeBuddy.value.level ?? 1,
+  is_defeated: activeBuddy.value.is_defeated ?? false,
+} : null)
 const loading = ref(true)
 const error = ref(null)
 let alive = true
@@ -483,7 +494,7 @@ const battleOptions = computed(() =>
       </BattleAnswerPanel>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="index === 0 ? 'player-fighter' : 'opponent-fighter'">
         <div class="fighter-shadow"></div>
-        <Pokemon_Backwards v-if="index === 0 && activeBuddy?.pokemon?.name" class="player-back-sprite" :pokename="activeBuddy.pokemon.name" :fallback-src="activeBuddySprite" />
+        <PokeSprite v-if="index === 0 && playerPokemon" class="player-back-sprite" :active-pokemon="playerPokemon" :fallback-src="activeBuddySprite" facing="back" embedded progress-position="hidden" />
         <img v-else-if="fighter.image && !fighter.failed" :key="fighter.image" :src="fighter.image" :alt="`${fighter.name}, front view`" crossorigin="anonymous" :style="{ transform: `translateY(${fighter.padding}%)` }" @load="groundArenaSprite($event, fighter)" @error="arenaSpriteError(fighter)" />
         <span v-else class="fighter-unavailable">{{ index === 0 ? activeBuddyMessage : 'Sprite unavailable' }}</span>
 
@@ -829,6 +840,10 @@ input:focus-visible {
 .player-fighter { left: 23%; top: 68%; width: 11%; }
 .opponent-fighter { left: 77%; top: 68%; width: 10.5%; }
 .arena-fighter > .player-back-sprite { position: absolute; bottom: 0; left: 0; width: 100%; height: 11cqw; }
+.player-back-sprite :deep(h3) { display: none; }
+.player-back-sprite :deep(.buddy-stage) { height: 100%; min-height: 0; flex: 1 1 0; }
+.player-back-sprite :deep(.buddy-image-container) { align-items: flex-end; }
+.player-back-sprite :deep(.buddy-sprite) { width: 100%; height: 100%; max-width: 100%; max-height: 100%; object-position: center bottom; filter: drop-shadow(0 3px 1px #1b253044); }
 .arena-fighter > img { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; image-rendering: pixelated; filter: drop-shadow(0 3px 1px #1b253044); }
 .fighter-shadow { position: absolute; top: -.3cqw; left: 23%; width: 54%; height: 1cqw; border-radius: 50%; background: #31221466; filter: blur(3px); }
 .fighter-name { position: absolute; top: 1cqw; left: 50%; transform: translateX(-50%); border: 1px solid #e6bf60; border-radius: 20px; padding: 4px 12px; color: #fff4d0; background: #182c43e8; text-transform: capitalize; font-size: clamp(10px, .9cqw, 14px); white-space: nowrap; }

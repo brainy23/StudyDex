@@ -12,7 +12,9 @@ import { avatarOptions, findAvatar } from '../data/avatarOptions'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import BackToHome from '../components/common/BackToHome.vue'
 import StudydexBubbleNav from '../components/common/StudydexBubbleNav.vue'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
+
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 
@@ -285,7 +287,7 @@ watch(
 
     const fallback = activeBuddy.value?.static_img || ''
     // Keep a visible sprite while an evolved form's GIF is loading.
-    // This also avoids unnecessary PokemonBuddy remounts.
+    // This also avoids unnecessary PokeSprite remounts.
     buddySprite.value = spriteCache.get(id) || fallback || buddySprite.value
 
     try {
@@ -319,7 +321,7 @@ watch(
 )
 
 // =====================================================
-// RECEIVE EVOLUTION / XP EVENTS FROM POKEMONBUDDY
+// RECEIVE EVOLUTION / XP EVENTS FROM POKESPRITE
 // =====================================================
 
 function receivePokemonUpdate({ pokemon, changes } = {}) {
@@ -652,6 +654,7 @@ onUnmounted(() => {
 
     <xpPrompt
       :result="experienceResult"
+      offer-gift
       @close="experienceResult = null"
       @open-gift="handleOpenGift"
     />
@@ -706,19 +709,30 @@ onUnmounted(() => {
               {{ buddyError }}
             </span>
 
-            <PokemonBuddy
+
+            <div class="trainer-pokemon" v-else-if="roomPokemon && buddySprite">
+
+            <PokeSprite
               ref="pokemonBuddyRef"
-              v-else-if="roomPokemon && buddySprite"
               :key="roomPokemon.ownedId || roomPokemon.id"
               class="room-pokemon"
               :active-pokemon="roomPokemon"
+              :fallback-src="roomPokemon.static_img"
               progress-position="bottom"
+              facing="front"
+              :max-xp="200"
               @update-pokemon="receivePokemonUpdate"
+              @xp-overflow="receiveXpOverflow"
             />
+
+
+            </div>
 
             <span v-else class="scene-message">
               No active buddy yet
             </span>
+
+
           </div>
 
           <!-- <div class="buddy-figure" aria-live="polite">
@@ -1168,7 +1182,7 @@ onUnmounted(() => {
   display: none;
 }
 
-/* Keep positioning controlled by PokemonBuddy. */
+/* Keep positioning controlled by PokeSprite. */
 .room-pokemon :deep(.buddy-image-container) {
   width: 100%;
   margin: 0;
@@ -1212,6 +1226,11 @@ onUnmounted(() => {
   .trainer-clock {
     max-width: calc(100vw - 24px);
   }
+}
+
+.trainer-pokemon {
+  width: 250px;
+  height: 250px;
 }
 
 </style>

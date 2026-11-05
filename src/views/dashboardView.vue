@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
 import BackToHome from '../components/common/BackToHome.vue'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
 import { getDashboardData } from '@/services/dashboardService'
 import { studyErrorMessage, resolveStudyImage } from '@/services/studyService'
@@ -244,7 +244,7 @@ onUnmounted(() => {
           </div>
           <div class="dashboard-buddy">
             <h3 class="town-buddy-heading">Your Town Buddy Progress</h3>
-            <PokemonBuddy v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy" :active-pokemon="activeBuddy" />
+            <PokeSprite v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy" :active-pokemon="activeBuddy" />
             <p v-else :role="buddySection?.status === 'error' ? 'alert' : 'status'">{{ buddySection?.message }}</p>
           </div>
         </header>

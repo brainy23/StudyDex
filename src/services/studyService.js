@@ -120,7 +120,7 @@ export async function getTopicFlashcards(topicId) {
 export async function getSelectedStudyBuddy(userId) {
   const { data, error } = await getSupabase()
     .from('user_pokemon')
-    .select('id, xp, level, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)')
+    .select('id, xp, level, is_defeated, pokemon:pokemon!user_pokemon_pokemon_id_fkey(id, name, sprite_url)')
     .eq('user_id', userId)
     .eq('is_selected', true)
     .maybeSingle()

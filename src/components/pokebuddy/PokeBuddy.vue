@@ -2,7 +2,7 @@
 import axios from 'axios'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import NavBar from '../common/NavBar.vue'
-import PokemonBuddy from './PokemonBuddy.vue'
+import PokeSprite from './PokeSprite.vue'
 
 const API = 'https://pokeapi.co/api/v2'
 const MAX_XP = 100
@@ -110,7 +110,7 @@ watch([unallocatedXP, controlsLocked], ([amount, locked]) => {
 
 // =========================================
 // COLLECTION IMAGES
-// Evolution requests belong to PokemonBuddy.
+// Evolution requests belong to PokeSprite.
 // These requests load collection images/new Pokémon.
 // =========================================
 
@@ -193,7 +193,7 @@ function selectPokemon(pokemon) {
 
 function savePokemonUpdate({ pokemon, changes }) {
   // Update the same owned record.
-  // Both PokemonBuddy and the Pokédex read this record.
+  // Both PokeSprite and the Pokédex read this record.
   if (user.value.pokemons.includes(pokemon)) {
     Object.assign(pokemon, changes)
   }
@@ -261,7 +261,7 @@ async function removeXP() {
 
 // =========================================
 // TRANSFER LEFTOVER XP
-// PokemonBuddy still calculates the result.
+// PokeSprite still calculates the result.
 // =========================================
 
 async function transferXP(pokemon) {
@@ -419,7 +419,7 @@ async function addRandomPokemon(asGift = false) {
           </div>
 
           <div class="buddy-panel">
-            <PokemonBuddy
+            <PokeSprite
               ref="buddyRef"
               :active-pokemon="activePokemon"
               @update-pokemon="savePokemonUpdate"

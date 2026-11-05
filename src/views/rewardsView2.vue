@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 
@@ -26,7 +26,7 @@ async function loadRewardsBuddy() {
         const savedSprite = resolveStudyImage(record.pokemon.sprite_url)
         let sprite = savedSprite
         let staticSprite = savedSprite
-        // PokemonBuddy displays animated_img; supply actual animated sprite frames.
+        // Supply animated and static sprites for the rewards buddy.
         const apiName = String(record.pokemon.name || '').toLowerCase()
             .replace(/[.'’]/g, '').replace(/\s+/g, '-')
         if (apiName) {
@@ -444,11 +444,14 @@ function backToPacks() {
       <aside class="buddy">
         <div class="bubble">{{ packMessage }}</div>
         <div class="buddy-circle">
-          <PokemonBuddy
+          <PokeSprite
             v-if="rewardsBuddy"
             :key="rewardsBuddy.ownedId"
             class="rewards-pokemon"
             :active-pokemon="rewardsBuddy"
+            :fallback-src="rewardsBuddy.static_img"
+            embedded
+            progress-position="hidden"
           />
           <p v-else-if="buddyLoading" role="status">Loading your Pokémon…</p>
           <div v-else-if="buddyError" role="alert">
@@ -1575,6 +1578,9 @@ function backToPacks() {
 .buddy-circle .rewards-pokemon :deep(.buddy-image-container) {
     display:grid; place-items:center; width:100%; height:100%;
     min-height:0; margin:0; padding:0; background:transparent;
+}
+.buddy-circle .rewards-pokemon :deep(.buddy-stage) {
+    width:100%; height:100%; min-height:0;
 }
 .buddy-circle .rewards-pokemon :deep(img.buddy-sprite) {
     width:90% !important; height:90% !important;
