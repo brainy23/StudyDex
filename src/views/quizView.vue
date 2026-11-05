@@ -1,4 +1,5 @@
 <script setup>
+import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -16,6 +17,8 @@ import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
+
 const pokemonTransition = usePokemonTransition()
 const profile = ref(null)
 const activeBuddy = ref(null)
@@ -491,16 +494,12 @@ const battleOptions = computed(() =>
 
     <!-- CLOCK / EXIT -->
     <header class="arena-hud">
-      <RouterLink to="/home" class="home-link">
-        ‹ Back to town
-      </RouterLink>
+      <StudyPageNavigation :show-topics="enteredArena" @topics="returnToSelection" />
 
-      <button v-if="enteredArena" type="button" class="home-link change-topic" @click="returnToSelection">Topics</button>
-      <div v-if="enteredArena && !pokemonTransition.state.active" class="quiz-clock-weather">
+      <div v-show="enteredArena" class="quiz-clock-weather">
         <ClockWeather />
       </div>
     </header>
-
 
     <section v-if="!enteredArena" class="arena-picker redesigned-picker" style="padding:100px 24px;">
       <p v-if="loading" role="status">Opening your questions…</p>
@@ -511,7 +510,7 @@ const battleOptions = computed(() =>
 
 
   </main>
-
+  <StudydexBubbleNav current="quiz"/>
   </div>
 </template>
 
@@ -708,15 +707,15 @@ img.layer {
 /* CLOCK AND NAVIGATION */
 
 .arena-hud {
-  position: absolute;
+  position: fixed;
   top: max(16px, env(safe-area-inset-top));
   left: 16px;
   right: 16px;
-  z-index: 10;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
+  z-index: 30;
   pointer-events: none;
 }
 
@@ -982,4 +981,5 @@ input:focus-visible {
 
 
 .arena-image { transform: none; }
+
 </style>
