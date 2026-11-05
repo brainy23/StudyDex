@@ -95,11 +95,63 @@ onMounted(() => {
     </div>
   </section>
 
-  <section class="features" id="features-section">
+  <section class="maincards">
     <h2>
-      Over <span class="underline">700 flashcards</span> for you to study with your buddy!
+      <span class="maincards-label">The StudyDex Experience</span>
     </h2>
+    <h2>
+      Big Adventures. Bigger Learning.
+    </h2>
+    
 
+    <p class="maincards-intro">From mastering new concepts to battling through quizzes, StudyDex turns everyday learning into an <span class="underline">adventure!</span></p>
+    
+    <div class="maincards-cards">
+
+      <div class="maincards-card">
+        <span class="maincards-icon maincards-flashcards">
+          <svg viewBox="0 0 32 32"><rect x="5" y="9" width="18" height="18" rx="3" fill="#fff9e8" /><rect x="9" y="5" width="18" height="18" rx="3" fill="#fff9e8" /><path d="M13 11h10M13 15h7" /></svg>
+        </span>
+        <strong>
+          751
+        </strong>
+        <h3>Flashcards</h3>
+        <p>Recall and reinforce what you've learned.</p>
+      </div>
+
+      <div class="maincards-card">
+        <span class="maincards-icon maincards-quiz">
+          <svg viewBox="0 0 32 32"><path d="m7 3 5 2 13 17-4 4L7 9Zm18 0-5 2L7 22l4 4L25 9Z" fill="#fff9e8" /><path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" /></svg>
+        </span>
+        <strong>
+          1,015
+        </strong>
+        <h3>Practice Questions</h3>
+        <p>Put your knowledge to the test.</p>
+      </div>
+
+      <div class="maincards-card">
+        <span class="maincards-icon maincards-learn">
+          <svg viewBox="0 0 32 32"><path d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1 4-3 9-3 13-1V7c-4-2-9-2-13 1Z" fill="#fff9e8" /><path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" /></svg>
+        </span>
+        <strong>
+          375
+        </strong>
+        <h3>Learning Concepts</h3>
+        <p>Build understanding one step at a time.</p>
+      </div>
+    </div>
+
+
+  </section>
+
+  <section class="features" id="features-section">
+    <h3>
+      Explore <span class="underline">Mathematics from Primary 1-6</span> and <span class="underline">Science from Primary 3-6.</span>
+    </h3>
+
+    <br>
+    
     <div id="features" class="carousel slide">
       <div class="carousel-inner">
 
@@ -130,15 +182,7 @@ onMounted(() => {
               </p>
             </div>            
 
-            <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Study Timer Screenshot
-              </div>
-              <h3>Study Timer</h3>
-              <p>
-                Focus for 25 minutes. Only 4 sessions a day earn XP.
-              </p>
-            </div>
+            
 
           </div>
         </div>
@@ -186,6 +230,16 @@ onMounted(() => {
 
           </div>
         </div>
+
+        <div class="feature-card">
+              <div class="screenshot-placeholder">
+                Study Timer Screenshot
+              </div>
+              <h3>Study Timer</h3>
+              <p>
+                Focus for 25 minutes. Only 4 sessions a day earn XP.
+              </p>
+          </div>
 
       </div>
 
@@ -525,6 +579,108 @@ h1 {
   margin-left: -40px;
   animation: float 3s ease-in-out infinite;
   animation-delay: 1s;
+}
+
+.maincards {
+  padding: 60px 8% 20px;
+  text-align: center;
+  color: #17324d;
+}
+
+.maincards-label {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: #ffd000;
+  color: #072578;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.maincards h2 {
+  margin: 16px 0 10px;
+  font-size: 36px;
+  font-weight: 800;
+  color: #1f3a93;
+}
+
+.maincards-intro {
+  margin: 0 auto 36px;
+  font-size: 17px;
+}
+
+.maincards-cards {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+}
+
+.maincards-card {
+  width: 33%;
+  padding: 28px 20px;
+  border: 2px solid #1f3a93;
+  border-radius: 16px;
+  background: #fffaf0;
+  box-shadow: 0 8px 20px rgba(23, 50, 77, 0.12);
+  transition: translate 0.2s;
+}
+
+.maincards-card:hover {
+  translate: 0 -6px;
+}
+
+.maincards-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  box-shadow: 0 3px 0 rgba(7, 23, 49, 0.25);
+}
+
+.maincards-icon svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: #263d63;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.maincards-flashcards { 
+  background: linear-gradient(#e0cbff, #b496e7); }
+.maincards-quiz { 
+  background: linear-gradient(#ffcf92, #f6a95e); }
+.maincards-learn { 
+  background: linear-gradient(#a2edda, #54c5ac); }
+
+.maincards-card strong {
+  display: block;
+  margin-top: 14px;
+  font-size: 44px;
+  font-weight: 800;
+  color: #1f3a93;
+}
+
+.maincards-card h3 {
+  margin: 4px 0 8px;
+  font-size: 20px;
+  font-weight: 800;
+  color: #072578;
+}
+
+.maincards-card p {
+  margin: 0;
+  font-size: 15px;
+}
+
+.maincards-note {
+  margin-top: 28px;
+  font-size: 15px;
+  color: #4a5d78;
 }
 
 </style>
