@@ -1,4 +1,6 @@
 <script setup>
+import { useTopicCompletion } from '../composables/useTopicCompletion'
+const topicCompletion = useTopicCompletion()
 import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -34,6 +36,7 @@ async function initialise() {
   error.value = null
   enteredArena.value = false
   profile.value = null
+  topicCompletion.bindStudent(null, null)
   activeBuddy.value = null
   previewQuestions.value = []
   selectedPreviewTopic.value = null
@@ -43,6 +46,7 @@ async function initialise() {
     const student = await getCurrentProfile()
     if (!alive || request !== generation) return
     profile.value = student
+    topicCompletion.bindStudent(student.id, student.school_level_id, 'quiz')
     if (!student.school_level_id) return
     const data = await getQuizTopicPreview(student, route.query.topic, route.query.subject)
     if (!alive || request !== generation) return
@@ -341,7 +345,10 @@ function choosePreview(optionId) {
 }
 function nextPreview() {
   if (previewChoice.value === null) return
-  if (previewIndex.value + 1 >= previewQuestions.value.length) previewFinished.value = true
+  if (previewQuestions.value.length && previewIndex.value + 1 >= previewQuestions.value.length) {
+    previewFinished.value = true
+    topicCompletion.markComplete(selectedPreviewTopic.value?.id)
+  }
   else { previewIndex.value++; previewChoice.value = null }
 }
 

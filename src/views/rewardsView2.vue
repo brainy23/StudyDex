@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
