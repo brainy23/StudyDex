@@ -1,4 +1,130 @@
-:root { --studydex-font: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
-body { font-family: var(--studydex-font); }
-/* Button and navbar rules remain owned by each view. */
-.poke-lab-page, .arena-page, .trainer-page { font-family: var(--studydex-font); }
+/*
+ * StudyDex design tokens.
+ * Imported in src/main.js after Bootstrap and main.css.
+ * Views opt in to these tokens batch by batch; nothing here restyles
+ * existing view classes.
+ */
+:root {
+  /* Fonts: one display, one pixel accent, one rounded body */
+  --sd-font-display: 'Luckiest Guy', 'Fredoka', ui-rounded, system-ui, sans-serif; /* signs, short headings (caps only) */
+  --sd-font-pixel: 'Silkscreen', 'Fredoka', monospace; /* HUD numbers, phone status; 12px minimum */
+  --sd-font-body: 'Fredoka', ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif;
+
+  /* Type scale (px so it doesn't shrink with the fluid root size) */
+  --sd-text-caption: 13px; /* chips, badges, meta (never reading text) */
+  --sd-text-small: 14px; /* hotspot labels, helper text */
+  --sd-text-body: 16px; /* reading text, speech bubbles, answers */
+  --sd-text-lead: 18px;
+  --sd-text-h4: 20px;
+  --sd-text-h3: 24px;
+  --sd-text-h2: clamp(26px, 3vw, 32px);
+  --sd-text-h1: clamp(30px, 4vw, 44px);
+  --sd-text-display: clamp(36px, 5vw, 56px);
+  --sd-leading-tight: 1.15;
+  --sd-leading-body: 1.45;
+
+  /* Spacing: 4-based */
+  --sd-space-1: 4px;
+  --sd-space-2: 8px;
+  --sd-space-3: 12px;
+  --sd-space-4: 16px;
+  --sd-space-5: 20px;
+  --sd-space-6: 24px;
+  --sd-space-8: 32px;
+  --sd-space-10: 40px;
+  --sd-space-12: 48px;
+  --sd-space-16: 64px;
+  --sd-tap: 44px; /* minimum hit area */
+
+  /* Radius */
+  --sd-radius-sm: 8px;
+  --sd-radius-md: 12px;
+  --sd-radius-lg: 18px;
+  --sd-radius-xl: 24px;
+  --sd-radius-pill: 999px;
+
+  /* Colour: world palette */
+  --sd-royal: #072578; /* logo outline, Pokédex panels, nav */
+  --sd-royal-2: #1f3a93; /* links, headings on cream */
+  --sd-ink: #17324d; /* body text on light */
+  --sd-ink-muted: #5b6b82; /* secondary text on light */
+  --sd-gold: #ffd117; /* primary button fill */
+  --sd-gold-soft: #ffde59; /* highlights, badges */
+  --sd-gold-edge: #a98608; /* button border / bottom edge */
+  --sd-gold-ink: #302700; /* text on gold */
+  --sd-cream: #fff8df; /* paper, bubbles, plaques */
+  --sd-paper: #fffdf5; /* lightest surface */
+  --sd-red: #ff4057; /* Poké Ball, Trainer Hub, danger */
+  --sd-red-ink: #9a2b3c; /* error text on light */
+  --sd-grass: #78ba83; /* success */
+  --sd-grass-ink: #2f7142; /* success text */
+  --sd-wood: #624b38; /* Trainer House panel border */
+  --sd-wood-ink: #493b30; /* text on cream panels */
+  --sd-night: #101925; /* scene backdrop / dark HUD */
+  --sd-glass: rgb(22 39 62 / 0.72); /* HUD pills only */
+  --sd-focus: #2454bf; /* matches BackToHome; use --sd-gold-soft on dark */
+
+  /* Depth: the game's chunky edge + one soft lift */
+  --sd-edge: 0 4px 0 var(--sd-gold-edge);
+  --sd-edge-wood: 0 6px 0 rgb(70 45 28 / 0.3);
+  --sd-lift: 0 8px 20px rgb(23 50 77 / 0.18);
+
+  /* Layers */
+  --sd-z-scene: 1;
+  --sd-z-hotspot: 20;
+  --sd-z-hud: 40;
+  --sd-z-dock: 100;
+  --sd-z-hub: 120;
+  --sd-z-guide: 900;
+  --sd-z-modal: 1050; /* Bootstrap modal = 1055 */
+}
+
+body {
+  font-family: var(--sd-font-body);
+}
+
+::selection {
+  background: var(--sd-gold-soft);
+  color: var(--sd-ink);
+}
+
+/* Shared keyboard focus ring. Zero specificity, so any view's own focus style wins. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--sd-focus);
+  outline-offset: 3px;
+}
+
+/* Display-only capitalisation for subject names. Wrap just the name in a span; data stays unchanged. */
+.sd-subject-name {
+  text-transform: capitalize;
+}
+
+/* One game button pair (opt-in; not yet used by any view) */
+.sd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sd-space-2);
+  min-height: var(--sd-tap);
+  padding: var(--sd-space-3) var(--sd-space-5);
+  border: 2px solid var(--sd-gold-edge);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-gold);
+  color: var(--sd-gold-ink);
+  box-shadow: var(--sd-edge);
+  font: 700 var(--sd-text-body) / 1.2 var(--sd-font-body);
+  cursor: pointer;
+}
+
+.sd-btn--secondary {
+  background: var(--sd-paper);
+  border-color: #d9caa8;
+  color: var(--sd-wood-ink);
+  box-shadow: 0 4px 0 #d9caa8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-btn {
+    transition: none;
+  }
+}

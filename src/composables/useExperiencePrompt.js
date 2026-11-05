@@ -28,5 +28,11 @@ export function useExperiencePrompt(buddy, onSaved = () => {}) {
     await save()
   }
   function dismiss() { if (prompt.value && !prompt.value.saving && !prompt.value.error) queue.value.shift() }
-  return { prompt, reward, dismiss }
+  async function showSaved(result, title = 'Activity complete!') {
+    if (!result || seen.has(result.eventId)) return
+    seen.add(result.eventId)
+    queue.value.push(reactive({ ...result, id: result.eventId, title, saving: false, error: '' }))
+    try { await onSaved(result) } catch { /* next visit reloads committed state */ }
+  }
+  return { prompt, reward, dismiss, showSaved }
 }

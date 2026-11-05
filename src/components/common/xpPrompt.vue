@@ -172,7 +172,7 @@ onBeforeUnmount(() => dialog.value?.close())
               </svg>
             </div>
 
-            <p class="brand">STUDYDEX · TRAINER JOURNEY</p>
+            <p class="brand">Trainer Journey</p>
             <h2 id="xp-title">{{ result.title || 'Experience update!' }}</h2>
           </header>
 
@@ -283,7 +283,7 @@ onBeforeUnmount(() => dialog.value?.close())
         <template v-else>
           <header class="xp-header gift-header">
             <div class="gift-emblem" aria-hidden="true">{{ step === 'revealed' ? '🎉' : '🎁' }}</div>
-            <p class="brand">STUDYDEX · TRAINER REWARDS</p>
+            <p class="brand">Trainer Rewards</p>
             <h2 id="gift-title">
               {{ step === 'revealed' ? 'Meet your new buddy!' : 'A special gift awaits!' }}
             </h2>
@@ -453,9 +453,10 @@ onBeforeUnmount(() => dialog.value?.close())
 .brand {
   margin: 0 0 8px;
   color: #8b7c50;
-  font-size: 12px;
+  font-size: var(--sd-text-small, 14px);
+  font-family: var(--sd-font-body);
   font-weight: 600;
-  letter-spacing: 1.4px;
+  letter-spacing: 0;
 }
 
 .xp-header h2 {
@@ -668,7 +669,6 @@ onBeforeUnmount(() => dialog.value?.close())
   .xp-card { padding: 26px 18px 22px; }
   .reward-emblem, .gift-emblem { width: 84px; height: 84px; border-radius: 26px; }
   .pokeball { width: 70px; height: 70px; }
-  .brand { font-size: 11px; letter-spacing: 1px; }
   .buddy-summary { gap: 10px; padding: 12px; }
 }
 

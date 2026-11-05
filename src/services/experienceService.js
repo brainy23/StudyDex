@@ -1,13 +1,17 @@
 import { getSupabase } from '../lib/supabase'
+import { getDailyProgress } from './learningService'
+import { checkedRpc, activityChanged } from './backendClient'
 export const newExperienceId = () => crypto.randomUUID()
 export async function getRewardedTimerCount(userId) {
-  const { count, error } = await getSupabase().from('studydex_xp_events')
-    .select('event_id', { count:'exact', head:true }).eq('user_id', userId)
-    .eq('reward_type','timer').eq('requested_delta',10)
-  if (error) throw error
-  return Math.min(4, count || 0)
+  const progress = await getDailyProgress(userId)
+  return Math.min(4, progress.timer_rewards || 0)
 }
 export async function awardExperience(event) {
+  if (event.type === 'boss' && event.sessionId) {
+    const result = await checkedRpc('record_learning_boss', { p_session_id:event.sessionId, p_event_id:event.id, p_health:event.health })
+    activityChanged(result)
+    return result
+  }
   if (!event.pokemonId) throw Error('Select a Pokémon before earning XP.')
   const { data, error } = await getSupabase().rpc('award_studydex_xp', {
     p_event_id:event.id, p_pokemon_record_id:String(event.pokemonId), p_reward_type:event.type,

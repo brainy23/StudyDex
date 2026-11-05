@@ -1,63 +1,34 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import { useTopicCompletion } from '../useTopicCompletion'
-
-beforeEach(() => localStorage.clear())
-afterEach(() => vi.restoreAllMocks())
-
-it('retains two completed topics across new page instances and does not count repeats', () => {
-  const lab = useTopicCompletion()
-  lab.bindStudent('student', 'level-3')
-  lab.markComplete('topic-1')
-  lab.markComplete('topic-2')
-  lab.markComplete('topic-1')
-  const arena = useTopicCompletion()
-  arena.bindStudent('student', 'level-3')
-  expect(arena.completedTopicIds.value).toEqual(['topic-1', 'topic-2'])
-  expect(arena.isComplete('topic-3')).toBe(false)
-  expect(arena.savedInBrowser.value).toBe(true)
+import { getTopicCompletions } from '../../services/learningService'
+vi.mock('../../services/learningService', () => ({ getTopicCompletions: vi.fn() }))
+beforeEach(() => { vi.resetAllMocks(); getTopicCompletions.mockResolvedValue([]) })
+it('loads persisted topic completions for each page instance', async () => {
+  getTopicCompletions.mockResolvedValue([{ topic_id: 'topic-1' }, { topic_id: 'topic-2' }])
+  for (let n = 0; n < 2; n++) {
+    const progress = useTopicCompletion()
+    await progress.bindStudent('student')
+    expect(progress.completedTopicIds.value).toEqual(['topic-1', 'topic-2'])
+    expect(progress.savedInBrowser.value).toBe(true)
+  }
 })
-
-it('keeps progress separate by student and school level, and clears the active binding', () => {
+it('clears old account progress and ignores late reads from that account', async () => {
+  let resolve
+  getTopicCompletions.mockReturnValueOnce(new Promise(done => { resolve = done }))
   const progress = useTopicCompletion()
-  progress.bindStudent('ash', 'level-3')
-  progress.markComplete('topic-1')
-  progress.bindStudent('misty', 'level-3')
-  expect(progress.isComplete('topic-1')).toBe(false)
-  progress.bindStudent('ash', 'level-4')
-  expect(progress.isComplete('topic-1')).toBe(false)
-  progress.bindStudent('ash', 'level-3')
-  expect(progress.isComplete('topic-1')).toBe(true)
-  progress.bindStudent(null, null)
-  progress.markComplete('topic-2')
+  const old = progress.bindStudent('ash')
+  await progress.bindStudent('misty')
+  resolve([{ topic_id: 'ash-private-progress' }]); await old
   expect(progress.completedTopicIds.value).toEqual([])
+  await progress.bindStudent(null)
+  expect(progress.isComplete('ash-private-progress')).toBe(false)
 })
-
-it('ignores corrupt browser data and repairs it when a topic is completed', () => {
-  const key = 'studydex:completed-topics:student:level-3'
-  localStorage.setItem(key, '{corrupt')
+it('reports unavailable persistence instead of trusting browser data and supports retry', async () => {
+  getTopicCompletions.mockRejectedValueOnce(new Error('offline'))
   const progress = useTopicCompletion()
-  progress.bindStudent('student', 'level-3')
-  expect(progress.completedTopicIds.value).toEqual([])
-  progress.markComplete('topic-1')
-  expect(JSON.parse(localStorage.getItem(key))).toEqual(['topic-1'])
-})
-
-it('merges a completion made in another browser tab', () => {
-  const key = 'studydex:completed-topics:student:level-3'
-  const progress = useTopicCompletion()
-  progress.bindStudent('student', 'level-3')
-  localStorage.setItem(key, JSON.stringify(['topic-from-other-tab']))
-  progress.markComplete('topic-1')
-  expect(progress.completedTopicIds.value).toEqual(['topic-from-other-tab', 'topic-1'])
-})
-
-it.each(['getItem', 'setItem'])('keeps unlocks between pages when storage %s is blocked', (method) => {
-  vi.spyOn(Storage.prototype, method).mockImplementation(() => { throw new Error('Storage blocked') })
-  const lab = useTopicCompletion()
-  lab.bindStudent(`blocked-${method}`, 'level-3')
-  lab.markComplete('topic-1')
-  const arena = useTopicCompletion()
-  arena.bindStudent(`blocked-${method}`, 'level-3')
-  expect(arena.isComplete('topic-1')).toBe(true)
-  expect(arena.savedInBrowser.value).toBe(false)
+  await progress.bindStudent('student')
+  expect(progress.savedInBrowser.value).toBe(false)
+  getTopicCompletions.mockResolvedValue([{ topic_id: 'saved-after-retry' }])
+  await progress.refresh()
+  expect(progress.isComplete('saved-after-retry')).toBe(true)
 })

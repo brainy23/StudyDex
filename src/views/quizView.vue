@@ -7,7 +7,9 @@ const router = useRouter()
 import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
-import { getQuizTopicPreview } from '../services/quizPreviewService'
+import { getStudentStudyCatalogue } from '../services/studyService'
+import { startQuiz, submitQuiz } from '../services/quizService'
+import XpPrompt from '../components/common/xpPrompt.vue'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
@@ -41,11 +43,23 @@ async function initialise() {
     if (!alive || request !== generation) return
     profile.value = student
     if (!student.school_level_id) return
-    const data = await getQuizTopicPreview(student, route.query.topic, route.query.subject)
+    const catalogue = await getStudentStudyCatalogue(student)
     if (!alive || request !== generation) return
-    selectedPreviewTopic.value = data.topic
-    previewSubject.value = data.subject
+    const topic = catalogue.topics.find(item => item.id === route.query.topic && (!route.query.subject || item.subject_id === route.query.subject))
+    if (!topic) throw new Error('Choose a topic for your school level.')
+    const key = `studydex:quiz:${student.id}:${topic.id}:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())}`
+    let requestId
+    try { requestId = sessionStorage.getItem(key) } catch { /* optional recovery */ }
+    requestId ||= crypto.randomUUID()
+    try { sessionStorage.setItem(key, requestId) } catch { /* server still owns the attempt */ }
+    const data = await startQuiz(topic.id, requestId, student.id)
+    if (!alive || request !== generation) return
+    quizRun.value = data
+    selectedPreviewTopic.value = topic
+    previewSubject.value = catalogue.subjects.find(item => item.id === topic.subject_id)
     previewQuestions.value = data.questions
+    quizResult.value = data.result
+    previewFinished.value = !!data.result
     enteredArena.value = true
     // Decorative sprites must not delay or hide readable questions.
     void loadSavedBuddy(student.id, request)
@@ -325,20 +339,47 @@ const previewIndex = ref(0)
 const previewChoice = ref(null)
 const previewFinished = ref(false)
 const previewQuestions = ref([])
+const quizRun = ref(null)
+const quizResult = ref(null)
+const answers = ref({})
+const submitting = ref(false)
+const submitError = ref('')
+const xpResult = ref(null)
 const previewQuestion = computed(() => previewQuestions.value[previewIndex.value])
 function resetPreview() {
   previewIndex.value = 0
   previewChoice.value = null
   previewFinished.value = false
+  answers.value = {}
+  quizResult.value = null
+  submitError.value = ''
+}
+async function newAttempt() {
+  try { sessionStorage.removeItem(`studydex:quiz:${profile.value.id}:${selectedPreviewTopic.value.id}:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())}`) } catch { /* optional recovery */ }
+  await initialise()
 }
 function choosePreview(optionId) {
   if (previewChoice.value !== null || previewFinished.value ||
     !previewQuestion.value?.options.some(option => option.id === optionId)) return
   previewChoice.value = optionId
+  answers.value[previewQuestion.value.id] = optionId
 }
-function nextPreview() {
-  if (previewChoice.value === null) return
-  if (previewIndex.value + 1 >= previewQuestions.value.length) previewFinished.value = true
+async function nextPreview() {
+  if (previewChoice.value === null || submitting.value) return
+  if (previewIndex.value + 1 >= previewQuestions.value.length) {
+    submitting.value = true
+    submitError.value = ''
+    try {
+      const owner = profile.value.id
+      const result = await submitQuiz(quizRun.value.run_id, { ...answers.value }, owner)
+      if (!alive || profile.value?.id !== owner) return
+      quizResult.value = result
+      previewFinished.value = true
+      xpResult.value = { ...result, title: 'Quiz complete!', saving: false }
+      void loadSavedBuddy(owner, generation)
+    } catch (cause) { if (alive) submitError.value = cause.message || 'Your answers could not be saved. Try again.' }
+    finally { submitting.value = false }
+  }
   else { previewIndex.value++; previewChoice.value = null }
 }
 
@@ -352,6 +393,7 @@ const battleOptions = computed(() =>
 
 </script>
 <template>
+  <XpPrompt :result="xpResult" @close="xpResult = null" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
@@ -441,10 +483,10 @@ const battleOptions = computed(() =>
 
 
       <!-- The question stays on the arena's built-in screen. -->
-      <section v-if="enteredArena" class="quiz-content demo-board" aria-label="Question preview">
+      <section v-if="enteredArena" class="quiz-content demo-board" aria-label="Graded quiz">
         <div class="demo-caption"><span>{{ previewSubject?.name }} · {{ selectedPreviewTopic?.name }}</span><span>{{ previewFinished ? 'Complete' : `${previewIndex + 1} / ${previewQuestions.length}` }}</span></div>
-        <h2 id="arena-question">{{ previewFinished ? 'Preview complete, trainer!' : previewQuestion?.question_text }}</h2>
-        <p v-if="previewFinished">You explored {{ previewQuestions.length }} questions. This preview is not graded.</p>
+        <h2 id="arena-question">{{ previewFinished ? 'Quiz complete, trainer!' : previewQuestion?.question_text }}</h2>
+        <p v-if="previewFinished">{{ quizResult.correct }} / {{ quizResult.total }} correct · {{ quizResult.scorePercent }}% · {{ quizResult.appliedDelta }} XP saved</p>
       </section>
 
       <!-- Classic battle menu: dialogue left, four choices right. -->
@@ -452,23 +494,26 @@ const battleOptions = computed(() =>
         :options="battleOptions"
         :selected-id="previewChoice"
         :finished="previewFinished"
+        :disabled="submitting"
         @select="choosePreview">
         <template #dialogue>
           <template v-if="previewFinished">
-            <span class="dialogue-kicker">PREVIEW COMPLETE</span>
-            <p>Great practice, trainer! Ready for another challenge?</p>
-            <small>Preview only · no grading or saved results.</small>
+            <span class="dialogue-kicker">RESULT SAVED</span>
+            <p>Your result is saved in Study History.</p>
+            <details><summary>Review answers</summary><p v-for="(item,index) in quizResult.review" :key="item.question_id">{{ index + 1 }}. {{ item.selected_option_id === item.correct_option_id ? 'Correct' : 'Incorrect' }} — {{ item.explanation || 'Review this topic in Poké Lab.' }}</p></details>
           </template>
           <template v-else-if="previewChoice === null">
-            <p>Choose an option to explore this question.</p><small>Preview only · no grading or saved results.</small>
+            <p>Choose your answer.</p><small>Attempt {{ quizRun.attempt_number }} of {{ quizRun.attempt_limit }} today · Singapore time</small>
           </template>
           <template v-else>
-            <p class="battle-explanation">Choice selected. This preview does not check answers.</p>
-            <button type="button" class="battle-next" @click="nextPreview">{{ previewIndex + 1 === previewQuestions.length ? 'Finish preview' : 'Next question' }} →</button>
+            <p class="battle-explanation">{{ submitting ? 'Saving your result…' : 'Answer selected.' }}</p>
+            <p v-if="submitError" role="alert">{{ submitError }}</p>
+            <button v-if="submitError && Date.parse(quizRun.expires_at) < Date.now()" type="button" @click="newAttempt">Start a new attempt</button>
+            <button type="button" class="battle-next" :disabled="submitting" @click="nextPreview">{{ previewIndex + 1 === previewQuestions.length ? 'Submit quiz' : 'Next question' }} →</button>
           </template>
         </template>
         <template #actions>
-          <button type="button" @click="resetPreview">Preview again</button>
+          <button type="button" @click="newAttempt">Start another attempt</button>
           <button type="button" @click="returnToSelection">Choose topic</button>
         </template>
       </BattleAnswerPanel>

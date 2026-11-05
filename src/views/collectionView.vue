@@ -1,23 +1,31 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 
-// Pokemon the user owns (replace with a Supabase fetch of the user's collection)
-const collection = ref([
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 
-    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 
-    60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 
-    79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 
-    98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 
-    114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 
-    130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 
-    146, 147, 148, 149, 150, 151
-])
-const sorted = computed(() => [...collection.value].sort((a, b) => a - b))
-
-// the user's current buddy (replace with the value saved in Supabase)
-const activeId = ref(Number(localStorage.getItem('activePokemonId')) || 4)
-const selectedId = ref(sorted.value.includes(activeId.value) ? activeId.value : sorted.value[0])
+import { getCurrentProfile } from '../services/profileService'
+import { getOwnedStudyPokemon } from '../services/studyService'
+import { checkedRpc } from '../services/backendClient'
+const collection = ref([])
+const ownedRecords = ref([])
+const sorted = computed(() => [...collection.value].sort((a,b) => a-b))
+const activeId = ref(null)
+const selectedId = ref(null)
+const owner = ref(null)
+const saving = ref(false)
+const collectionError = ref('')
+let alive = true
+async function loadCollection() {
+  try {
+    const profile = await getCurrentProfile()
+    const records = await getOwnedStudyPokemon(profile.id)
+    if (!alive) return
+    owner.value = profile.id
+    ownedRecords.value = records
+    collection.value = records.map(row => row.pokemon.pokeapi_id)
+    activeId.value = records.find(row => row.is_selected)?.pokemon.pokeapi_id || null
+    selectedId.value = sorted.value.includes(selectedId.value) ? selectedId.value : activeId.value || sorted.value[0]
+    collectionError.value = ''
+  } catch (cause) { if (alive) collectionError.value = cause.message }
+}
 
 const SCALE = window.innerWidth < 800 ? 2 : 4 // whole numbers keep the pixel art crisp
 
@@ -142,11 +150,17 @@ const celebrating = ref(false)
 let toastTimer = 0
 let celebrateTimer = 0
 
-function makeActive() {
+async function makeActive() {
     if (!selectedId.value || selectedId.value === activeId.value) return
-    activeId.value = selectedId.value
-    localStorage.setItem('activePokemonId', String(activeId.value))
-    // TODO: save to Supabase, e.g. update user_buddy set pokemon_id = activeId.value
+    if (saving.value) return
+    saving.value = true
+    try {
+      const record = ownedRecords.value.find(row => row.pokemon.pokeapi_id === selectedId.value)
+      await checkedRpc('select_user_pokemon', { p_owned_id: record.id }, owner.value)
+      if (!alive) return
+      await loadCollection()
+    } catch (cause) { collectionError.value = cause.message; return }
+    finally { saving.value = false }
 
     toast.value = nameOf(activeId.value) + ' is now your active Pokémon!'
     clearTimeout(toastTimer)
@@ -157,8 +171,9 @@ function makeActive() {
     celebrateTimer = setTimeout(() => (celebrating.value = false), 900)
 }
 
-onMounted(loadNames)
+onMounted(() => { void loadNames(); void loadCollection() })
 onUnmounted(() => {
+    alive = false
     clearTimeout(toastTimer)
     clearTimeout(celebrateTimer)
 })
@@ -166,6 +181,7 @@ onUnmounted(() => {
 
 <template>
   <main class="collection">
+    <p v-if="collectionError" role="alert">{{ collectionError }} <button @click="loadCollection">Retry</button></p>
     <header class="topbar">
       <div class="title"><span class="title-icon" aria-hidden="true"></span>MY COLLECTION</div>
       <div class="registered">
@@ -224,7 +240,7 @@ onUnmounted(() => {
             <span v-for="t in detail.types" :key="t" class="chip" :style="{ '--tc': TYPE_COLORS[t] }">{{ t }}</span>
           </div>
 
-          <button class="activate" :disabled="selectedId === activeId" @click="makeActive">
+          <button class="activate" :disabled="saving || selectedId === activeId" @click="makeActive">
             {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
           </button>
         </template>

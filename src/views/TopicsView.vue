@@ -58,7 +58,7 @@ const topics = computed(() => catalogue.value.topics
   .map(t => ({ ...t, theme:selectedSubject.value?.name })))
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
 function disabled(item) { return flow.value === 'quiz' && !item.quiz_question_count }
-function actionText() { return flow.value === 'quiz' ? 'Preview questions →' : 'Choose Learn or Study →' }
+function actionText() { return flow.value === 'quiz' ? 'Start quiz →' : 'Choose Learn or Study →' }
 const navigationError = ref('')
 async function selectTopic(item) {
   if (disabled(item)) return
@@ -96,7 +96,7 @@ async function selectTopic(item) {
       </button>
     </div>
     <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : `No ${selectedSubject?.name || 'study'} topics are available for your school level yet.` }}</p>
-    <p v-if="flow === 'quiz'" class="sd-footnote">Question previews are not graded. Answers, scores and EXP are not saved.</p>
+    <p v-if="flow === 'quiz'" class="sd-footnote">Three attempts per topic per Singapore day. Scores and XP are saved to Study History.</p>
   </section>
 </main>
 </template>
