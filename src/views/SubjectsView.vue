@@ -8,6 +8,7 @@ import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/selection-pages.css'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
 const route = useRoute()
 const router = useRouter()
 const pokemonTransition = usePokemonTransition()
@@ -86,6 +87,7 @@ function selectSubject(item) {
 }
 </script>
 <template>
+<LoadingScreen :show="loading" message="Opening your adventure…" />
 <main class="sd-picker" :style="{ '--page-art': `url(${asset('subjects-white.png')})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ flow === 'quiz' ? 'POKÉ ARENA' : 'POKÉ LAB' }}</p><h1>Choose your next adventure</h1><p>What will you master today?</p></header>

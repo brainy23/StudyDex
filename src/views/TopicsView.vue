@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
 // Colour is controlled here; no subject-specific background or icon files.
 function isScienceSubject(name) {
   return /^science$/i.test(String(name || '').trim())
@@ -66,9 +67,16 @@ const level = computed(() => {
   const match = String(profile.value?.school_level?.name || '').match(/^(?:primary\s*|p\s*)?([3-6])(?:\b|$)/i)
   return match ? Number(match[1]) : null
 })
-const topics = computed(() => flow.value === 'quiz' && isScienceSubject(selectedSubject.value?.name)
-  ? scienceTopics.filter(t => t.level === level.value && !(scienceCourse.value === 'foundation' && t.standardOnly)).map(t => ({ ...t, id:t.key, description:t.official, ready:!!demoBank[t.key]?.length }))
-  : catalogue.value.topics.filter(t => t.subject_id === selectedSubject.value?.id).map(t => ({ ...t, ready:false, theme:selectedSubject.value?.name })))
+
+const topics = computed(() =>
+  catalogue.value.topics
+    .filter(topic => topic.subject_id === selectedSubject.value?.id)
+    .map(topic => ({
+      ...topic,
+      theme: selectedSubject.value?.name,
+    }))
+)
+
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
 function disabled(item) { return flow.value === 'quiz' && !item.quiz_question_count }
 function actionText() { return flow.value === 'quiz' ? 'Preview questions →' : 'Choose Learn or Study →' }
@@ -81,11 +89,11 @@ function selectTopic(item) {
 }
 </script>
 <template>
+  <LoadingScreen :show="loading" message="Opening your Topics…" />
 <main class="sd-picker sd-topics sd-colour-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-subjects', query:{ flow } }">← All subjects</RouterLink></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ selectedSubject?.name || 'STUDY' }}</p><h1>Your {{ selectedSubject?.name || 'study' }} adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
-  <p v-if="loading" class="sd-page-state" role="status">Loading your subjects…</p>
-    <div v-else-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
+    <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
     <div v-else-if="!profile?.school_level_id" class="sd-page-state"><p>Set your school level to see the right topics.</p><RouterLink to="/account">Account settings</RouterLink></div>
   <section v-else class="sd-topic-panel" :aria-label="`${selectedSubject?.name || 'Study'} topics`">
     <div class="sd-topic-toolbar"><span class="sd-level">{{ selectedSubject?.name || 'STUDY' }} · {{ profile.school_level?.name }}</span><span class="sd-count">{{ topics.length }} topics</span></div>

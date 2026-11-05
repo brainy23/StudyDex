@@ -4,6 +4,8 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import '../assets/selection-pages.css'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
+
 const route = useRoute()
 const router = useRouter()
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
@@ -47,6 +49,7 @@ function selectMode(mode) {
 }
 </script>
 <template>
+  <LoadingScreen :show="loading" message="Opening your Modes…" />
 <main class="sd-picker" :style="{ '--page-art': `url(${asset('subjects-white.png')})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-topics', query:{ flow:'study', subject:topic?.subject_id || route.query.subject } }">← {{ selectedSubject?.name || 'Study' }} topics</RouterLink></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · POKÉ LAB · {{ selectedSubject?.name || 'STUDY' }}</p><h1>How would you like to begin?</h1><p>{{ topic?.name || 'Choose your learning adventure' }}</p></header>
