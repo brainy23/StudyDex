@@ -1,4 +1,5 @@
 <script setup>
+import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
@@ -14,6 +15,18 @@ import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
+
+
+const pageLoading = computed(() =>
+  loading.value ||
+  (
+    !error.value &&
+    !!topic.value &&
+    (!lessonResource.value || lessonResource.value.loading)
+  )
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -290,6 +303,10 @@ async function backToFlashcards() {
 
 </script>
 <template>
+  <LoadingScreen
+  :show="pageLoading && !pokemonTransition.state.active"
+  message="Opening your Classroom…"
+/>
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab, 'is-learning': true }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
@@ -297,10 +314,7 @@ async function backToFlashcards() {
       <button type="button" class="is-current" aria-current="page" disabled>Learn</button>
     </nav>
     <header class="study-header">
-      <nav class="study-navigation" aria-label="Study navigation">
-        <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-        <button type="button" class="home-link" @click="returnToSelection">Topics</button>
-      </nav>
+      <StudyPageNavigation @topics="returnToSelection" />
       <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
     </header>
     <div class="study-content">
@@ -371,6 +385,7 @@ async function backToFlashcards() {
     </div>
   </main>
   </div>
+  <StudydexBubbleNav current="study"/>
 </template>
 <style scoped>
 
@@ -1081,9 +1096,6 @@ input:focus-visible {
   position:static; align-self:flex-start;
   width:max-content; max-width:100%;
   transform:none; pointer-events:auto;
-}
-@media(min-width:1001px) {
-  .poke-lab-page.is-learning .study-clock { zoom:.65; }
 }
 @media(max-width:600px) {
   .poke-lab-page .study-header > .study-clock {

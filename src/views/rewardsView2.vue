@@ -1,5 +1,72 @@
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import { getCurrentProfile } from '../services/profileService'
+import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
+
+const rewardsBuddy = ref(null)
+const buddyLoading = ref(true)
+const buddyError = ref('')
+let buddyActive = true
+let buddyRequest = 0
+let buddyController
+async function loadRewardsBuddy() {
+    const request = ++buddyRequest
+    buddyController?.abort()
+    buddyLoading.value = true
+    buddyError.value = ''
+    try {
+        const profile = await getCurrentProfile()
+        const record = await getSelectedStudyBuddy(profile.id)
+        if (!buddyActive || request !== buddyRequest) return
+        if (!record?.pokemon) {
+            rewardsBuddy.value = null
+            return
+        }
+        const savedSprite = resolveStudyImage(record.pokemon.sprite_url)
+        let sprite = savedSprite
+        let staticSprite = savedSprite
+        // PokemonBuddy displays animated_img; supply actual animated sprite frames.
+        const apiName = String(record.pokemon.name || '').toLowerCase()
+            .replace(/[.'’]/g, '').replace(/\s+/g, '-')
+        if (apiName) {
+            const controller = new AbortController()
+            buddyController = controller
+            const timeout = setTimeout(() => controller.abort(), 8000)
+            try {
+                const base = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
+                const response = await fetch(base + '/pokemon/' + encodeURIComponent(apiName), {
+                    signal: controller.signal,
+                })
+                if (response.ok) {
+                    const data = await response.json()
+                    sprite = data.sprites?.versions?.['generation-v']?.['black-white']
+                        ?.animated?.front_default || data.sprites?.front_default || savedSprite
+                    staticSprite = data.sprites?.front_default || savedSprite
+                }
+            } catch { /* The saved sprite remains available if the API fails. */ }
+            finally { clearTimeout(timeout) }
+        }
+        if (!buddyActive || request !== buddyRequest) return
+        rewardsBuddy.value = {
+            ...record.pokemon,
+            ownedId: record.id,
+            xp: record.xp ?? 0,
+            level: record.level ?? 1,
+            evolution_stage: record.evolution_stage ?? 0,
+            isDefeated: record.is_defeated ?? false,
+            animated_img: sprite,
+            static_img: staticSprite,
+        }
+    } catch {
+        if (buddyActive && request === buddyRequest) buddyError.value = 'Your Pokémon could not load.'
+    } finally {
+        if (buddyActive && request === buddyRequest) buddyLoading.value = false
+    }
+}
+onMounted(loadRewardsBuddy)
+onUnmounted(() => { buddyActive = false; buddyRequest++; buddyController?.abort() })
+
 
 // stages: browse > idle > zoom > ready > tear > rise > flip > revealed
 const stage = ref('browse')
@@ -377,7 +444,18 @@ function backToPacks() {
       <aside class="buddy">
         <div class="bubble">{{ packMessage }}</div>
         <div class="buddy-circle">
-          <img class="buddy-img" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png" alt="Your buddy" />
+          <PokemonBuddy
+            v-if="rewardsBuddy"
+            :key="rewardsBuddy.ownedId"
+            class="rewards-pokemon"
+            :active-pokemon="rewardsBuddy"
+          />
+          <p v-else-if="buddyLoading" role="status">Loading your Pokémon…</p>
+          <div v-else-if="buddyError" role="alert">
+            <p>{{ buddyError }}</p>
+            <button type="button" @click="loadRewardsBuddy">Try again</button>
+          </div>
+          <p v-else>Select an active Pokémon from your collection.</p>
         </div>
       </aside>
       <section class="shelf">
@@ -1237,8 +1315,6 @@ function backToPacks() {
         display: grid;
         place-items: center;
     }
-    .buddy-circle img{ width: 85%; }
-    .buddy-img{ animation: bob-slow 3.2s ease-in-out infinite; }
 
     .shelf{
         background-color: rgba(255, 255, 255, 0.55);
@@ -1481,7 +1557,28 @@ function backToPacks() {
         .card-name{ font-size: 44px; }
     }
     @media (prefers-reduced-motion: reduce){
-        .shaking, .aura, .rays, .confetti, .shine-sweep, .buddy-img, .hero-pack, .backdrop, .tear-arrow,
+        .shaking, .aura, .rays, .confetti, .shine-sweep, .hero-pack, .backdrop, .tear-arrow,
         .stage-ready .pack-body, .stage-ready .pack-top{ animation: none !important; }
     }
+
+/* Shared buddy: show only the large animated sprite on this page. */
+.buddy-circle { position:relative; aspect-ratio:1; overflow:hidden; }
+.buddy-circle .rewards-pokemon {
+    display:grid; place-items:center; width:100%; height:100%;
+    min-width:0; margin:0; padding:0; border:0;
+    background:transparent; box-shadow:none;
+}
+.buddy-circle .rewards-pokemon :deep(h2),
+.buddy-circle .rewards-pokemon :deep(h3),
+.buddy-circle .rewards-pokemon :deep(p),
+.buddy-circle .rewards-pokemon :deep(.buddy-xp) { display:none !important; }
+.buddy-circle .rewards-pokemon :deep(.buddy-image-container) {
+    display:grid; place-items:center; width:100%; height:100%;
+    min-height:0; margin:0; padding:0; background:transparent;
+}
+.buddy-circle .rewards-pokemon :deep(img.buddy-sprite) {
+    width:90% !important; height:90% !important;
+    max-width:none !important; max-height:none !important;
+    object-fit:contain; image-rendering:pixelated;
+}
 </style>
