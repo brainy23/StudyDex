@@ -309,7 +309,7 @@ const battleOptions = computed(() =>
       </BattleAnswerPanel>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
         <div class="fighter-shadow"></div>
-        <span v-if="index === 1" class="boss-name">{{ fighter.name }} · Boss HP {{ bossHp }} / {{ hitsRequired }}</span>
+        <span v-if="index === 1" class="boss-name"><span class="boss-name-part">{{ fighter.name }} ·</span> <span class="boss-name-part">Boss HP {{ bossHp }} / {{ hitsRequired }}</span></span>
         <PokeSprite
           v-if="index === 0"
           :key="fighter.pokename"
@@ -618,5 +618,49 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 
 .forest-art { transform: none; }
 
+/* =====================================================
+   RESPONSIVE FIXES (375px iPhone 6 → 1200px Bootstrap xl)
+   Placed last so they override the rules above.
+   ===================================================== */
+
+/* No visible text below 14px. */
+.arena-scene .demo-caption,
+.arena-topic-caption,
+.picker-eyebrow,
+.picker-footnote,
+.bubble-card > span:last-child,
+.science-filters p,
+.science-detail,
+.science-theme,
+.fighter-unavailable,
+.player-back-sprite :deep(.sprite-status) { font-size: var(--text-sm); }
+.science-theme,
+.picker-eyebrow { letter-spacing: .06em; }
+
+/* The question counter ("1 / 5") never splits across lines. */
+.demo-caption > span:last-child { flex-shrink: 0; white-space: nowrap; }
+
+/* Boss name and HP: readable at every width. On phones it may wrap onto two
+   centred lines (name, then HP) instead of running off the screen. */
+.arena-scene .boss-name { font-size: var(--text-sm); }
+.boss-name-part { white-space: nowrap; }
+@media (max-width: 767.98px) {
+  .arena-scene .boss-name {
+    width: max-content;
+    max-width: 42vw;
+    padding: 3px 10px;
+    white-space: normal;
+    text-align: center;
+    border-radius: var(--radius-md);
+  }
+}
+
+/* Mute is a full 44px tap target. */
+.mute-button {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  padding: 0 16px;
+  font-size: var(--text-sm);
+}
 
 </style>

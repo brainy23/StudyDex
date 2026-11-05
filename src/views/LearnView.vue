@@ -1225,4 +1225,17 @@ input:focus-visible {
   height: max(100%, var(--tap-min));
   transform: translate(-50%, -50%);
 }
+
+/* Bottom strip for the Menu bubble: when the classroom stacks and scrolls,
+   "Finish lesson" can scroll clear of the bubble. (1000px is this view's
+   existing stacked-layout switch.) */
+@media (max-width: 1000px) {
+  .poke-lab-page .inline-learn-scene { padding-bottom: var(--bubble-nav-reserve); }
+}
+/* Full-screen classroom: the stool, buddy and speech bubble start right of the
+   Menu bubble instead of under it. Only this floor layer narrows; the room art
+   keeps its size, and dragging still uses the floor's own box. */
+@media (min-width: 1001px) {
+  .classroom-play-floor { left: var(--bubble-nav-reserve); }
+}
 </style>
