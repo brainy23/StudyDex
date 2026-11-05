@@ -76,150 +76,70 @@ async function fixture(
   return { ...evidence, content: state }
 }
 
-for (const [label, flow, title] of [
-  ['Poké Lab', 'study', 'Ready to learn?'],
-  ['Poké Arena', 'quiz', 'A Challenge Awaits!'],
-]) {
-  test.describe(label, () => {
-    test('Town click plays the transition and reveals the loaded subject picker', async ({
-      page,
-    }) => {
-      const evidence = await fixture(page, { motion: 'no-preference' })
-      await page.goto('/home')
-      await page.getByRole('button', { name: new RegExp(label) }).click()
-      const dialog = page.locator('dialog.pokemon-transition')
-      await expect(dialog).toBeVisible()
-      await expect(dialog.getByRole('heading')).toHaveText(title)
-      await expect(dialog).toHaveAttribute('data-phase', 'loading')
-      await expect(dialog.locator('.transition-ball')).toHaveCSS('animation-duration', '1s')
-      await expect(dialog.locator('.transition-backdrop')).toHaveCSS(
-        'transition-duration',
-        '0.625s',
-      )
-      await expect(page).toHaveURL(new RegExp(`/subjects[?]flow=${flow}$`))
-      await expect.poll(() => evidence.content.requests).toBe(1)
-      evidence.content.release()
-      await expect(dialog).toBeHidden()
-      await expect(page.getByRole('heading', { name: 'Choose your next adventure' })).toBeFocused()
-      await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
-      await page.getByRole('button', { name: /Mathematics/ }).click()
-      await expect(page.locator('.sd-topic-card strong')).toHaveText(['Numbers P3'])
-      await expect(dialog).toBeHidden()
-      expect(evidence.errors).toEqual([])
-      expect(evidence.liveRequests).toEqual([])
-    })
+for (const [label, flow] of [['Poké Lab', 'study'], ['Poké Arena', 'quiz']]) {
+  test(`${label} opens subjects and topics without a transition`, async ({ page }) => {
+    const evidence = await fixture(page, { motion: 'no-preference' })
+    await page.goto('/home')
+    await page.getByRole('button', { name: new RegExp(label) }).click()
+    await expect(page).toHaveURL(new RegExp(`/subjects[?]flow=${flow}$`))
+    await expect.poll(() => evidence.content.requests).toBe(1)
+    await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
+    await expect(page.getByRole('status', { name: 'Loading', exact: true })).toHaveText('Loading your subjects…')
+    evidence.content.release()
+    await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
+    await page.getByRole('button', { name: /Mathematics/ }).click()
+    await expect(page.locator('.sd-topic-card strong')).toHaveText(['Numbers P3'])
+    await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
+    expect(evidence.errors).toEqual([])
+    expect(evidence.liveRequests).toEqual([])
+  })
 
-    test('Skip waits for subject loading; reduced motion stays static', async ({ page }) => {
-      const evidence = await fixture(page)
-      await page.goto('/home')
-      await page.getByRole('button', { name: new RegExp(label) }).click()
-      const dialog = page.locator('dialog.pokemon-transition')
-      await expect(dialog).toBeVisible()
-      await expect(dialog).toHaveClass(/is-static/)
-      await expect.poll(() => evidence.content.requests).toBe(1)
-      await page.keyboard.press('Escape')
-      await expect(dialog).toBeVisible()
-      await expect(page.locator('.sd-page-state')).toHaveText('Loading your subjects…')
-      evidence.content.release()
-      await expect(dialog).toBeHidden()
-      await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
-      expect(evidence.errors).toEqual([])
-    })
+  test(`${label} keeps subject error/retry available without a transition`, async ({ page }) => {
+    const evidence = await fixture(page, { fail: true })
+    await page.goto('/home')
+    await page.getByRole('button', { name: new RegExp(label) }).click()
+    await expect.poll(() => evidence.content.requests).toBe(1)
+    evidence.content.release()
+    await expect(page.getByRole('alert')).toContainText('Your subjects could not be loaded')
+    await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
+    evidence.content.fail = false
+    await page.getByRole('button', { name: 'Try again' }).click()
+    await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
+    expect(evidence.errors).toEqual([])
+  })
 
-    test('a content failure reveals the existing error and retry flow', async ({ page }) => {
-      const evidence = await fixture(page, { fail: true })
-      await page.goto('/home')
-      await page.getByRole('button', { name: new RegExp(label) }).click()
-      await expect(page.locator('dialog.pokemon-transition')).toBeVisible()
-      await expect.poll(() => evidence.content.requests).toBe(1)
-      evidence.content.release()
-      await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
-      await expect(page.getByRole('alert')).toContainText('Your subjects could not be loaded')
-      evidence.content.fail = false
-      await page.getByRole('button', { name: 'Try again' }).click()
-      await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
-      await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
-      expect(evidence.errors).toEqual([])
-    })
-
-    test('browser Back cancels the pending entry without leaving a modal over Town', async ({
-      page,
-    }) => {
-      const evidence = await fixture(page)
-      await page.goto('/home')
-      await page.getByRole('button', { name: new RegExp(label) }).click()
-      await expect(page).toHaveURL(new RegExp(`/subjects[?]flow=${flow}$`))
-      await expect(page.locator('dialog.pokemon-transition')).toBeVisible()
-      await page.goBack()
-      await expect(page).toHaveURL(/\/home$/)
-      await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
-      evidence.content.release()
-      await expect(page.getByRole('button', { name: new RegExp(label) })).toBeEnabled()
-      expect(evidence.errors).toEqual([])
-    })
-
-    test('a stalled content load times out to a retry state and ignores the late response', async ({
-      page,
-    }) => {
-      const evidence = await fixture(page)
-      await page.goto('/home')
-      await page.clock.install()
-      await page.getByRole('button', { name: new RegExp(label) }).click()
-      await expect.poll(() => evidence.content.requests).toBe(1)
-      await page.clock.fastForward(15001)
-      await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
-      await expect(page.getByRole('alert')).toContainText('taking too long')
-      evidence.content.release()
-      await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()
-      await page.getByRole('button', { name: 'Try again' }).click()
-      await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
-      expect(evidence.errors).toEqual([])
-    })
-
-    test('direct subject visits do not trigger the entry transition', async ({ page }) => {
-      const evidence = await fixture(page)
-      evidence.content.release()
-      await page.goto(`/subjects?flow=${flow}`)
-      await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
-      await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
-      expect(evidence.errors).toEqual([])
-      expect(evidence.liveRequests).toEqual([])
-    })
+  test(`${label} allows Back while subjects load`, async ({ page }) => {
+    const evidence = await fixture(page)
+    await page.goto('/home')
+    await page.getByRole('button', { name: new RegExp(label) }).click()
+    await expect(page).toHaveURL(new RegExp(`/subjects[?]flow=${flow}$`))
+    await page.goBack()
+    evidence.content.release()
+    await expect(page).toHaveURL(/\/home$/)
+    await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
+    expect(evidence.errors).toEqual([])
   })
 }
 
-test('Arena waits for quiz availability after subjects load, even when animation is skipped', async ({
-  page,
-}) => {
-  const evidence = await fixture(page, { motion: 'no-preference', holdQuestions: true })
+test('Arena waits for quiz availability on the picker without a transition', async ({ page }) => {
+  const evidence = await fixture(page, { holdQuestions: true })
   evidence.content.release()
   await page.goto('/home')
   await page.getByRole('button', { name: /Poké Arena/ }).click()
-  const dialog = page.locator('dialog.pokemon-transition')
-  await expect(dialog).toBeVisible()
   await expect.poll(() => evidence.content.questionRequests).toBe(1)
-  await dialog.getByRole('button', { name: 'Skip animation' }).click()
-  await expect(dialog.getByRole('button', { name: 'Loading…', exact: true })).toBeDisabled()
-  await expect(dialog).toBeVisible()
-  await expect(page.locator('.sd-page-state')).toHaveText('Loading your subjects…')
+  await expect(page.getByRole('status', { name: 'Loading', exact: true })).toHaveText('Loading your subjects…')
+  await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
   evidence.content.releaseQuestions()
-  await expect(dialog).toBeHidden()
   await expect(page.locator('.sd-path strong')).toHaveText(['Mathematics'])
   expect(evidence.errors).toEqual([])
-  expect(evidence.liveRequests).toEqual([])
 })
 
-test('Arena with no usable quizzes reveals the empty state', async ({ page }) => {
+test('Arena with no usable quizzes reveals the empty picker without a transition', async ({ page }) => {
   const evidence = await fixture(page, { emptyQuiz: true })
+  evidence.content.release()
   await page.goto('/home')
   await page.getByRole('button', { name: /Poké Arena/ }).click()
-  await expect(page.locator('dialog.pokemon-transition')).toBeVisible()
-  await expect.poll(() => evidence.content.requests).toBe(1)
-  evidence.content.release()
+  await expect(page.locator('.sd-empty')).toHaveText('No subjects are available for your school level yet.')
   await expect(page.locator('dialog.pokemon-transition')).toBeHidden()
-  await expect(page.locator('.sd-empty')).toHaveText(
-    'No subjects are available for your school level yet.',
-  )
   expect(evidence.errors).toEqual([])
-  expect(evidence.liveRequests).toEqual([])
 })

@@ -1,5 +1,4 @@
 <script setup>
-import { useTransitionPageReady } from '../composables/useTransitionPageReady'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
@@ -20,6 +19,7 @@ import ClockWeather from '@/components/common/ClockWeather.vue'
 import StudyImage from '../components/study/StudyImage.vue'
 import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
+import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
@@ -380,6 +380,14 @@ const cards = computed(() => cardRows(currentResources.value?.flashcards.data).m
 })))
 const currentCard = computed(() => cards.value[cardIndex.value] || null)
 const flashResource = computed(() => currentResources.value?.flashcards)
+useRoomTransitionReady('study-decks', () => !loading.value && (
+  !!error.value || !topic.value || !profile.value?.school_level_id ||
+  !!flashResource.value && !flashResource.value.loading
+), cause => {
+  generation++
+  error.value = cause
+  loading.value = false
+})
 const reviewedCount = computed(() => completedCards.value)
 const unsupportedCards = computed(() => {
   const data = flashResource.value?.data
@@ -525,7 +533,6 @@ onUnmounted(() => { clearInterval(focusInterval) })
 
 watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnProgress, { immediate: true, flush: 'post' })
 
-useTransitionPageReady('study-decks:' + route.query.topic, () => !loading.value && (!!error.value || !topic.value || !!flashResource.value && !flashResource.value.loading))
 </script>
 <template>
   <LoadingScreen
@@ -545,7 +552,7 @@ useTransitionPageReady('study-decks:' + route.query.topic, () => !loading.value 
 
         <button type="button" class="home-link" @click="returnToSelection">Topics</button>
       </nav>
-      <div v-show="enteredLab" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
