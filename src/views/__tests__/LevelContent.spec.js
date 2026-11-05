@@ -17,6 +17,7 @@ import {
   getSelectedStudyBuddy,
 } from '../../services/studyService'
 import { getStudentQuizCatalogue } from '../../services/quizPreviewService'
+import { usePokemonTransition } from '../../composables/usePokemonTransition'
 
 vi.mock('../../services/profileService', () => ({ getCurrentProfile: vi.fn() }))
 vi.mock('../../services/studyService', async (importOriginal) => ({
@@ -113,6 +114,7 @@ beforeEach(() => {
   )
 })
 afterEach(() => {
+  usePokemonTransition().cancel()
   wrapper?.unmount()
   wrapper = null
   vi.restoreAllMocks()
@@ -175,7 +177,12 @@ it('opens Mathematics topics, Learn and Flashcards using database topic IDs', as
   await flushPromises()
   expect(router.currentRoute.value.query).toEqual({ subject: 'math', topic: 'math-1' })
   await wrapper.findAll('.sd-path')[0].trigger('click')
+  const transition = usePokemonTransition()
+  expect(transition.state.destination).toBe('Learn Room')
+  transition.skipAnimation()
+  transition.presented(transition.state.sequence)
   await flushPromises()
+  expect(transition.state.active).toBe(false)
   expect(wrapper.get('.inline-whiteboard').text()).toContain('2 × 2 = 4\n4 − 1 = 3')
   expect(getTopicLesson).toHaveBeenCalledWith('math-1')
   await router.push('/study?subject=math&topic=math-1')

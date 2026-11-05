@@ -24,7 +24,7 @@ test('waits for content and restores scrolling/focus after revealing it', async 
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   await expect(dialog).toHaveAttribute('data-phase', 'loading')
-  await expect(dialog.getByRole('heading')).toHaveText('A Challenge Awaits!')
+  await expect(dialog.getByRole('heading')).toHaveText('Time for Battle!')
   await expect(page.getByRole('button', { name: 'Skip animation' })).toBeFocused()
   await expect.poll(() => page.evaluate(() => document.body.style.overflow)).toBe('hidden')
   await finishLoad(page)
