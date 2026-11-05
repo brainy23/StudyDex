@@ -1,9 +1,16 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 
+let leaving = false
+
+function goBack() {
+  if (leaving) return
+  leaving = true
+  history.back()
+}
 const rewardsBuddy = ref(null)
 const buddyLoading = ref(true)
 const buddyError = ref('')
@@ -107,10 +114,29 @@ const tearVars = computed(() => {
 })
 
 // number of unopened packs the user owns (replace with a Supabase fetch)
-const packCount = ref(5)
+const packCount = ref(0)
 const packMessage = computed(() =>
     packCount.value > 0 ? "Let's rip some packs!" : 'Study to earn more packs!'
 )
+async function loadPacks() {
+    const supabase = getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { count, error } = await supabase
+        .from('user_packs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .is('opened_at', null)
+
+    if (error) { console.error('Could not load packs', error); return }
+    packCount.value = count ?? 0
+}
+
+onMounted(() => {
+    loadOwned()
+    loadPacks()
+})
 
 // Pokemon the user already owns (replace with a Supabase fetch)
 const owned = ref(new Set())
@@ -402,45 +428,31 @@ function completeTear(ms) {
     dragging.value = false
     animateTear(1, ms, tear)
 }
-async function saveCard(card) {
-  const supabase = getSupabase()
-  await loadPokemonMap()
+async function recordOpen(card) {
+    const supabase = getSupabase()
+    await loadPokemonMap()
 
-  const pokemonUuid = uuidFromDex(card.id)
-  if (!pokemonUuid) {
-    console.error('No row in the pokemon table for dex #' + card.id)
-    return
-  }
+    const pokemonUuid = uuidFromDex(card.id)
+    if (!pokemonUuid) {
+        console.error('No row in the pokemon table for dex #' + card.id)
+        loadPacks()
+        return
+    }
 
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return
-
-  if (card.isNew) {
-    const { error } = await supabase.from('user_pokemon').insert({
-      user_id: user.id,
-      pokemon_id: pokemonUuid,
-      xp: 0,
-      level: 1,
-      is_selected: false,
-      is_defeated: false,
-    })
-    if (error) console.error('Could not save Pokémon', error)
-  } else {
-    const { error } = await supabase.rpc('add_duplicate_xp', {
-      p_pokemon_id: pokemonUuid,
-      p_xp: 25,
-    })
-    if (error) console.error('Could not add XP', error)
-  }
+    const { error } = await supabase.rpc('open_pack', { p_pokemon_id: pokemonUuid })
+    if (error) {
+        console.error('Could not open pack', error)
+        loadPacks()   // resync the count with the database
+    }
 }
 
 function tear() {
     if (stage.value !== 'ready' || !card.value) return
     packCount.value--
+    recordOpen({ ...card.value })
     owned.value.add(card.value.id)
     // TODO: save the card to Supabase and mark one pack as opened.
-    saveCard({ ...card.value })
-    // Duplicates (card.isNew === false) should give bonus XP.
+        // Duplicates (card.isNew === false) should give bonus XP.
     burst()
     makeConfetti()
     rip()
@@ -487,7 +499,7 @@ function backToPacks() {
 <template>
   <main :class="{ browsing: stage === 'browse' }" :style="theme" @pointermove="onMove">
     <div>
-        <button onclick="history.back()" class="back">Back</button> 
+        <button type="button" class="back" @click="goBack">Back</button>
     </div>
     <div v-if="stage !== 'browse'" class="backdrop" :class="{ on: flipped }"></div>
 

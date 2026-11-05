@@ -4,6 +4,14 @@ import { getSupabase } from '../lib/supabase'
 import { useActivePokemon } from '../composables/useActivePokemon'
 import { dexFromUuid, loadPokemonMap } from '../lib/pokemon'
 
+let leaving = false
+
+function goBack() {
+  if (leaving) return
+  leaving = true
+  history.back()
+}
+
 // ---------- shared active Pokémon ----------
 const { activeId, setActive } = useActivePokemon()
 
@@ -40,6 +48,21 @@ function prettyName(name) {
   if (name === 'mr-mime') return 'Mr. Mime'
   if (name === 'farfetchd') return "Farfetch'd"
   return name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
+}
+
+// ---------- sounds ----------
+// Put the files in public/sounds/ (adjust names/extensions to yours)
+const SOUND_FILES = {
+  selectingPokemon: '/sounds/selecting.mp3',
+  selectedPokemon: '/sounds/selected.mp3',
+}
+
+function playSound(name) {
+  const src = SOUND_FILES[name]
+  if (!src) return
+  const audio = new Audio(src)
+  audio.volume = 0.5
+  audio.play().catch(() => {})
 }
 
 // ---------- state ----------
@@ -282,9 +305,9 @@ onUnmounted(() => {
             >{{ t }}</span>
           </div>
 
-          <button class="activate" :disabled="selectedId === activeId" @click="makeActive; playSound('selectedPokemon');">
-            {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
-          </button>
+            <button class="activate" :disabled="selectedId === activeId" @click="makeActive">
+                {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
+            </button>
         </template>
       </aside>
     </div>

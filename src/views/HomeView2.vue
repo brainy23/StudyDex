@@ -10,6 +10,7 @@ import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '
 import { signOutCurrentSession } from '../services/authService'
 import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
+import { getSupabase } from '../lib/supabase'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
@@ -678,8 +679,6 @@ onUnmounted(() => {
 
 })
 
-
-
 // POKÉAPI BUDDY DATA
 const buddyData = ref(null)
 const buddyLoading = ref(false)
@@ -773,14 +772,34 @@ async function getPokeBall() {
 
 
 // Call this when a Pokémon is selected as the active buddy.
-function setActiveBuddy(pokemon) {
+async function setActiveBuddy(pokemon) {
   const selectedRecord = savedOwnedPokemon.value.find(record => record.id === pokemon.ownedId)
   if (!selectedRecord) return
+  if (selectedRecord.is_selected) return   // already the buddy
+
+  // keep the old state so we can roll back if the save fails
+  const previousRecords = savedOwnedPokemon.value
+  const previousBuddy = savedActiveBuddy.value
+
+  // update the UI immediately
   savedOwnedPokemon.value = savedOwnedPokemon.value.map(record => ({
     ...record,
     is_selected: record.id === selectedRecord.id,
   }))
   savedActiveBuddy.value = savedOwnedPokemon.value.find(record => record.id === selectedRecord.id)
+
+  // save to Supabase
+  const supabase = getSupabase()
+  const { error } = await supabase.rpc('set_active_pokemon', {
+    p_row_id: selectedRecord.id,
+  })
+
+  if (error) {
+    console.error('Could not set town buddy', error)
+    // roll back
+    savedOwnedPokemon.value = previousRecords
+    savedActiveBuddy.value = previousBuddy
+  }
 }
 
 const ballShaking = ref(false)
