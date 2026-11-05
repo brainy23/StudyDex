@@ -64,8 +64,7 @@ onMounted(() => {
       </h1>
 
       <p>
-        The study app for primary school kids. Focus in short study sessions
-        and grow your Pokémon buddy along the way.
+       The MOE-aligned study app for primary school students. Learn in short, focused sessions and grow your Pokémon buddy along the way.
       </p>
 
       <a href="/signup" class="button">
@@ -102,10 +101,10 @@ onMounted(() => {
     <h2>
       Big Adventures. Bigger Learning.
     </h2>
-    
+
 
     <p class="maincards-intro">From mastering new concepts to battling through quizzes, StudyDex turns everyday learning into an adventure!</p>
-    
+
     <div class="maincards-cards">
 
       <div class="maincards-card">
@@ -150,7 +149,7 @@ onMounted(() => {
       Explore <span class="underline">Mathematics from Primary 1-6</span> and <span class="underline">Science from Primary 3-6.</span>
     </h3>
 
-    
+
     <div id="features" class="carousel slide">
       <div class="carousel-inner">
 
@@ -179,9 +178,9 @@ onMounted(() => {
               <p>
                 Over 150 Pokémons for you to collect!
               </p>
-            </div>            
+            </div>
 
-            
+
 
           </div>
         </div>
@@ -247,8 +246,8 @@ onMounted(() => {
           </div>
         </div>
 
-    
-        
+
+
 
       </div>
 
@@ -665,11 +664,11 @@ h1 {
   stroke-linejoin: round;
 }
 
-.maincards-flashcards { 
+.maincards-flashcards {
   background: linear-gradient(#e0cbff, #b496e7); }
-.maincards-quiz { 
+.maincards-quiz {
   background: linear-gradient(#ffcf92, #f6a95e); }
-.maincards-learn { 
+.maincards-learn {
   background: linear-gradient(#a2edda, #54c5ac); }
 
 .maincards-card strong {

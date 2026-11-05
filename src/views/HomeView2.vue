@@ -8,17 +8,23 @@ import { useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon, getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 import { signOutCurrentSession } from '../services/authService'
+import { getTodos, saveTodo } from '../services/learningService'
+import { checkedRpc } from '../services/backendClient'
 import { findAvatar } from '../data/avatarOptions'
 import Tutorialguide from '../components/common/tutorialguide.vue'
+import WelcomePackModal from '../components/common/welcomePack.vue'
 
 import QuestPhone from '@/components/common/QuestPhone.vue'
 
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
+import playSound from '../../scripts/soundEffect'
+import { useBuddySleep } from '../composables/useBuddySleep'
 
 const router = useRouter()
 const buildingNavigationError = ref('')
+
 
 
 // tutorial
@@ -112,7 +118,12 @@ const buildingButtons = [
   },
 ]
 
+function isBuildingLocked(building) {
+  return buddySleeping.value && building.id !== 'trainer'
+}
+
 async function selectBuilding(building) {
+  if (isBuildingLocked(building)) return
   buildingNavigationError.value = ''
   try {
     const failure = await router.push(building.path)
@@ -125,7 +136,7 @@ async function selectBuilding(building) {
 // Component outputs used by the town's interactions.
 // ClockWeather owns weather/location; TownBackground owns time/lighting.
 const rainActive = ref(false)
-const buddySleeping = ref(false)
+const { isSleeping: buddySleeping } = useBuddySleep()
 
 // ==========================================
 // RAIN + UMBRELLA
@@ -549,7 +560,9 @@ onUnmounted(() => {
 
 // TO-DOS — shared by the notepad and the quest screen.
 // To-do completion dates follow the device's local calendar.
-const TODO_STORAGE_KEY = 'studydex-todos-v1'
+const todoOwner = ref(null)
+const todoSaving = ref(false)
+let todosActive = true
 const todos = ref([])
 const todoDialog = ref(null)
 const todoInput = ref(null)
@@ -571,40 +584,42 @@ const remainingTodoLabel = computed(() =>
 )
 
 function localDateKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore', year:'numeric', month:'2-digit', day:'2-digit' }).format(date)
 }
 
 function removePastCompletedTodos() {
   const today = localDateKey()
-  const kept = todos.value.filter(todo => !todo.completedAt || todo.completedAt >= today)
+  const kept = todos.value.filter(todo => !todo.completedAt || localDateKey(new Date(todo.completedAt)) >= today)
   if (kept.length !== todos.value.length) todos.value = kept
 }
 
-function saveTodos() {
+async function loadTodos() {
   try {
-    localStorage.setItem(TODO_STORAGE_KEY, JSON.stringify(todos.value))
-    todoStorageNotice.value = ''
-  } catch {
-    todoStorageNotice.value = 'Browser storage is unavailable. Changes will only last for this visit.'
-  }
-}
-
-function loadTodos() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TODO_STORAGE_KEY) || '[]')
-    if (!Array.isArray(saved)) throw new Error('Invalid saved to-dos')
-    todos.value = saved.filter(todo =>
-      todo && typeof todo.id === 'string' && typeof todo.title === 'string' &&
-      todo.title.trim() && (todo.completedAt === null ||
-        (typeof todo.completedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(todo.completedAt)))
-    )
+    const profile = await getCurrentProfile()
+    const records = await getTodos(profile.id)
+    if (!todosActive) return
+    todoOwner.value = profile.id
+    todos.value = records
     removePastCompletedTodos()
-  } catch {
-    todoStorageNotice.value = 'Saved to-dos could not be loaded in this browser.'
+    todoStorageNotice.value = ''
+  } catch (cause) {
+    if (todosActive) todoStorageNotice.value = cause.message || 'Your tasks could not load. Please retry.'
   }
 }
-
-watch(todos, saveTodos, { deep: true })
+async function persistTodo(todo, remove = false) {
+  if (!todoOwner.value || todoSaving.value) return false
+  const owner = todoOwner.value
+  todoSaving.value = true
+  try {
+    await saveTodo(todo, owner, remove)
+    if (!todosActive || owner !== todoOwner.value) return false
+    await loadTodos()
+    return true
+  } catch (cause) {
+    if (todosActive) todoStorageNotice.value = cause.message || 'Your task could not be saved. Try again.'
+    return false
+  } finally { todoSaving.value = false }
+}
 
 function scheduleTodoCleanup() {
   clearTimeout(todoMidnightTimer)
@@ -615,22 +630,22 @@ function scheduleTodoCleanup() {
 }
 
 function refreshTodosOnReturn() {
-  if (!document.hidden) scheduleTodoCleanup()
+  if (!document.hidden) { scheduleTodoCleanup(); if (!todoSaving.value) void loadTodos() }
 }
 
-function addTodo() {
+async function addTodo() {
   const title = newTodoTitle.value.trim()
   if (!title) return
   removePastCompletedTodos()
-  todos.value.push({ id: crypto.randomUUID(), title, completedAt: null })
+  if (!await persistTodo({ id: crypto.randomUUID(), title, completedAt: null })) return
   newTodoTitle.value = ''
   todoInput.value?.focus()
 }
 
-function toggleTodo(todo) {
+async function toggleTodo(todo) {
   removePastCompletedTodos()
   if (!todos.value.some(item => item.id === todo.id)) return
-  todo.completedAt = todo.completedAt ? null : localDateKey()
+  await persistTodo({ ...todo, completedAt: todo.completedAt ? null : new Date().toISOString() })
 }
 
 async function startEditingTodo(todo) {
@@ -642,15 +657,15 @@ async function startEditingTodo(todo) {
   input?.select()
 }
 
-function saveTodoEdit(todo) {
+async function saveTodoEdit(todo) {
   const title = editTodoTitle.value.trim()
   if (!title) return
-  todo.title = title
+  if (!await persistTodo({ ...todo, title })) return
   editingTodoId.value = null
 }
 
-function deleteTodo(todo) {
-  todos.value = todos.value.filter(item => item.id !== todo.id)
+async function deleteTodo(todo) {
+  if (!await persistTodo(todo, true)) return
   if (editingTodoId.value === todo.id) editingTodoId.value = null
 }
 
@@ -676,8 +691,6 @@ onUnmounted(() => {
 
 
 })
-
-
 
 // POKÉAPI BUDDY DATA
 const buddyData = ref(null)
@@ -772,14 +785,29 @@ async function getPokeBall() {
 
 
 // Call this when a Pokémon is selected as the active buddy.
-function setActiveBuddy(pokemon) {
+const buddySelectionSaving = ref(false)
+async function setActiveBuddy(pokemon) {
   const selectedRecord = savedOwnedPokemon.value.find(record => record.id === pokemon.ownedId)
-  if (!selectedRecord) return
-  savedOwnedPokemon.value = savedOwnedPokemon.value.map(record => ({
-    ...record,
-    is_selected: record.id === selectedRecord.id,
+  if (!selectedRecord || selectedRecord.is_selected || buddySelectionSaving.value) return
+  buddySelectionSaving.value = true
+  const previousRecords = savedOwnedPokemon.value
+  const previousBuddy = savedActiveBuddy.value
+  savedOwnedPokemon.value = previousRecords.map(record => ({
+    ...record, is_selected: record.id === selectedRecord.id,
   }))
   savedActiveBuddy.value = savedOwnedPokemon.value.find(record => record.id === selectedRecord.id)
+  try {
+    const profile = await getCurrentProfile()
+    if (!trainerProfileActive) return
+    await checkedRpc('select_user_pokemon', { p_owned_id: selectedRecord.id }, profile.id)
+    await refreshTrainerProfile()
+  } catch (cause) {
+    if (trainerProfileActive) {
+      savedOwnedPokemon.value = previousRecords
+      savedActiveBuddy.value = previousBuddy
+      profileNotice.value = cause.message || 'Your buddy could not be saved.'
+    }
+  } finally { buddySelectionSaving.value = false }
 }
 
 const ballShaking = ref(false)
@@ -788,6 +816,7 @@ function shakePokeball() {
   if (!buddySleeping.value || !pokeball.value) return
 
   ballShaking.value = true
+  playSound('metalClang');
 }
 
 const townBuddyImage = computed(() => {
@@ -800,7 +829,7 @@ const townBuddyImage = computed(() => {
   return activeBuddyImage.value
 })
 
-// Convert the homepage record into the format PokemonBuddy uses.
+// Convert the homepage record into the format PokeSprite uses.
 const homepagePokemon = computed(() => {
   if (!activeBuddy.value.id) return null
 
@@ -813,14 +842,8 @@ const homepagePokemon = computed(() => {
   }
 })
 
-// Sample count — connect this to the user's inventory later.
-const unopenedPackCount = ref(3)
-
-const unopenedPackLabel = computed(() =>
-  unopenedPackCount.value > 99
-    ? '99+'
-    : String(unopenedPackCount.value)
-)
+const unopenedPackCount = ref(0)
+const currentUserId = ref(null)
 
 // Trainer identity always comes from the authenticated student's saved profile.
 const trainerProfile = ref({ name: 'Loading…', avatar: 'prefer_not_to_say' })
@@ -838,7 +861,12 @@ async function refreshTrainerProfile() {
   try {
     const profile = await getCurrentProfile()
     if (!trainerProfileActive) return
+    currentUserId.value = profile.id
     trainerProfile.value = { name: profile.display_name, avatar: profile.avatar_choice }
+    try {
+      const inventory = await checkedRpc('get_reward_inventory', undefined, profile.id)
+      if (trainerProfileActive) unopenedPackCount.value = inventory.unopened_count || 0
+    } catch { /* Keep the saved count or zero until the next refresh. */ }
 
     try {
       savedActiveBuddy.value = await getSelectedStudyBuddy(profile.id)
@@ -869,6 +897,8 @@ onMounted(() => {
   window.addEventListener('studydex:pokemon-xp', refreshTrainerProfile)
 })
 onUnmounted(() => {
+  todosActive = false
+  todoOwner.value = null
   trainerProfileActive = false
   window.removeEventListener('focus', refreshTrainerProfile)
   window.removeEventListener('studydex:pokemon-xp', refreshTrainerProfile)
@@ -1262,10 +1292,12 @@ watch(
 </script>
 
 <template>
+<WelcomePackModal v-if="!showTutorial" :user-id="currentUserId" />
 <!-- =================================================
        STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
        ================================================= -->
   <div class="world-page">
+    <p v-if="buddySleeping" class="sleep-hours-notice" role="status">Learning opens at 7am.</p>
     <p v-if="buildingNavigationError" class="building-navigation-error" role="alert">{{ buildingNavigationError }}</p>
 
   <!-- tutorial -->
@@ -1320,7 +1352,6 @@ watch(
         </span>
 
         <span class="trainer-identity">
-          <span class="trainer-caption">TRAINER PROFILE</span>
           <span class="trainer-name">{{ trainerProfile.name }}</span>
         </span>
 
@@ -1443,7 +1474,7 @@ watch(
       <div class="world-scene">
         <TownBackground
           :rain-active="rainActive"
-          @sleep-change="buddySleeping = $event"
+          :buddy-sleeping="buddySleeping"
         />
 
         <!-- Darken the town while raining -->
@@ -1538,13 +1569,16 @@ watch(
                 />
 
                 <!-- Awake Pokémon uses the reusable component -->
-                <PokemonBuddy
+                <PokeSprite
                   v-else-if="homepagePokemon"
                   :key="homepagePokemon.ownedId"
                   class="homepage-pokemon"
                   :active-pokemon="homepagePokemon"
+                  :fallback-src="homepagePokemon.static_img"
+                  facing="front"
                   embedded
                   progress-position="hidden"
+                  :max-xp="MAX_XP"
                 />
               </Transition>
 
@@ -1569,13 +1603,15 @@ watch(
             :key="building.id"
             type="button"
             class="building-button"
+            :disabled="isBuildingLocked(building)"
+            :title="isBuildingLocked(building) ? 'Your Pokémon is sleeping until 7am Singapore time.' : building.title"
             :style="{
               left: building.left,
               top: building.top,
             }"
 
             @click="selectBuilding(building)"
-            @mouseenter="hoveredBuilding = building.id"
+            @mouseenter="hoveredBuilding = building.id; playSound('pop')"
             @mouseleave="hoveredBuilding = null"
           >
 
@@ -1601,108 +1637,119 @@ watch(
       </div>
 
         <!-- TRAINER NAVBAR -->
-  <nav class="sd-navbar" aria-label="Main navigation">
+      <nav class="sd-navbar" aria-label="Main navigation">
+      <!-- STUDY -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        :disabled="buddySleeping"
+        @click="router.push('/subjects?flow=study')"
+      >
+        <span class="sd-icon-tile sd-icon-study">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path
+              d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
+                4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
+              fill="#fff9e8"
+            />
+            <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
+          </svg>
+        </span>
+        <span class="sd-nav-label">Study</span>
+      </button>
 
-    <!-- STUDY -->
-    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-      <span class="sd-icon-tile sd-icon-study">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path
-            d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
-              4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
-            fill="#fff9e8"
-          />
-          <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
-        </svg>
-      </span>
-      <span class="sd-nav-label">Study</span>
-    </button>
+      <!-- QUIZ -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        :disabled="buddySleeping"
+        @click="router.push('/subjects?flow=quiz')"
+      >
+        <span class="sd-icon-tile sd-icon-quiz">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="m7 3 5 2 13 17-4 4L7 9Z" fill="#fff9e8" />
+            <path d="m25 3-5 2L7 22l4 4L25 9Z" fill="#fff9e8" />
+            <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
+          </svg>
+        </span>
+        <span class="sd-nav-label">Quiz</span>
+      </button>
 
-    <!-- QUIZ -->
-    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-      <span class="sd-icon-tile sd-icon-quiz">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path
-            d="m7 3 5 2 13 17-4 4L7 9Z"
-            fill="#fff9e8"
-          />
-          <path
-            d="m25 3-5 2L7 22l4 4L25 9Z"
-            fill="#fff9e8"
-          />
-          <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
-        </svg>
-      </span>
-      <span class="sd-nav-label">Quiz</span>
-    </button>
+      <!-- TOWN -->
+      <button
+        type="button"
+        class="sd-nav-button sd-town-button is-active"
+        aria-current="page"
+        @click="router.push('/home')"
+      >
+        <span class="sd-pokeball" aria-hidden="true"></span>
+        <span class="sd-nav-label">Town</span>
+      </button>
 
-    <!-- TOWN: ACTIVE ON HOMEVIEW2 -->
-    <button
-      type="button"
-      class="sd-nav-button sd-town-button is-active"
-      aria-current="page"
-    >
-      <span class="sd-pokeball" aria-hidden="true"></span>
-      <span class="sd-nav-label">Town</span>
-    </button>
+      <!-- TO-DO LIST -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        data-bs-toggle="modal"
+        data-bs-target="#todoModal"
+        aria-label="To-Do List"
+      >
+        <span class="sd-icon-tile sd-icon-todos">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect
+              x="6"
+              y="4"
+              width="21"
+              height="25"
+              rx="3"
+              fill="#fff9e8"
+            />
+            <path d="M11 2v5M22 2v5M16 13h7M16 19h7M16 25h7" />
+            <path d="m9 12 2 2 3-4m-5 8 2 2 3-4" />
+            <circle
+              cx="11"
+              cy="25"
+              r="1"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
+        </span>
+        <span class="sd-nav-label" aria-hidden="true">To-Dos</span>
+      </button>
 
-    <!-- TO-DO LIST — available even while the buddy sleeps -->
-    <button
-      type="button"
-      class="sd-nav-button"
-      data-bs-toggle="modal"
-      data-bs-target="#todoModal"
-    >
-      <span class="sd-icon-tile sd-icon-todos">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <rect x="6" y="4" width="21" height="25" rx="3" fill="#fff9e8" />
-          <path d="M11 2v5M22 2v5M16 13h7M16 19h7M16 25h7" />
-          <path d="m9 12 2 2 3-4m-5 8 2 2 3-4" />
-          <circle cx="11" cy="25" r="1" fill="currentColor" stroke="none" />
-        </svg>
-      </span>
-      <span class="sd-nav-label">To-Do List</span>
-    </button>
-
-    <!-- POKEDEX -->
-    <!-- Available to view when buddy sleeps -->
-    <button
-      type="button"
-      class="sd-nav-button"
-      @click="router.push('/collection')"
-    >
-      <span class="sd-icon-tile sd-icon-bag">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M12 7V5a4 4 0 0 1 8 0v2" />
-
-          <rect
-            x="6"
-            y="7"
-            width="20"
-            height="22"
-            rx="6"
-            fill="#ffcf65"
-          />
-
-          <path d="M6 15h20" />
-
-          <rect
-            x="10"
-            y="18"
-            width="12"
-            height="7"
-            rx="2"
-            fill="#fff0bb"
-          />
-
-          <path d="M16 13v4" />
-        </svg>
-      </span>
-
-      <span class="sd-nav-label">PokeDex</span>
-    </button>
-
-  </nav>
+      <!-- POKÉDEX -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        @click="router.push('/collection')"
+      >
+        <span class="sd-icon-tile sd-icon-bag">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M12 7V5a4 4 0 0 1 8 0v2" />
+            <rect
+              x="6"
+              y="7"
+              width="20"
+              height="22"
+              rx="6"
+              fill="#ffcf65"
+            />
+            <path d="M6 15h20" />
+            <rect
+              x="10"
+              y="18"
+              width="12"
+              height="7"
+              rx="2"
+              fill="#fff0bb"
+            />
+            <path d="M16 13v4" />
+          </svg>
+        </span>
+        <span class="sd-nav-label">PokeDex</span>
+      </button>
+    </nav>
 
       <!-- TO-DO MODAL -->
       <div
@@ -1719,7 +1766,7 @@ watch(
             <!-- HEADER -->
             <div class="modal-header todo-modal-header">
               <div>
-                <span class="todo-kicker">STUDYDEX / MY NOTES</span>
+                <span class="todo-kicker">My notes</span>
                 <h2 id="todo-modal-title">My To-Do List</h2>
                 <p aria-live="polite">{{ remainingTodoLabel }}</p>
               </div>
@@ -1750,7 +1797,7 @@ watch(
                   autocomplete="off"
                 />
 
-                <button type="submit" :disabled="!newTodoTitle.trim()">
+                <button type="submit" :disabled="todoSaving || !todoOwner || !newTodoTitle.trim()">
                   + Add
                 </button>
               </form>
@@ -1760,7 +1807,7 @@ watch(
                 class="todo-storage-note"
                 role="status"
               >
-                {{ todoStorageNotice }}
+                {{ todoStorageNotice }} <button type="button" @click="loadTodos">Retry</button>
               </p>
 
               <ul v-if="orderedTodos.length" class="todo-notepad-list">
@@ -1871,6 +1918,19 @@ watch(
 </template>
 
 <style scoped>
+.sleep-hours-notice {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: calc(24px + env(safe-area-inset-left, 0px));
+  z-index: 1050;
+  max-width: calc(100% - 48px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: #fff6dc;
+  color: #303557;
+  text-align: center;
+}
 .building-navigation-error {
   position: fixed;
   z-index: 2000;
@@ -1974,14 +2034,14 @@ watch(
 }
 
 .building-button-title {
-  font-size: calc(14 * var(--control-unit));
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.2;
 }
 
 .building-button-subtitle {
   color: #647394;
-  font-size: calc(10 * var(--control-unit));
+  font-size: var(--text-sm);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -2006,9 +2066,36 @@ watch(
   box-shadow: none;
 }
 
-@media (max-width: 600px) {
+/* Keep the side signs on screen: a sign only moves inwards when it would
+   cross the screen edge (no effect when there is room). */
+.building-navigation .building-button:nth-of-type(1) { translate: max(0px, calc(8px - 21vw + 50%)) 0; }
+.building-navigation .building-button:nth-of-type(3) { translate: min(0px, calc(17vw - 8px - 50%)) 0; }
+
+/* Below md: drop the subtitle and let titles wrap, instead of shrinking type. */
+@media (max-width: 767.98px) {
   .building-button-subtitle {
     display: none;
+  }
+
+  .building-button {
+    white-space: normal;
+  }
+
+  .building-button-text {
+    max-width: 4.2em; /* one word per line: POKÉ / ARENA, POKÉ / LAB, TRAINER / HOUSE */
+    font-size: var(--text-md);
+  }
+
+  .building-button-title {
+    line-height: 1.1;
+  }
+}
+
+/* Small phones: slightly tighter signs so all three fit side by side. */
+@media (max-width: 575.98px) {
+  .building-button {
+    gap: 6px;
+    padding: 7px 10px 7px 7px;
   }
 }
 
@@ -2184,8 +2271,8 @@ watch(
 
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: var(--sd-space-2);
 
   pointer-events: none;
 }
@@ -2206,11 +2293,14 @@ watch(
   z-index: 100;
 
   display: grid;
-  grid-template-columns: 1fr 1fr 1.1fr 1fr 1fr;
+  grid-template-columns: repeat(9, minmax(76px, 1fr));
+  overflow-x: auto;
+  scrollbar-width: thin;
   align-items: center;
   gap: calc(8 * var(--control-unit));
 
-  width: min(calc(480 * var(--control-unit)), calc(100% - 24px));
+  width: min(980px, calc(100% - 24px));
+  box-sizing: border-box;
   height: calc(94 * var(--control-unit));
   padding: calc(10 * var(--control-unit)) calc(14 * var(--control-unit));
 
@@ -2231,6 +2321,11 @@ watch(
     0 12px 28px rgba(6, 19, 44, 0.3),
     0 4px 0 rgba(15, 36, 70, 0.65),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
+
+  grid-template-columns: 1fr 1fr 1.1fr 1fr 1fr;
+  width: min(calc(480 * var(--control-unit)), calc(100% - 24px));
+  overflow: visible;
+
 }
 
 .sd-nav-button {
@@ -2262,11 +2357,24 @@ watch(
 }
 
 .sd-nav-label {
-  font-size: calc(13 * var(--control-unit));
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
   text-shadow: 0 2px 3px rgba(5, 20, 45, 0.6);
+}
+
+/* Small phones: use the full width so 16px labels fit in five columns. */
+@media (max-width: 575.98px) {
+  .sd-navbar {
+    width: calc(100% - 12px);
+    gap: 2px;
+    padding: calc(8 * var(--control-unit)) 4px;
+  }
+
+  .sd-nav-button {
+    padding: 2px 0;
+  }
 }
 
 .sd-icon-tile {
@@ -2417,17 +2525,33 @@ watch(
   outline-offset: 5px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .sd-hud {
     top: 12px;
     left: 12px;
-    gap: 6px;
+    gap: var(--sd-space-1);
   }
 
   .sd-logo {
     width: 145px;
   }
 
+}
+
+@media (max-height: 500px) {
+  .sd-hud {
+    flex-direction: row;
+    gap: var(--sd-space-3);
+  }
+
+  .sd-logo {
+    width: clamp(100px, 12vw, 150px);
+  }
+
+  .sd-clock-weather {
+    flex-direction: row;
+    gap: var(--sd-space-2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2501,16 +2625,16 @@ watch(
   margin-bottom: 4px;
 
   color: #886317;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 900;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
 .buddy-speech p {
   margin: 0;
 
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.4;
 }
@@ -2551,24 +2675,24 @@ watch(
   filter: blur(3px);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .town-buddy {
     width: clamp(44px, 12vw, 70px);
   }
 
   .buddy-speech {
-    width: 155px;
-    padding: 7px 9px;
+    width: min(200px, 56vw);
+    padding: 7px 10px;
     border-radius: 13px;
   }
 
   .buddy-speaker {
-    font-size: 7px;
+    font-size: var(--text-sm);
     margin-bottom: 2px;
   }
 
   .buddy-speech p {
-    font-size: 10px;
+    font-size: var(--text-sm);
   }
 }
 
@@ -2673,8 +2797,7 @@ watch(
 
   background: linear-gradient(150deg, #ff7180, #dc304d);
   color: #fff;
-
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -2719,16 +2842,14 @@ watch(
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .sd-pack-badge {
     top: -7px;
     right: -9px;
 
-    min-width: 20px;
-    height: 20px;
+    min-width: 22px;
+    height: 22px;
     padding: 0 4px;
-
-    font-size: 10px;
   }
 }
 
@@ -2768,12 +2889,12 @@ watch(
 }
 .sd-clock-weather {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   pointer-events: auto;
 }
 
 .sd-clock-weather :deep(.clock-weather-widget) {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .trainer-hud,
@@ -2850,12 +2971,7 @@ watch(
   gap: 4px;
 }
 
-.trainer-caption {
-  color: #c7dbf1;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
-}
+/* (The 8px "TRAINER PROFILE" caption was removed; the aside's aria-label names the card.) */
 
 .trainer-name {
   overflow: hidden;
@@ -2929,14 +3045,14 @@ watch(
   white-space: nowrap;
 
   color: #fff;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
 .trainer-buddy-level {
   flex-shrink: 0;
   color: #ffe19a;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 900;
 }
 
@@ -2976,7 +3092,7 @@ watch(
   margin-top: 4px;
 
   color: #c7dbef;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -3001,7 +3117,7 @@ watch(
   padding: 5px 10px 8px;
 
   color: #75849a;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 1.2px;
 }
@@ -3021,7 +3137,7 @@ watch(
 
   color: #30476a;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 700;
   text-align: left;
   cursor: pointer;
@@ -3066,7 +3182,7 @@ watch(
   color: #30476a;
   box-shadow: 0 8px 20px rgba(14, 31, 58, 0.2);
 
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -3085,6 +3201,17 @@ watch(
   cursor: pointer;
 }
 
+/* 44px tap area for the small dismiss cross. */
+.trainer-notice button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  transform: translate(-50%, -50%);
+}
+
 .trainer-menu-enter-active,
 .trainer-menu-leave-active {
   transition:
@@ -3098,11 +3225,11 @@ watch(
   transform: translateY(-6px);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .trainer-hud {
     top: 12px;
     right: 12px;
-    width: 180px;
+    width: min(200px, 54vw);
   }
 
   .trainer-profile-card {
@@ -3120,13 +3247,8 @@ watch(
     gap: 7px;
   }
 
-  .trainer-caption {
-    font-size: 7px;
-    letter-spacing: 0.5px;
-  }
-
   .trainer-name {
-    font-size: 13px;
+    font-size: var(--text-md);
   }
 
   .trainer-buddy-icon {
@@ -3134,22 +3256,8 @@ watch(
     height: 33px;
   }
 
-  .trainer-buddy-name {
-    font-size: 11px;
-  }
-}
-
-@media (max-width: 380px) {
-  .trainer-hud {
-    width: 150px;
-  }
-
-  .trainer-caption {
-    display: none;
-  }
-
   .trainer-buddy-row {
-    gap: 5px;
+    gap: 6px;
   }
 }
 
@@ -3206,10 +3314,9 @@ watch(
 }
 
 .todo-kicker {
-  font-family: 'Silkscreen', monospace;
-  font-size: 10px;
+  font-size: var(--text-sm);
+  font-weight: 700;
   color: #887037;
-  letter-spacing: 1px;
 }
 
 .todo-modal-header h2 {
@@ -3369,9 +3476,10 @@ watch(
   border: 0;
   border-radius: 6px;
   background: transparent;
+  min-height: var(--tap-min);
   color: #536e87;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -3414,7 +3522,7 @@ watch(
   margin: 0;
   padding: 24px 30px 30px;
   border-top: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: #707887;
 }
 
@@ -3431,7 +3539,7 @@ watch(
 
 .todo-storage-note {
   margin: 10px 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: #9b482e;
 }
 
@@ -3442,7 +3550,7 @@ watch(
   outline-offset: 3px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .todo-modal-header {
     padding: 20px 16px 0;
   }
@@ -3473,7 +3581,7 @@ watch(
   }
 }
 @keyframes todo-modal-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .todo-paper { padding: 20px 16px; }
   .todo-notepad-row { flex-wrap: wrap; gap: 9px; }
   .todo-title-button { flex-basis: calc(100% - 40px); }

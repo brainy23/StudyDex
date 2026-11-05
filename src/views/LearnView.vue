@@ -14,6 +14,9 @@ import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
+import { useStudySession } from '../composables/useStudySession'
+import { useFloatingStudyTimer } from '../composables/useFloatingStudyTimer'
+import { onBeforeRouteLeave } from 'vue-router'
 import '../assets/study.css'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
@@ -57,6 +60,21 @@ const topic = computed(() =>
     : availableTopics.value[0] || null,
 )
 const currentResources = computed(() => resources[topic.value?.id])
+const persistedStudy = useStudySession(profile, topic, 'learn')
+const floatingTimer = useFloatingStudyTimer()
+watch([profile, topic], ([student, selectedTopic]) => floatingTimer.attach(student, selectedTopic), { immediate: true })
+watch(floatingTimer.rewardSequence, () => {
+  if (profile.value?.id) void loadLearnBuddy(profile.value.id, generation)
+})
+const lessonCompleted = ref(false)
+async function finishLesson() {
+  try { await persistedStudy.action('complete'); lessonCompleted.value = true } catch { /* visible retry */ }
+}
+onBeforeRouteLeave(async () => {
+  if (persistedStudy.ready.value && !lessonCompleted.value) {
+    try { await persistedStudy.action('abandon') } catch { /* saved session is retained */ }
+  }
+})
 async function initialise() {
   activeBuddyController?.abort()
   activeBuddyController = null
@@ -310,12 +328,12 @@ async function backToFlashcards() {
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab, 'is-learning': true }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
-      <button type="button" :disabled="!topic || learningNavigationBusy" @click="backToFlashcards">Flashcards</button>
       <button type="button" class="is-current" aria-current="page" disabled>Learn</button>
+      <button type="button" :disabled="!topic || learningNavigationBusy" @click="backToFlashcards">Flashcards</button>
     </nav>
     <header class="study-header">
       <StudyPageNavigation @topics="returnToSelection" />
-      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather @rain-change="rainActive = $event" /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
@@ -375,6 +393,8 @@ async function backToFlashcards() {
                 <div v-if="concept.example_text" class="inline-example"><h3>Example</h3><p class="learn-copy">{{ concept.example_text }}</p></div>
               </section>
               <p v-if="!lessonConcepts.length">No lesson content has been added for this topic yet.</p>
+              <button v-if="lessonConcepts.length" type="button" :disabled="persistedStudy.busy.value || lessonCompleted" @click="finishLesson">{{ lessonCompleted ? 'Lesson completion saved' : 'Finish lesson' }}</button>
+              <p v-if="persistedStudy.error.value" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().catch(() => {})">Retry</button></p>
             </template>
             <p v-else>No lesson content is available yet.</p>
           </article>
@@ -1190,4 +1210,38 @@ input:focus-visible {
   .poke-lab-page .inline-classroom { padding-top: 240px; }
 }
 
+/* =====================================================
+   RESPONSIVE FIXES (375px iPhone 6 → 1200px Bootstrap xl)
+   Same Lab header as Flashcards: 44px taps, no text below 14px.
+   ===================================================== */
+.poke-lab-page .study-mode-toggle { height: calc(var(--tap-min) + 8px); }
+.poke-lab-page .study-mode-toggle button,
+.poke-lab-page .study-mode-toggle button:first-child,
+.poke-lab-page .study-mode-toggle button:last-child { min-height: var(--tap-min); font-size: var(--text-sm); }
+.learn-eyebrow { font-size: max(.7em, var(--text-sm)); letter-spacing: .06em; }
+
+/* The movable stool keeps its pixel size but gets a 44 × 44 tap area.
+   (Doubled class beats the reset that removes button pseudo-elements.) */
+.poke-lab-page button.pixel-stool.pixel-stool::after {
+  content: '' !important;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--tap-min));
+  height: max(100%, var(--tap-min));
+  transform: translate(-50%, -50%);
+}
+
+/* Bottom strip for the Menu bubble: when the classroom stacks and scrolls,
+   "Finish lesson" can scroll clear of the bubble. (1000px is this view's
+   existing stacked-layout switch.) */
+@media (max-width: 1000px) {
+  .poke-lab-page .inline-learn-scene { padding-bottom: var(--bubble-nav-reserve); }
+}
+/* Full-screen classroom: the stool, buddy and speech bubble start right of the
+   Menu bubble instead of under it. Only this floor layer narrows; the room art
+   keeps its size, and dragging still uses the floor's own box. */
+@media (min-width: 1001px) {
+  .classroom-play-floor { left: var(--bubble-nav-reserve); }
+}
 </style>

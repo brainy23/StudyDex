@@ -1,5 +1,6 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import PokeSprite from '../pokebuddy/PokeSprite.vue'
 
 // Existing XP-result contract is preserved.
 // New optional result fields:
@@ -12,18 +13,89 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 //   unallocatedXP: number (optional leftover XP display)
 // The parent handles creating/saving a gift after @open-gift.
 const props = defineProps({
+  offerGift: { type: Boolean, default: false },
   result: {
     type: Object,
     default: null
   }
 })
 
-const emit = defineEmits(['close', 'open-gift'])
+const emit = defineEmits(['close', 'open-gift', 'continue'])
 
 const dialog = ref(null)
+const card = ref(null)
+let sizeObserver
+
+// Fit the whole card to the visible viewport instead of clipping its footer or
+// adding an internal scrollbar. Measure the unscaled card to avoid resize loops.
+function fitPrompt() {
+  if (!dialog.value?.open || !card.value) return
+  const viewport = window.visualViewport
+  const width = viewport?.width ?? window.innerWidth
+  const height = viewport?.height ?? window.innerHeight
+  const landscape = width > 480 && height <= 500
+  const cardWidth = Math.max(0, Math.min(landscape ? 600 : 420, width - 24) - 4)
+  card.value.style.width = `${cardWidth}px`
+  const cardHeight = card.value.offsetHeight
+  if (!cardHeight) return
+  const scale = Math.max(0, Math.min(1, (height - 28) / cardHeight))
+  card.value.style.transform = `scale(${scale})`
+  dialog.value.style.width = `${cardWidth * scale + 4}px`
+  dialog.value.style.height = `${cardHeight * scale + 4}px`
+}
+
+function observeCard() {
+  sizeObserver?.disconnect()
+  if (card.value) sizeObserver?.observe(card.value)
+  fitPrompt()
+}
+
+onMounted(() => {
+  if (typeof ResizeObserver !== 'undefined') sizeObserver = new ResizeObserver(fitPrompt)
+  observeCard()
+  window.addEventListener('resize', fitPrompt)
+  window.visualViewport?.addEventListener('resize', fitPrompt)
+})
 const step = ref('xp') // 'xp' -> 'gift' -> 'revealed'
+const evolutionSprite = ref(null)
+const evolutionFinished = ref(false)
+const animating = ref(false)
+const evolutionError = ref('')
+let animationSequence = 0
+const busy = computed(() => props.result?.saving || animating.value || giftOpening.value)
+const displayedPokemon = computed(() =>
+  evolutionFinished.value || props.result?.duplicate || !props.result?.evolutions?.length
+    ? props.result?.pokemon
+    : props.result?.originalPokemon || props.result?.pokemon
+)
+
+watch([() => props.result, () => props.result?.saving], async ([result], _, onCleanup) => {
+  const sequence = ++animationSequence
+  let cancelled = false
+  onCleanup(() => { cancelled = true })
+  evolutionFinished.value = false
+  evolutionError.value = ''
+  animating.value = false
+  if (!result || result.saving || result.error || result.duplicate || !result.evolutions?.length) return
+  animating.value = true
+  result.animating = true
+  await nextTick()
+  try {
+    const played = await evolutionSprite.value?.playEvolution(result.evolutions)
+    if (!played && !cancelled) evolutionError.value = 'Progress saved. The animation could not load.'
+  } catch {
+    if (!cancelled) evolutionError.value = 'Progress saved. The animation could not load.'
+  } finally {
+    result.animating = false
+    if (!cancelled && sequence === animationSequence) {
+      evolutionFinished.value = true
+      animating.value = false
+    }
+  }
+}, { immediate: true, flush: 'post' })
 
 const isLoss = computed(() => (props.result?.delta ?? 0) < 0)
+const isQuiz = computed(() => props.result?.rewardType === 'quiz')
 
 const hasAdjustedDeduction = computed(() => {
   const result = props.result
@@ -77,17 +149,25 @@ const pokemonName = computed(() =>
 )
 
 function closePrompt() {
-  if (props.result?.saving || giftOpening.value) return
+  if (busy.value) return
   emit('close')
 }
 
-function continueFromXp() {
-  if (props.result?.saving || props.result?.error) return
+function completePrompt() {
+  if (busy.value || props.result?.error) return
+  const result = props.result
+  // Dismiss first so the parent can safely run its existing return-page guard.
+  emit('close')
+  emit('continue', result)
+}
 
-  if (reachedMaxEvolution.value) {
+function continueFromXp() {
+  if (busy.value || props.result?.error) return
+
+  if (reachedMaxEvolution.value && props.offerGift) {
     step.value = giftPokemon.value ? 'revealed' : 'gift'
   } else {
-    closePrompt()
+    completePrompt()
   }
 }
 
@@ -112,6 +192,7 @@ watch(
 
     if (isOpen && !element.open) element.showModal()
     if (!isOpen && element.open) element.close()
+    observeCard()
   },
   { immediate: true, flush: 'post' }
 )
@@ -120,7 +201,17 @@ watch(giftPokemon, pokemon => {
   if (pokemon && step.value === 'gift') step.value = 'revealed'
 })
 
-onBeforeUnmount(() => dialog.value?.close())
+watch([() => props.result, step], async () => {
+  await nextTick()
+  observeCard()
+}, { deep: true, flush: 'post' })
+
+onBeforeUnmount(() => {
+  sizeObserver?.disconnect()
+  window.removeEventListener('resize', fitPrompt)
+  window.visualViewport?.removeEventListener('resize', fitPrompt)
+  dialog.value?.close()
+})
 </script>
 
 <template>
@@ -133,6 +224,7 @@ onBeforeUnmount(() => dialog.value?.close())
     >
       <article
         v-if="result"
+        ref="card"
         class="xp-card"
         :class="{ 'is-loss': isLoss }"
         :aria-busy="result.saving || giftOpening"
@@ -141,7 +233,7 @@ onBeforeUnmount(() => dialog.value?.close())
           type="button"
           class="xp-close"
           aria-label="Close experience popup"
-          :disabled="result.saving || giftOpening"
+          :disabled="busy"
           @click="closePrompt"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -172,15 +264,19 @@ onBeforeUnmount(() => dialog.value?.close())
               </svg>
             </div>
 
-            <p class="brand">STUDYDEX · TRAINER JOURNEY</p>
+            <p class="brand">Trainer Journey</p>
             <h2 id="xp-title">{{ result.title || 'Experience update!' }}</h2>
           </header>
 
           <div class="xp-content" role="status" aria-live="polite">
+            <div v-if="displayedPokemon" class="evolution-preview">
+              <PokeSprite ref="evolutionSprite" :active-pokemon="displayedPokemon"
+                :fallback-src="displayedPokemon.static_img" facing="front" embedded progress-position="hidden" />
+            </div>
             <div v-if="result.saving" class="feedback-panel">
               <span class="saving-spinner" aria-hidden="true"></span>
-              <h3>Updating your Pokémon…</h3>
-              <p>Saving your progress.</p>
+              <h3>{{ isQuiz ? 'Checking your quiz…' : 'Updating your Pokémon…' }}</h3>
+              <p>{{ isQuiz ? 'Grading your answers and saving your XP.' : 'Saving your progress.' }}</p>
             </div>
 
             <div v-else-if="result.error" class="feedback-panel error-panel">
@@ -190,6 +286,10 @@ onBeforeUnmount(() => dialog.value?.close())
             </div>
 
             <template v-else>
+              <div v-if="isQuiz" class="quiz-score">
+                <strong>{{ result.scorePercent }}%</strong>
+                <span>{{ result.correct }} / {{ result.total }} correct</span>
+              </div>
               <div class="reward-panel">
                 <span class="reward-label">
                   {{
@@ -219,6 +319,10 @@ onBeforeUnmount(() => dialog.value?.close())
                 </p>
               </div>
 
+              <p v-if="isQuiz && Number.isFinite(result.appliedDelta) && result.appliedDelta < result.delta" class="info-note">
+                {{ result.delta }} XP earned. {{ result.appliedDelta }} XP applied to your buddy because of its XP limit.
+              </p>
+
               <div class="buddy-summary">
                 <span class="buddy-icon" aria-hidden="true">✦</span>
                 <div class="buddy-copy">
@@ -227,21 +331,28 @@ onBeforeUnmount(() => dialog.value?.close())
                 </div>
                 <div class="buddy-total">
                   <strong>{{ result.xp ?? 0 }}</strong>
-                  <span>total XP</span>
+                  <span>Lv. {{ result.level ?? 1 }} · XP</span>
                 </div>
               </div>
 
+              <p v-if="result.evolved || result.devolved" class="evolution-note">
+                {{ animating ? (result.devolved ? 'Devolving…' : 'Evolving…')
+                  : `${result.pokemonName} ${result.devolved ? 'devolved' : 'evolved'}!` }}
+              </p>
+              <p v-if="evolutionError || result.progressionError" class="info-note" role="status">
+                {{ evolutionError || result.progressionError }}
+              </p>
               <p v-if="reachedMaxEvolution" class="evolution-note">
                 <span aria-hidden="true">✨</span>
                 {{ result.pokemonName || 'Your Pokémon' }} reached its final evolution!
-                A special gift is ready.
+                <template v-if="offerGift">A special gift is ready.</template>
               </p>
 
               <p v-if="result.delta === 0" class="info-note">
                 All four focus-timer rewards for today have been earned.
               </p>
               <p v-if="hasAdjustedDeduction" class="info-note">
-                XP stops at zero. Actual deduction:
+                XP stops at the base form’s zero XP. Actual deduction:
                 {{ Math.abs(result.appliedDelta) }} XP.
               </p>
               <p v-if="result.duplicate" class="info-note">
@@ -270,10 +381,10 @@ onBeforeUnmount(() => dialog.value?.close())
               v-else
               type="button"
               class="action-button"
-              :disabled="result.saving"
+              :disabled="busy"
               @click="continueFromXp"
             >
-              {{ result.saving ? 'Saving…' : reachedMaxEvolution ? 'Continue to gift' : 'Continue' }}
+              {{ result.saving ? 'Saving…' : animating ? 'Transforming…' : reachedMaxEvolution && offerGift ? 'Continue to gift' : 'Continue' }}
               <span v-if="!result.saving" aria-hidden="true">→</span>
             </button>
           </footer>
@@ -283,7 +394,7 @@ onBeforeUnmount(() => dialog.value?.close())
         <template v-else>
           <header class="xp-header gift-header">
             <div class="gift-emblem" aria-hidden="true">{{ step === 'revealed' ? '🎉' : '🎁' }}</div>
-            <p class="brand">STUDYDEX · TRAINER REWARDS</p>
+            <p class="brand">Trainer Rewards</p>
             <h2 id="gift-title">
               {{ step === 'revealed' ? 'Meet your new buddy!' : 'A special gift awaits!' }}
             </h2>
@@ -329,7 +440,7 @@ onBeforeUnmount(() => dialog.value?.close())
 
           <footer class="xp-footer">
             <template v-if="step === 'revealed'">
-              <button type="button" class="action-button" @click="closePrompt">
+              <button type="button" class="action-button" @click="completePrompt">
                 Continue <span aria-hidden="true">→</span>
               </button>
             </template>
@@ -365,19 +476,19 @@ onBeforeUnmount(() => dialog.value?.close())
 }
 
 .xp-prompt {
-  width: min(460px, calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
+  width: min(420px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
   margin: auto;
   padding: 0;
-  overflow: auto;
+  overflow: hidden;
   overflow-wrap: anywhere;
   border: 2px solid #e7dcc0;
-  border-radius: 28px;
+  border-radius: 20px;
   background: #fffdf6;
   color: #26365b;
   font-family: 'Fredoka', sans-serif;
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.35;
   text-align: center;
   box-shadow: 0 8px 0 rgb(47 40 24 / 16%), 0 24px 80px rgb(15 28 49 / 30%);
 }
@@ -389,17 +500,18 @@ onBeforeUnmount(() => dialog.value?.close())
 
 .xp-card {
   position: relative;
-  padding: 30px 28px 26px;
+  padding: 18px;
+  transform-origin: top left;
 }
 
 .xp-close {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 10px;
+  right: 10px;
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 1px solid #e6dfcc;
   border-radius: 50%;
@@ -427,17 +539,17 @@ onBeforeUnmount(() => dialog.value?.close())
   position: relative;
   display: grid;
   place-items: center;
-  width: 96px;
-  height: 96px;
-  margin: 0 auto 16px;
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 8px;
   border: 1px solid #f2dfa0;
   border-radius: 30px;
   background: #fff2bf;
 }
 
 .pokeball {
-  width: 78px;
-  height: 78px;
+  width: 40px;
+  height: 40px;
   filter: drop-shadow(0 4px 0 rgb(121 94 24 / 12%));
 }
 
@@ -451,26 +563,35 @@ onBeforeUnmount(() => dialog.value?.close())
 .sparkle-two { bottom: 8px; left: -12px; font-size: 20px; }
 
 .brand {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   color: #8b7c50;
-  font-size: 12px;
+  font-size: 11px;
+  font-family: var(--sd-font-body);
   font-weight: 600;
-  letter-spacing: 1.4px;
+  letter-spacing: 0;
 }
 
 .xp-header h2 {
   margin: 0;
   color: #172c50;
-  font-size: clamp(24px, 6vw, 30px);
+  font-size: clamp(19px, 4.5vw, 24px);
   font-weight: 650;
   line-height: 1.25;
   text-wrap: balance;
 }
 
-.xp-content { margin-top: 22px; }
+.xp-content { margin-top: 12px; }
+.quiz-score { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-bottom: 8px; color: #26365b; }
+.quiz-score strong { font-size: 24px; }
+.quiz-score span { font-size: 12px; }
+.evolution-preview { height: clamp(80px, 18dvh, 125px); margin-bottom: 8px; }
+.evolution-preview :deep(.buddy-stage) { min-height: 0; height: 100%; flex: 1 1 0; }
+.evolution-preview :deep(h3),
+.evolution-preview :deep(.buddy-message),
+.evolution-preview :deep(.buddy-feedback) { display: none; }
 
 .reward-panel {
-  padding: 20px 16px;
+  padding: 12px;
   border: 1px solid #dce9d5;
   border-radius: 20px;
   background: #f0f7e9;
@@ -479,23 +600,23 @@ onBeforeUnmount(() => dialog.value?.close())
 .reward-label {
   display: block;
   color: #65815b;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 1.4px;
+  letter-spacing: 1px;
 }
 
 .amount {
   display: block;
   margin: 4px 0;
   color: #40754b;
-  font-size: clamp(42px, 12vw, 60px);
+  font-size: clamp(32px, 8vw, 42px);
   font-weight: 650;
   line-height: 1.15;
   font-variant-numeric: tabular-nums;
 }
 
 .amount > span { font-size: 0.45em; font-weight: 500; }
-.reward-caption { margin: 8px 0 0; color: #687b60; font-size: 14px; }
+.reward-caption { margin: 4px 0 0; color: #687b60; font-size: 12px; }
 
 .is-loss .reward-panel { border-color: #efd9d3; background: #fff1eb; }
 .is-loss .amount { color: #b85b50; }
@@ -505,9 +626,9 @@ onBeforeUnmount(() => dialog.value?.close())
 .buddy-summary {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 14px;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
   border: 1px solid #eee7d7;
   border-radius: 16px;
   background: #fff;
@@ -518,46 +639,46 @@ onBeforeUnmount(() => dialog.value?.close())
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 12px;
   background: #fff3c7;
   color: #b38a28;
-  font-size: 25px;
+  font-size: 20px;
 }
 
 .buddy-copy { flex: 1; min-width: 0; }
 .buddy-label { display: block; margin-bottom: 2px; color: #8a91a0; font-size: 11px; font-weight: 500; letter-spacing: 0.8px; }
-.buddy-copy > strong { display: block; color: #26365b; font-size: 18px; font-weight: 600; line-height: 1.3; }
+.buddy-copy > strong { display: block; color: #26365b; font-size: 15px; font-weight: 600; line-height: 1.3; }
 .buddy-total { min-width: 0; max-width: 45%; text-align: right; }
-.buddy-total strong { display: block; color: #26365b; font-size: 22px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
-.buddy-total span { color: #87909c; font-size: 13px; }
+.buddy-total strong { display: block; color: #26365b; font-size: 18px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.buddy-total span { color: #87909c; font-size: 11px; }
 
 .evolution-note {
-  margin: 14px 0 0;
-  padding: 12px;
+  margin: 8px 0 0;
+  padding: 8px;
   border: 1px solid #efd37f;
   border-radius: 14px;
   background: #fff7d5;
   color: #78591e;
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 550;
 }
 
-.info-note { margin: 12px 4px 0; color: #7b8494; font-size: 14px; line-height: 1.5; }
+.info-note { margin: 8px 0 0; color: #7b8494; font-size: 12px; line-height: 1.35; }
 
 .feedback-panel {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 26px 18px;
+  padding: 16px 12px;
   border: 1px solid #e4e9ee;
   border-radius: 20px;
   background: #f3f7fa;
 }
 
-.feedback-panel h3 { margin: 14px 0 6px; font-size: 20px; font-weight: 600; }
-.feedback-panel p { margin: 0; color: #718096; font-size: 15px; }
+.feedback-panel h3 { margin: 10px 0 4px; font-size: 17px; font-weight: 600; }
+.feedback-panel p { margin: 0; color: #718096; font-size: 12px; }
 
 .saving-spinner {
   display: inline-block;
@@ -575,8 +696,8 @@ onBeforeUnmount(() => dialog.value?.close())
 .error-panel h3 { color: #a64f43; }
 .error-panel p { color: #956e63; }
 
-.xp-footer { margin-top: 22px; }
-.close-note { margin: 0 0 14px; color: #986b60; font-size: 14px; line-height: 1.5; }
+.xp-footer { margin-top: 12px; }
+.close-note { margin: 0 0 8px; color: #986b60; font-size: 12px; line-height: 1.35; }
 
 .action-button {
   display: flex;
@@ -584,14 +705,14 @@ onBeforeUnmount(() => dialog.value?.close())
   justify-content: center;
   gap: 12px;
   width: 100%;
-  min-height: 50px;
-  padding: 12px 20px;
+  min-height: 40px;
+  padding: 8px 16px;
   border: 1px solid #dfbd47;
   border-radius: 14px;
   background: #ffde59;
   color: #634f1f;
   font: inherit;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
   box-shadow: 0 4px 0 #d7b44b;
   cursor: pointer;
@@ -608,25 +729,25 @@ onBeforeUnmount(() => dialog.value?.close())
 .gift-emblem {
   display: grid;
   place-items: center;
-  width: 94px;
-  height: 94px;
-  margin: 0 auto 16px;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 8px;
   border: 1px solid #f2dfa0;
   border-radius: 30px;
   background: #fff2bf;
-  font-size: 50px;
+  font-size: 32px;
 }
 
-.gift-subtitle { margin: 10px 0 0; color: #68758e; font-size: 15px; }
+.gift-subtitle { margin: 6px 0 0; color: #68758e; font-size: 12px; }
 
 .gift-panel {
-  padding: 20px 16px;
+  padding: 12px;
   border: 1px solid #eee2bd;
   border-radius: 20px;
   background: #fff9e7;
 }
 
-.gift-large { display: block; margin-bottom: 10px; font-size: 72px; line-height: 1.1; }
+.gift-large { display: block; margin-bottom: 8px; font-size: 48px; line-height: 1.1; }
 .gift-panel > p { margin: 0; color: #635b4c; font-size: 14px; }
 
 .gift-xp {
@@ -648,15 +769,15 @@ onBeforeUnmount(() => dialog.value?.close())
 .gift-error { margin: 12px 0 0; color: #b42318; font-size: 13px; }
 
 .gift-reveal {
-  padding: 20px 16px;
+  padding: 12px;
   border: 1px solid #dce9d5;
   border-radius: 20px;
   background: #f0f7e9;
 }
 
-.gift-sprite { display: block; width: 112px; height: 112px; margin: 0 auto 10px; object-fit: contain; image-rendering: pixelated; }
+.gift-sprite { display: block; width: 88px; height: 88px; margin: 0 auto 10px; object-fit: contain; image-rendering: pixelated; }
 .gift-image-placeholder { display: grid; place-items: center; width: 90px; height: 90px; margin: 0 auto 10px; color: #b38a28; font-size: 48px; }
-.gift-reveal h3 { margin: 4px 0; color: #26365b; font-size: 24px; }
+.gift-reveal h3 { margin: 4px 0; color: #26365b; font-size: 20px; }
 .gift-reveal p { margin: 8px 0 0; color: #687b60; font-size: 14px; }
 
 .secondary-button { margin-top: 12px; border-color: #e6dfcc; background: #fff; color: #64718a; box-shadow: none; font-size: 15px; }
@@ -665,11 +786,22 @@ onBeforeUnmount(() => dialog.value?.close())
 @keyframes xp-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 480px) {
-  .xp-card { padding: 26px 18px 22px; }
-  .reward-emblem, .gift-emblem { width: 84px; height: 84px; border-radius: 26px; }
-  .pokeball { width: 70px; height: 70px; }
-  .brand { font-size: 11px; letter-spacing: 1px; }
-  .buddy-summary { gap: 10px; padding: 12px; }
+  .xp-card { padding: 16px; }
+  .reward-emblem, .gift-emblem { width: 44px; height: 44px; border-radius: 16px; }
+  .pokeball { width: 36px; height: 36px; }
+  .buddy-summary { gap: 8px; padding: 8px; }
+}
+
+@media (min-width: 481px) and (max-height: 500px) {
+  .reward-emblem, .gift-emblem { display: none; }
+  .xp-content:has(.evolution-preview) {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    column-gap: 16px;
+    align-items: center;
+  }
+  .xp-content:has(.evolution-preview) > * { grid-column: 2; }
+  .xp-content > .evolution-preview { grid-column: 1; grid-row: 1 / span 8; height: 140px; margin: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -5,6 +5,7 @@ import { getCurrentProfile } from '../services/profileService'
 import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import { enterRoom } from '../composables/useRoomTransition'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import '../assets/selection-pages.css'
 const route = useRoute()
 const router = useRouter()
@@ -39,9 +40,6 @@ const topic = computed(() => catalogue.value.topics.find(t =>
   String(t.id) === String(route.query.topic) &&
   (!route.query.subject || String(t.subject_id) === String(route.query.subject))
 ))
-const selectedSubject = computed(() =>
-  catalogue.value.subjects.find(subject => subject.id === topic.value?.subject_id) || null
-)
 const choices = [{ mode:'learn', name:'Learn', icon:'learn', theme:'purple', detail:'Explore the lesson with Professor Mewtwo' }, { mode:'flashcards', name:'Study', icon:'study', theme:'green', detail:'Practise flashcards and start your focus timer' }]
 const navigationError = ref('')
 async function selectMode(mode) {
@@ -57,8 +55,8 @@ async function selectMode(mode) {
 <template>
   <LoadingScreen :show="loading" message="Opening your Modes…" />
 <main v-if="!loading" class="sd-picker" :style="{ '--page-art': `url(${asset('subjects-white.png')})` }">
-  <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-topics', query:{ flow:'study', subject:topic?.subject_id || route.query.subject } }">← {{ selectedSubject?.name || 'Study' }} topics</RouterLink></nav>
-  <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · POKÉ LAB · {{ selectedSubject?.name || 'STUDY' }}</p><h1>How would you like to begin?</h1><p>{{ topic?.name || 'Choose your learning adventure' }}</p></header>
+  <nav class="sd-top-nav"><GoBackBtn /></nav>
+  <header class="sd-picker-heading"><p class="sd-eyebrow">Poké Lab</p><h1>How would you like to begin?</h1><p>{{ topic?.name || 'Choose your learning adventure' }}</p></header>
   <p v-if="navigationError" class="sd-page-state" role="alert">{{ navigationError }}</p>
     <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
     <div v-else-if="!profile?.school_level_id" class="sd-page-state"><p>Set your school level to see the right topics.</p><RouterLink to="/account">Account settings</RouterLink></div>

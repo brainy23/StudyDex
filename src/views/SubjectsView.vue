@@ -9,6 +9,7 @@ import {
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import '../assets/selection-pages.css'
 
 const route = useRoute()
@@ -130,14 +131,12 @@ function selectSubject(item) {
     }"
   >
     <nav class="sd-top-nav">
-      <RouterLink to="/home">
-        ‹ Back to town
-      </RouterLink>
+      <GoBackBtn />
     </nav>
 
     <header class="sd-picker-heading">
       <p class="sd-eyebrow">
-        STUDYDEX · {{ flow === 'quiz' ? 'POKÉ ARENA' : 'POKÉ LAB' }}
+        {{ flow === 'quiz' ? 'Poké Arena' : 'Poké Lab' }}
       </p>
       <h1>Choose your next adventure</h1>
       <p>What will you master today?</p>
@@ -205,7 +204,7 @@ function selectSubject(item) {
       No subjects are available for your school level yet.
     </p>
 
-    
+
   </main>
 </template>
 

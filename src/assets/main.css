@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Luckiest+Guy&family=Montserrat:ital,wght@0,100..900;1,100..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Raleway:ital,wght@0,100..900;1,100..900&family=Silkscreen:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Luckiest+Guy&family=Nunito:ital,wght@0,200..1000;1,200..1000&family=Silkscreen:wght@400;700&display=swap');
 
 * {
   box-sizing: border-box;
@@ -6,17 +6,19 @@
 
 body {
   margin: 0;
-  font-family: 'Fredoka';
+  font-family: var(--sd-font-body, 'Fredoka', ui-rounded, 'Arial Rounded MT Bold', system-ui, sans-serif);
   font-size: 1rem;
 }
 
 #app {
   min-height: 100vh;
+  min-height: 100dvh; /* follows the mobile browser bar; 100vh is the fallback */
 }
 
 :root {
-  /* Fluid base sizing: 14px at 320px, reaching 16px at Bootstrap lg. */
-  font-size: clamp(14px, calc(13.05px + 0.2976vw), 16px);
+  /* Root stays at the browser default (16px unless the user changed it), so 1rem never shrinks on phones. */
+  font-size: 100%;
+  /* Icon/SVG scale for the zoom rule below: 75% at 320px, full size at 992px and above. */
   --responsive-ui-scale: clamp(0.75, calc(0.631 + 0.0372vw), 1);
   /* Control sizing: 75% at 320px, full size at 992px and above. */
   --control-unit: clamp(0.75px, calc(0.631px + 0.0372vw), 1px);
@@ -38,9 +40,11 @@ body {
   height: var(--icon-md);
 }
 
+/* Shrink only images and SVGs below lg. Text containers whose class contains
+   "-icon" are no longer zoomed, so their labels keep their real font size. */
 @media (max-width: 991.98px) {
   #app svg,
-  #app [class*="-icon"] {
+  #app img[class*="-icon"] {
     zoom: var(--responsive-ui-scale);
   }
 }

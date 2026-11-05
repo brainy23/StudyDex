@@ -45,4 +45,8 @@ playwright-report/
 .env
 .env.*
 !.env.example
+supabase/.temp/
+supabase/.branches/
 
+# Local responsive screenshots
+screenshots/

@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useBuddySleep } from '../../composables/useBuddySleep'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -7,6 +8,8 @@ const props = defineProps({
   sleeping: { type: Boolean, default: false },
   routes: { type: Object, default: () => ({ town: '/home', study: '/study-decks', quiz: '/quiz', pokedex: '/collection' }) },
 })
+const { isSleeping } = useBuddySleep()
+const locked = computed(() => isSleeping.value || props.sleeping)
 const router = useRouter()
 const route = useRoute()
 const opened = ref(false)
@@ -22,7 +25,8 @@ const items = [
   { id: 'pokedex', label: 'PokeDex', x: 1, y: 0, color: '#d8bdff' },
 ]
 const selected = computed(() => props.current || items.find(item => props.routes[item.id] === route.path)?.id)
-const unavailable = item => selected.value === item.id || (props.sleeping && ['study', 'quiz'].includes(item.id))
+const sleepLocked = item => locked.value && ['study', 'quiz'].includes(item.id)
+const unavailable = item => selected.value === item.id || sleepLocked(item)
 function close(restoreFocus = false) {
   opened.value = false
   if (restoreFocus) toggle.value?.focus()
@@ -99,7 +103,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
         :style="{ '--x': item.x, '--y': item.y, '--tint': item.color, '--delay': `${index * 35}ms` }"
         :disabled="unavailable(item) || busy" :tabindex="opened ? 0 : -1"
         :aria-hidden="!opened" :aria-current="selected === item.id ? 'page' : undefined"
-        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz'].includes(item.id) ? ', buddy sleeping' : ''}`"
+        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleepLocked(item) ? ', buddy sleeping' : ''}`"
         @click="navigate(item)">
 
         <span v-if="item.id === 'town'" class="sd-pokeball" aria-hidden="true"></span>
@@ -150,6 +154,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 .bubble-nav *, .bubble-nav *::before, .bubble-nav *::after { box-sizing: border-box; }
 
+.bubble-nav button:disabled { cursor: not-allowed; filter: grayscale(1); opacity: .6; }
+
 .bubble-nav button {
   appearance: none; margin: 0; width: var(--size); height: var(--size); border-radius: 50%;
   position: absolute; left: 0; bottom: 0; padding: 6px 3px;
@@ -164,7 +170,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 
 .bubble-label {
-  font-size: 11px; font-weight: 800; line-height: 1.1; white-space: nowrap;
+  font-size: var(--text-sm); font-weight: 800; line-height: 1.1; white-space: nowrap;
   text-shadow: 0 2px 3px rgba(5, 20, 45, 0.6);
 }
 
@@ -241,16 +247,16 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   position: absolute; bottom: 92px; left: 0; width: 230px; margin: 0; padding: 12px;
   border: 2px solid rgba(207, 234, 255, 0.78); border-radius: 16px;
   background: linear-gradient(180deg, rgba(81, 125, 179, 0.9), rgba(22, 48, 87, 0.95));
-  color: white; font: 700 13px/1.4 ui-rounded, system-ui, sans-serif;
+  color: white; font: 700 var(--text-sm)/1.4 var(--sd-font-body);
 }
 
-@media (max-width: 480px), (max-height: 480px) {
+@media (max-width: 575.98px), (max-height: 500px) {
   .bubble-nav { --size: 60px; --radius: 168px; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .icon-tile { width: 28px; height: 27px; border-radius: 8px; }
   .icon-tile svg { width: 21px; height: 21px; }
   .sd-pokeball { width: 26px; height: 26px; }
   .sd-pokeball::after { width: 9px; height: 9px; }
-  .bubble-label { font-size: 10px; }
+  .bubble-label { font-size: var(--text-sm); }
 }
 @media (prefers-reduced-motion: reduce) {
   .bubble-nav .bubble-item, .bubble-nav button, .bubble-toggle svg { transition: none; }

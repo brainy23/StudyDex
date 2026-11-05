@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 
@@ -26,7 +27,7 @@ async function loadRewardsBuddy() {
         const savedSprite = resolveStudyImage(record.pokemon.sprite_url)
         let sprite = savedSprite
         let staticSprite = savedSprite
-        // PokemonBuddy displays animated_img; supply actual animated sprite frames.
+        // Supply animated and static sprites for the rewards buddy.
         const apiName = String(record.pokemon.name || '').toLowerCase()
             .replace(/[.'’]/g, '').replace(/\s+/g, '-')
         if (apiName) {
@@ -67,6 +68,8 @@ async function loadRewardsBuddy() {
 onMounted(loadRewardsBuddy)
 onUnmounted(() => { buddyActive = false; buddyRequest++; buddyController?.abort() })
 
+import { getSupabase } from '../lib/supabase'
+import { uuidFromDex, dexFromUuid, loadPokemonMap } from '../lib/pokemon'
 
 // stages: browse > idle > zoom > ready > tear > rise > flip > revealed
 const stage = ref('browse')
@@ -105,13 +108,49 @@ const tearVars = computed(() => {
 })
 
 // number of unopened packs the user owns (replace with a Supabase fetch)
-const packCount = ref(5)
+const packCount = ref(0)
 const packMessage = computed(() =>
     packCount.value > 0 ? "Let's rip some packs!" : 'Study to earn more packs!'
 )
+async function loadPacks() {
+    const supabase = getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { count, error } = await supabase
+        .from('user_packs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .is('opened_at', null)
+
+    if (error) { console.error('Could not load packs', error); return }
+    packCount.value = count ?? 0
+}
+
+onMounted(() => {
+    loadOwned()
+    loadPacks()
+})
 
 // Pokemon the user already owns (replace with a Supabase fetch)
-const owned = ref(new Set([4, 25]))
+const owned = ref(new Set())
+
+async function loadOwned() {
+  const supabase = getSupabase()
+  await loadPokemonMap()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data, error } = await supabase
+    .from('user_pokemon')
+    .select('pokemon_id')
+    .eq('user_id', user.id)
+
+  if (error) { console.error(error); return }
+  owned.value = new Set(data.map(r => dexFromUuid(r.pokemon_id)))
+}
+
+onMounted(loadOwned)
 
 // Only base forms can be pulled: every Pokemon in #1-151 that does not evolve
 // from another Pokemon in #1-151. Delete IDs to trim the pool.
@@ -383,13 +422,31 @@ function completeTear(ms) {
     dragging.value = false
     animateTear(1, ms, tear)
 }
+async function recordOpen(card) {
+    const supabase = getSupabase()
+    await loadPokemonMap()
+
+    const pokemonUuid = uuidFromDex(card.id)
+    if (!pokemonUuid) {
+        console.error('No row in the pokemon table for dex #' + card.id)
+        loadPacks()
+        return
+    }
+
+    const { error } = await supabase.rpc('open_pack', { p_pokemon_id: pokemonUuid })
+    if (error) {
+        console.error('Could not open pack', error)
+        loadPacks()   // resync the count with the database
+    }
+}
 
 function tear() {
     if (stage.value !== 'ready' || !card.value) return
     packCount.value--
+    recordOpen({ ...card.value })
     owned.value.add(card.value.id)
     // TODO: save the card to Supabase and mark one pack as opened.
-    // Duplicates (card.isNew === false) should give bonus XP.
+        // Duplicates (card.isNew === false) should give bonus XP.
     burst()
     makeConfetti()
     rip()
@@ -435,8 +492,8 @@ function backToPacks() {
 
 <template>
   <main :class="{ browsing: stage === 'browse' }" :style="theme" @pointermove="onMove">
-    <div>
-        <button onclick="history.back()" class="back">Back</button> 
+    <div v-if="stage === 'browse'" class="rewards-back-navigation">
+      <GoBackBtn />
     </div>
     <div v-if="stage !== 'browse'" class="backdrop" :class="{ on: flipped }"></div>
 
@@ -444,11 +501,14 @@ function backToPacks() {
       <aside class="buddy">
         <div class="bubble">{{ packMessage }}</div>
         <div class="buddy-circle">
-          <PokemonBuddy
+          <PokeSprite
             v-if="rewardsBuddy"
             :key="rewardsBuddy.ownedId"
             class="rewards-pokemon"
             :active-pokemon="rewardsBuddy"
+            :fallback-src="rewardsBuddy.static_img"
+            embedded
+            progress-position="hidden"
           />
           <p v-else-if="buddyLoading" role="status">Loading your Pokémon…</p>
           <div v-else-if="buddyError" role="alert">
@@ -642,7 +702,7 @@ function backToPacks() {
     .back{
         font-family: inherit;
         font-size: 24px;
-        padding: 8px 20px;
+        padding: 4px 20px;
         border: 3px solid rgb(200, 160, 0);
         border-radius: 12px;
         background-color: rgb(255, 215, 37);
@@ -669,6 +729,7 @@ function backToPacks() {
     .to-left.away{ translate: -150% 0; }
     .to-right.away{ translate: 150% 0; }
 
+    .rewards-back-navigation,
     .back{
         position: fixed;
         top: 24px;
@@ -1575,6 +1636,9 @@ function backToPacks() {
 .buddy-circle .rewards-pokemon :deep(.buddy-image-container) {
     display:grid; place-items:center; width:100%; height:100%;
     min-height:0; margin:0; padding:0; background:transparent;
+}
+.buddy-circle .rewards-pokemon :deep(.buddy-stage) {
+    width:100%; height:100%; min-height:0;
 }
 .buddy-circle .rewards-pokemon :deep(img.buddy-sprite) {
     width:90% !important; height:90% !important;

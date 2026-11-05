@@ -16,6 +16,7 @@ export function useExperiencePrompt(buddy, onSaved = () => {}) {
   const jobs = new Map()
   const prompt = computed(() => queue.value[0] || null)
 
+  let pending = Promise.resolve()
   async function reward(event) {
     if (!event?.id) throw Error('An activity ID is required.')
     const existing = jobs.get(event.id)
@@ -60,14 +61,34 @@ export function useExperiencePrompt(buddy, onSaved = () => {}) {
         inFlight = false
       }
     }
-    job.retry = save
-    await save()
+    // Serialize different activities so each plan starts from the last saved state.
+    function enqueueSave() {
+      const operation = pending.then(save)
+      pending = operation.catch(() => {})
+      return operation
+    }
+    job.retry = enqueueSave
+    await enqueueSave()
     return job
   }
 
   function dismiss() {
-    if (prompt.value && !prompt.value.saving && !prompt.value.error &&
+    if (prompt.value && !prompt.value.saving && !prompt.value.animating && !prompt.value.error &&
         !prompt.value.giftOpening && !prompt.value.giftLoading) queue.value.shift()
   }
-  return { prompt, reward, dismiss }
+  async function showSaved(result, title = 'Activity complete!') {
+    if (!result) return
+    const id = result.eventId || result.id
+    if (!id) throw new Error('A saved activity ID is required.')
+    const existing = jobs.get(id)
+    if (existing) return existing
+    const job = reactive({ ...result, id, title, saving: false, error: '' })
+    jobs.set(id, job)
+    queue.value.push(job)
+    try { await onSaved(result, job) }
+    catch (cause) { job.progressionError = cause?.message || 'Progress refresh failed.' }
+    return job
+  }
+  function clear() { queue.value = []; jobs.clear() }
+  return { prompt, reward, dismiss, showSaved, clear }
 }

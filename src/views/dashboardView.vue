@@ -2,13 +2,18 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
-import BackToHome from '../components/common/BackToHome.vue'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import GoBackBtn from '../components/common/goBackbtn.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
+import { useBuddySleep } from '../composables/useBuddySleep'
+import LearningLink from '../components/common/LearningLink.vue'
 import { getDashboardData } from '@/services/dashboardService'
+import QuizReviewModal from '@/components/common/QuizReviewModal.vue'
+import { getQuizReview } from '@/services/quizReviewService'
 import { studyErrorMessage, resolveStudyImage } from '@/services/studyService'
 import { getSupabase } from '@/lib/supabase'
 
+const { isSleeping } = useBuddySleep()
 const loading = ref(true)
 const errorMessage = ref('')
 const dashboard = ref(null)
@@ -17,6 +22,38 @@ const selectedPeriod = ref('7')
 const expandedTopic = ref(null)
 const showAllProgress = ref(false)
 const now = ref(new Date())
+const reviewAttemptId = ref(null)
+const quizReview = ref(null)
+const reviewLoading = ref(false)
+const reviewError = ref('')
+let reviewRequest = 0
+function closeQuizReview() {
+  reviewRequest++
+  reviewAttemptId.value = null
+  quizReview.value = null
+  reviewError.value = ''
+  reviewLoading.value = false
+}
+async function openQuizReview(attemptId) {
+  const userId = profile.value?.id
+  if (!userId) return
+  const request = ++reviewRequest
+  reviewAttemptId.value = attemptId
+  quizReview.value = null
+  reviewError.value = ''
+  reviewLoading.value = true
+  try {
+    const result = await getQuizReview(attemptId, userId)
+    if (disposed || request !== reviewRequest || profile.value?.id !== userId) return
+    quizReview.value = result
+  } catch (error) {
+    if (!disposed && request === reviewRequest && profile.value?.id === userId) {
+      reviewError.value = studyErrorMessage(error, 'Your quiz review')
+    }
+  } finally {
+    if (!disposed && request === reviewRequest) reviewLoading.value = false
+  }
+}
 let requestId = 0
 let disposed = false
 let subscription
@@ -24,6 +61,7 @@ let clockInterval
 
 // No user ID comes from the UI. The service resolves the authenticated profile.
 async function loadDashboard() {
+  closeQuizReview()
   const request = ++requestId
   loading.value = true
   errorMessage.value = ''
@@ -47,10 +85,16 @@ async function loadDashboard() {
   }
 }
 const readable = section => ['ready', 'empty'].includes(section?.status)
+const capitalizedName = name => {
+  const text = String(name ?? '').trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
 const profile = computed(() => dashboard.value?.profile)
 const catalogue = computed(() => dashboard.value?.catalogue)
-const subjects = computed(() => catalogue.value?.data?.subjects ?? [])
-const topics = computed(() => catalogue.value?.data?.topics ?? [])
+const subjects = computed(() => (catalogue.value?.data?.subjects ?? [])
+  .map(subject => ({ ...subject, name: capitalizedName(subject.name) })))
+const topics = computed(() => (catalogue.value?.data?.topics ?? [])
+  .map(topic => ({ ...topic, name: capitalizedName(topic.name) })))
 const subject = computed(() => subjects.value.find(item => item.id === selectedSubjectId.value))
 const quizSection = computed(() => dashboard.value?.quizAttempts)
 const sessionSection = computed(() => dashboard.value?.studySessions)
@@ -60,7 +104,11 @@ const sessionsAvailable = computed(() => readable(sessionSection.value))
 const blocksAvailable = computed(() => readable(blockSection.value) && sessionsAvailable.value)
 const attempts = computed(() => quizAvailable.value ? quizSection.value.data ?? [] : [])
 const sessions = computed(() => sessionsAvailable.value ? sessionSection.value.data ?? [] : [])
-const completedSessions = computed(() => sessions.value.filter(row => row.status === 'completed' && row.completed_at))
+const completedSessions = computed(() => sessions.value.flatMap(row => {
+  if (row.status === 'completed' && row.completed_at) return [row]
+  const dates = blocks.value.filter(block => block.session_id === row.id && block.focus_completed_at).map(block => block.focus_completed_at).sort()
+  return dates.length ? [{ ...row, completed_at: dates.at(-1) }] : []
+}))
 const blocks = computed(() => blocksAvailable.value ? blockSection.value.data ?? [] : [])
 const buddySection = computed(() => dashboard.value?.buddy)
 const buddy = computed(() => buddySection.value?.data)
@@ -157,23 +205,20 @@ const nextChallenge = computed(() => {
   const priority = topic => topic.score === null ? 1 : topic.score < 80 ? 0 : 2
   return [...topicProgress.value].sort((a, b) => priority(a) - priority(b) || (a.score ?? 0) - (b.score ?? 0))[0]
 })
+const studyLink = topic => ({ name: 'study-mode', query: { subject: topic.subject_id, topic: topic.id } })
 const quizLink = topic => ({ name: 'quiz', query: { subject: topic.subject_id, topic: topic.id } })
 const quizXP = computed(() => attempts.value.reduce((sum, row) => sum + row.xp_change, 0))
-const studyXP = computed(() => blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
+const studyXP = computed(() => sessions.value.reduce((sum, row) => sum + (row.xp_change || 0), 0) + blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
 const average = computed(() => regularAttempts.value.length ? Math.round(regularAttempts.value.reduce((sum, row) => sum + percentage(row), 0) / regularAttempts.value.length) : null)
-const streak = computed(() => {
-  const days = new Set(completedSessions.value.map(row => dayKey(row.completed_at)))
-  let day = dayKey(now.value)
-  if (!days.has(day)) day = shiftDay(day, -1)
-  let count = 0
-  while (days.has(day)) { count++; day = shiftDay(day, -1) }
-  return count
-})
+// A study session in this card means one completed focus block, regardless
+// of XP earned or whether its enclosing study session has been finished.
+const todaysStudyBlocks = computed(() => blocks.value.filter(block =>
+  block.focus_completed_at && dayKey(block.focus_completed_at) === dayKey(now.value),
+).length)
 const stats = computed(() => [
   { title: 'Total earned XP', value: quizAvailable.value && blocksAvailable.value ? quizXP.value + studyXP.value : '—', description: 'Quiz XP and recorded study XP', color: 'yellow', icon: '⭐' },
-  { title: 'Study sessions', value: sessionsAvailable.value ? completedSessions.value.length : '—', description: 'Completed sessions', color: 'blue', icon: '📚' },
+  { title: 'Study sessions', value: blocksAvailable.value ? todaysStudyBlocks.value : '—', description: 'Focus blocks completed today · Singapore time', color: 'blue', icon: '📚' },
   { title: 'Quiz average', value: quizAvailable.value && average.value !== null ? `${average.value}%` : '—', description: quizAvailable.value && !regularAttempts.value.length ? 'No quizzes completed yet' : 'Regular quizzes only', color: 'pink', icon: '🎯' },
-  { title: 'Study streak', value: sessionsAvailable.value ? streak.value : '—', description: 'Consecutive study days · SGT', color: 'purple', icon: '🔥' },
 ])
 const notices = computed(() => [quizSection.value, sessionSection.value, blockSection.value].filter(section => section && !readable(section)))
 const chartDays = computed(() => Array.from({ length: Number(selectedPeriod.value) }, (_, index) => shiftDay(dayKey(now.value), index - Number(selectedPeriod.value) + 1)))
@@ -195,19 +240,22 @@ const chartOptions = computed(() => ({
 const history = computed(() => {
   const topicName = id => topics.value.find(topic => topic.id === id)?.name ?? 'Topic unavailable'
   return [
-    ...attempts.value.map(row => ({ id: `quiz-${row.id}`, title: topicName(row.topic_id), type: row.attempt_type === 'boss_battle' ? 'Boss battle' : 'Quiz', badge: 'quiz', score: percentage(row), xp: row.xp_change, date: row.completed_at })),
-    ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
+    ...attempts.value.map(row => ({ id: `quiz-${row.id}`, attemptId: row.attempt_type === 'quiz' ? row.id : null, title: topicName(row.topic_id), type: row.attempt_type === 'boss_battle' ? 'Boss battle' : 'Quiz', badge: 'quiz', score: percentage(row), xp: row.xp_change, date: row.completed_at })),
+    ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: row.mode === 'learn' ? 'Learn' : 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? (row.xp_change || 0) + blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))
 })
 const visibleHistory = computed(() => showAllProgress.value ? history.value : history.value.slice(0, 5))
 const signed = value => value === null ? '—' : `${value >= 0 ? '+' : ''}${value}`
 onMounted(() => {
   loadDashboard()
+  window.addEventListener('focus', loadDashboard)
+  window.addEventListener('studydex:activity', loadDashboard)
   clockInterval = setInterval(() => { now.value = new Date() }, 60000)
   try {
     // Defer service calls outside the Supabase auth callback.
     subscription = getSupabase().auth.onAuthStateChange(event => {
       if (['SIGNED_OUT', 'SIGNED_IN', 'USER_UPDATED'].includes(event)) {
+        closeQuizReview()
         requestId++
         dashboard.value = null
         loading.value = true
@@ -218,13 +266,18 @@ onMounted(() => {
 })
 onUnmounted(() => {
   disposed = true
+  closeQuizReview()
   requestId++
   subscription?.unsubscribe()
   clearInterval(clockInterval)
+  window.removeEventListener('focus', loadDashboard)
+  window.removeEventListener('studydex:activity', loadDashboard)
 })
 </script>
 
 <template>
+  <QuizReviewModal v-if="reviewAttemptId" :review="quizReview" :loading="reviewLoading" :error="reviewError"
+    @close="closeQuizReview" @retry="openQuizReview(reviewAttemptId)" />
   <main class="trainer-dashboard student-dashboard">
     <div class="dashboard-shell">
       <div v-if="loading" class="dashboard-panel" role="status" aria-live="polite">Loading your dashboard…</div>
@@ -234,9 +287,10 @@ onUnmounted(() => {
         <RouterLink class="button button-secondary" to="/login">Log in</RouterLink>
       </div>
       <template v-else-if="dashboard">
+        <p v-if="isSleeping" class="section-notice" role="status">Your Pokémon is sleeping. New quizzes and study topics unlock at 7am Singapore time. You can still review your progress.</p>
         <header class="dashboard-header">
           <div class="header-main welcome-copy">
-            <BackToHome variant="custom" class="back-button" />
+            <div class="dashboard-back-navigation"><GoBackBtn /></div>
             <span class="eyebrow">YOUR TRAINER JOURNEY</span>
             <div class="welcome-title-row"><h1>Hello, {{ profile.display_name }}!</h1><span v-if="profile.school_level" class="level-badge">{{ profile.school_level.name }}</span></div>
             <p class="welcome-message">Small steps today. Bigger wins tomorrow.</p>
@@ -244,7 +298,8 @@ onUnmounted(() => {
           </div>
           <div class="dashboard-buddy">
             <h3 class="town-buddy-heading">Your Town Buddy Progress</h3>
-            <PokemonBuddy v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy" :active-pokemon="activeBuddy" />
+            <PokeSprite v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy"
+              :active-pokemon="activeBuddy" :fallback-src="activeBuddy.static_img" embedded progress-position="right" />
             <p v-else :role="buddySection?.status === 'error' ? 'alert' : 'status'">{{ buddySection?.message }}</p>
           </div>
         </header>
@@ -260,7 +315,7 @@ onUnmounted(() => {
         </section>
         <div class="main-grid">
           <section class="dashboard-panel topic-panel" aria-labelledby="subject-progress-title">
-            <div class="panel-heading"><div class="topic-heading-main"><div class="topic-heading-copy"><span class="eyebrow">EXPLORE · PRACTISE · COMPLETE</span><h2 id="subject-progress-title">{{ subject?.name || 'Subject' }} Topic Progress</h2><p>Reach 80% in your latest quiz to complete a topic.</p></div><div v-if="readable(catalogue) && subjects.length" class="subject-picker">
+            <div class="panel-heading"><div class="topic-heading-main"><div class="topic-heading-copy"><span class="eyebrow">EXPLORE · PRACTISE · COMPLETE</span><h2 id="subject-progress-title"><span class="sd-subject-name">{{ subject?.name || 'Subject' }}</span> Topic Progress</h2><p>Reach 80% in your latest quiz to complete a topic.</p></div><div v-if="readable(catalogue) && subjects.length" class="subject-picker">
               <label for="progress-subject">Subject</label>
               <select id="progress-subject" v-model="selectedSubjectId"><option v-for="option in subjects" :key="option.id" :value="option.id">{{ option.name }}</option></select>
             </div></div></div>
@@ -268,12 +323,13 @@ onUnmounted(() => {
             <template v-else>
               <div v-if="quizAvailable && topicProgress.length" class="completion-summary"><div class="completion-heading"><div><strong>{{ completedTopics }}</strong><span>of {{ topicProgress.length }} topics completed</span></div><span>{{ completionPercent }}%</span></div><div class="completion-track" role="progressbar" aria-label="Topics completed" :aria-valuenow="completedTopics" :aria-valuemax="topicProgress.length" aria-valuemin="0"><div class="completion-fill" :style="{ width: `${completionPercent}%` }"></div></div></div>
               <p v-else-if="!quizAvailable" class="section-notice">{{ quizSection?.message }}</p>
-              <aside v-if="nextChallenge" class="next-challenge"><span class="challenge-icon" aria-hidden="true">💡</span><div class="challenge-copy"><span class="eyebrow">YOUR NEXT CHALLENGE</span><h3>{{ nextChallenge.name }}</h3><p>{{ nextChallenge.score === null ? 'Give this topic your first try!' : `Your latest score is ${nextChallenge.score}%. Keep practising!` }}</p></div><RouterLink :to="quizLink(nextChallenge)" class="button button-primary">Open Quiz Arena →</RouterLink></aside>
-              <p v-if="!topicProgress.length" class="simple-empty">No topics are available{{ subject ? ` for ${subject.name}` : '' }} at your school level.</p>
+              <aside v-if="nextChallenge" class="next-challenge"><span class="challenge-icon" aria-hidden="true">💡</span><div class="challenge-copy"><span class="eyebrow">YOUR NEXT CHALLENGE</span><h3>{{ nextChallenge.name }}</h3><p>{{ nextChallenge.score === null ? 'Give this topic your first try!' : `Your latest score is ${nextChallenge.score}%. Keep practising!` }}</p></div><LearningLink :to="quizLink(nextChallenge)" class="button button-primary">Open Quiz Arena →</LearningLink></aside>
+              <p v-if="!topicProgress.length" class="simple-empty">No topics are available<template v-if="subject"> for <span class="sd-subject-name">{{ subject.name }}</span></template> at your school level.</p>
               <div class="topic-list">
                 <article v-for="topic in topicProgress" :key="topic.id" class="topic-item" :class="`topic-${topic.color}`">
                   <button class="topic-toggle" :aria-expanded="expandedTopic === topic.id" :aria-controls="`topic-${topic.id}`" @click="expandedTopic = expandedTopic === topic.id ? null : topic.id"><span class="topic-icon" aria-hidden="true">📖</span><span class="topic-name">{{ topic.name }}</span><span class="topic-status">{{ topic.status }}</span><span class="topic-score">{{ topic.score === null ? '—' : `${topic.score}%` }}</span><span class="topic-chevron">{{ expandedTopic === topic.id ? '−' : '+' }}</span></button>
-                  <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><RouterLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</RouterLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span></li></ul></div>
+                  <LearningLink :to="studyLink(topic)" class="button button-secondary topic-study-link" :aria-label="`Go to topic: ${topic.name}`">Go to topic →</LearningLink>
+                  <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><LearningLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</LearningLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span><button type="button" class="review-link" :aria-label="`Review ${topic.name} quiz completed ${formatDate(attempt.completed_at)}`" @click="openQuizReview(attempt.id)">Review answers</button></li></ul></div>
                 </article>
               </div>
             </template>
@@ -282,13 +338,13 @@ onUnmounted(() => {
             <div class="panel-heading"><div><span class="eyebrow">BUILD YOUR STUDY HABIT</span><h2 id="activity-title">🎯 Learning Activity</h2><p>Recorded focus and break time.</p></div><select v-model="selectedPeriod" class="period-select" aria-label="Activity date range"><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></div>
             <p v-if="!blocksAvailable" role="status">{{ !sessionsAvailable ? sessionSection?.message : blockSection?.message }}</p>
             <template v-else-if="minutesInPeriod > 0"><div class="activity-total"><strong>{{ minutesInPeriod }}</strong><span>minutes in the last {{ selectedPeriod }} days</span></div><div class="activity-chart"><VueApexCharts type="area" height="260" width="100%" :options="chartOptions" :series="chartSeries" /></div><p class="chart-note">Completed focus and break intervals · Singapore time.</p></template>
-            <div v-else class="activity-empty"><span class="empty-icon">🌱</span><h3>Ready for your next study session?</h3><p>No recorded completed intervals in this date range.</p><RouterLink to="/study-decks" class="button button-primary">Explore study decks →</RouterLink></div>
+            <div v-else class="activity-empty"><span class="empty-icon">🌱</span><h3>Ready for your next study session?</h3><p>No recorded completed intervals in this date range.</p><LearningLink to="/study-decks" class="button button-primary">Explore study decks →</LearningLink></div>
           </section>
         </div>
         <section class="dashboard-panel history-panel" aria-labelledby="history-title">
           <div class="panel-heading"><div><span class="eyebrow">EVERY STEP COUNTS</span><h2 id="history-title">📋 Recent Progress</h2><p>Your completed study sessions, quizzes and boss battles.</p></div><button v-if="history.length > 5" class="button button-secondary" :aria-expanded="showAllProgress" @click="showAllProgress = !showAllProgress">{{ showAllProgress ? 'Show recent 5' : 'View all activity' }}</button></div>
           <p v-if="!quizAvailable || !sessionsAvailable" class="section-notice">Some activity is unavailable. Only successfully loaded records are shown.</p>
-          <div v-if="visibleHistory.length" class="history-table-wrap" tabindex="0" aria-label="Recent activity table, scrollable"><table class="progress-table"><thead><tr><th scope="col">Topic / Activity</th><th scope="col">Type</th><th scope="col">Score</th><th scope="col">XP</th><th scope="col">Completed · SGT</th></tr></thead><tbody><tr v-for="item in visibleHistory" :key="item.id"><td>{{ item.title }}</td><td><span class="type-badge" :class="item.badge">{{ item.type }}</span></td><td>{{ item.score === null ? '—' : `${item.score}%` }}</td><td class="history-xp" :class="{ 'xp-negative': item.xp < 0 }">{{ signed(item.xp) }}</td><td class="history-date">{{ formatDate(item.date) }}</td></tr></tbody></table></div>
+          <div v-if="visibleHistory.length" class="history-table-wrap" tabindex="0" aria-label="Recent activity table, scrollable"><table class="progress-table"><thead><tr><th scope="col">Topic / Activity</th><th scope="col">Type</th><th scope="col">Score</th><th scope="col">XP</th><th scope="col">Completed · SGT</th></tr></thead><tbody><tr v-for="item in visibleHistory" :key="item.id"><td><button v-if="item.attemptId" type="button" class="review-link" :aria-label="`Review ${item.title} quiz completed ${formatDate(item.date)}`" @click="openQuizReview(item.attemptId)">{{ item.title }} · Review answers</button><template v-else>{{ item.title }}</template></td><td><span class="type-badge" :class="item.badge">{{ item.type }}</span></td><td>{{ item.score === null ? '—' : `${item.score}%` }}</td><td class="history-xp" :class="{ 'xp-negative': item.xp < 0 }">{{ signed(item.xp) }}</td><td class="history-date">{{ formatDate(item.date) }}</td></tr></tbody></table></div>
           <p v-else-if="quizAvailable && sessionsAvailable" class="simple-empty">No completed activity yet. Your first achievement will appear here.</p>
         </section>
       </template>
@@ -297,6 +353,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+button:disabled { cursor: not-allowed; opacity: .55; filter: grayscale(1); }
+.review-link { border: 0; background: none; padding: 4px 0; color: #285d94; font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
 /* BASE */
 .trainer-dashboard,
 .trainer-dashboard * {
@@ -371,19 +429,8 @@ summary:focus-visible,
   min-width: 0;
 }
 
-.back-button {
-  position: static;
-  display: inline-flex;
-  align-items: center;
-  min-height: 40px;
+.dashboard-back-navigation {
   margin-bottom: 14px;
-  padding: 8px 12px;
-  border: 1px solid #e4cf87;
-  border-radius: 8px;
-  background: #fff4c9;
-  color: #715823;
-  font-size: 16px;
-  text-decoration: none;
 }
 
 .welcome-title-row {
@@ -475,7 +522,7 @@ summary:focus-visible,
 /* STATISTICS */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 22px;
 }
@@ -742,6 +789,12 @@ summary:focus-visible,
   background: #fffbf1;
 }
 
+.topic-item > .topic-study-link {
+  display: flex;
+  width: fit-content;
+  margin: 0 12px 12px auto;
+}
+
 .topic-toggle {
   display: grid;
   grid-template-columns: 34px minmax(0, 1fr) auto 52px 18px;
@@ -850,7 +903,7 @@ summary:focus-visible,
 
 .attempt-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 14px;
   padding: 12px 0;
@@ -1193,89 +1246,27 @@ summary:focus-visible,
   text-align: center;
 }
 
-.dashboard-buddy :deep(.pokemon-buddy) {
-  display: grid;
-  grid-template-columns: 90px minmax(0, 1fr);
-  align-items: center;
-  gap: 4px 12px;
+.dashboard-pokemon-buddy {
+  height: auto;
   padding: 0;
-  text-align: left;
-}
-
-.dashboard-buddy :deep(.pokemon-buddy > h2) {
-  display: none;
-}
-
-.dashboard-buddy :deep(.buddy-image-container) {
-  grid-column: 1;
-  grid-row: 1 / 4;
-  width: 90px;
-  height: 110px;
-}
-
-.dashboard-buddy :deep(.buddy-sprite) {
-  width: auto;
-  height: 75px;
-  max-width: 100%;
-}
-
-.dashboard-buddy :deep(.pokemon-buddy > h3),
-.dashboard-buddy :deep(.buddy-details > h3) {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: end;
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.3;
-}
-
-.dashboard-buddy :deep(.buddy-level) {
-  grid-column: 2;
-  grid-row: 2;
-  margin: 0;
-  font-size: 16px;
-}
-
-/* Allow XP text to wrap without overlapping. */
-.dashboard-buddy :deep(.buddy-xp) {
-  grid-column: 2;
-  grid-row: 3;
-  align-self: start;
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  width: 100%;
-  max-width: none;
-  margin-top: 4px;
 }
 
-.dashboard-buddy :deep(.buddy-xp > p) {
-  margin: 0;
-  color: #647394;
-  font-size: 14px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.dashboard-pokemon-buddy :deep(.buddy-stage) {
+  height: 110px;
+  min-height: 0;
+  flex: none;
 }
 
-.dashboard-buddy :deep(.buddy-xp .xp-track) {
-  width: 100%;
-  height: 9px;
-  margin: 0;
-  border-radius: 999px;
-  background: #e5e9df;
+.dashboard-pokemon-buddy :deep(.buddy-sprite) {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
 }
 
-.dashboard-buddy :deep(.buddy-xp .xp-fill) {
-  background: #78c98b;
-  border-radius: inherit;
-}
-
-.dashboard-buddy :deep(.buddy-message),
-.dashboard-buddy :deep(.buddy-error),
-.dashboard-buddy :deep(.buddy-status) {
-  grid-column: 1 / -1;
-  font-size: 14px;
-  text-align: center;
+.dashboard-pokemon-buddy :deep(h3) {
+  display: none;
 }
 
 /* RESPONSIVE LAYOUT */
@@ -1410,6 +1401,11 @@ summary:focus-visible,
     gap: 5px 10px;
   }
 
+  .attempt-row .review-link {
+    grid-column: 1 / -1;
+    grid-row: 3;
+  }
+
   .attempt-date {
     grid-column: 1;
     grid-row: 2;
@@ -1449,7 +1445,7 @@ summary:focus-visible,
 .topic-heading-copy { flex: 1 1 250px; min-width: 0; }
 .subject-picker { display: flex; flex: 0 1 250px; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; }
 .subject-picker label { font-size: 16px; font-weight: 600; }
-.subject-picker select { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #dde3ec; border-radius: 10px; background: white; color: #172c50; font: inherit; }
+.subject-picker select { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #dde3ec; border-radius: 10px; background: white; color: #172c50; font: inherit; text-transform: capitalize; }
 .data-notices, .section-notice { padding: 14px 16px; border-radius: 12px; background: #fff8df; color: #715823; margin-bottom: 18px; }
 .data-notices p { margin: 0 0 6px; }
 

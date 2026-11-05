@@ -1,7 +1,7 @@
 import { getCurrentProfile } from './profileService'
 import { getSupabase } from '../lib/supabase'
 import {
-  getStudyCatalogue,
+  getStudentStudyCatalogue,
   getSelectedStudyBuddy,
   studyErrorMessage,
 } from './studyService'
@@ -55,7 +55,7 @@ export async function getDashboardStudySessions(userId) {
   try {
     const { data, error } = await getSupabase()
       .from('study_sessions')
-      .select('id, user_id, topic_id, status, completed_at')
+      .select('id, user_id, topic_id, mode, status, xp_change, completed_at')
       .eq('user_id', userId)
       .order('completed_at', { ascending: false, nullsFirst: false })
     if (error) throw error
@@ -90,7 +90,7 @@ async function loadCatalogue(profile) {
   }
 
   try {
-    const catalogue = await getStudyCatalogue(profile.school_level_id)
+    const catalogue = await getStudentStudyCatalogue(profile)
 
     if (!catalogue.topics.length) {
       return empty(

@@ -1,6 +1,7 @@
 <script setup>
 import axios from 'axios'
 import { computed, onBeforeUnmount, ref } from 'vue'
+import playSound from '../../../scripts/soundEffect'
 
 
 const props = defineProps({
@@ -309,9 +310,16 @@ async function playAnimation(transition) {
     ? `${previous.name} is devolving…`
     : `${previous.name} is evolving…`
 
+    if (direction >= 0){
+      playSound('evolving')
+    } else {
+      playSound('devolving')
+    }
+
   if (!prefersReducedMotion()) {
     phase.value = 'charging'
     await wait(900)
+    if (direction >= 0) playSound('HURRAY')
     if (disposed) return
 
     phase.value = 'swapping'

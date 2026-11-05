@@ -6,12 +6,14 @@ const props = defineProps({
   graded: { type: Boolean, default: false },
   finished: { type: Boolean, default: false },
   disabled: { type: Boolean, default: false },
+  allowAnswerChange: { type: Boolean, default: false },
   questionId: { type: String, default: 'arena-question' },
 })
 const emit = defineEmits(['select'])
 
 function selectOption(id) {
-  if (props.disabled || props.finished || props.selectedId !== null) return
+  if (props.disabled || props.finished ||
+      (props.selectedId !== null && (!props.allowAnswerChange || props.graded))) return
   emit('select', id)
 }
 </script>
@@ -38,7 +40,7 @@ function selectOption(id) {
           },
         ]"
         :aria-pressed="selectedId === option.id"
-        :disabled="disabled || selectedId !== null"
+        :disabled="disabled || (selectedId !== null && (!allowAnswerChange || graded))"
         @click="selectOption(option.id)"
       >
         <b class="choice-letter">{{ String.fromCharCode(65 + index) }}</b>
@@ -170,4 +172,16 @@ function selectOption(id) {
   .battle-dialogue :deep(p) { font-size: 18px; }
   .battle-dialogue :deep(.battle-explanation) { font-size: 14px; }
 }
+
+/* =====================================================
+   RESPONSIVE FIXES (375px iPhone 6 → 1200px Bootstrap xl)
+   Placed last so they override the rules above.
+   No visible text below 14px; every button at least 44px tall.
+   ===================================================== */
+.battle-dialogue :deep(.dialogue-kicker) { font-size: var(--text-sm); letter-spacing: .06em; }
+.battle-dialogue :deep(small) { font-size: var(--text-sm); }
+.battle-dialogue :deep(.battle-explanation) { font-size: clamp(var(--text-sm), 1cqw, 17px); }
+.choice-letter { flex-basis: 28px; height: 28px; font-size: var(--text-sm); }
+.battle-dock :deep(.battle-next),
+.battle-end-actions :deep(button) { min-height: var(--tap-min); font-size: var(--text-sm); }
 </style>

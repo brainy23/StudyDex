@@ -147,8 +147,7 @@ async function open(path) {
         stubs: {
           ClockWeather: true,
           TownBackground: true,
-          PokemonBuddy: true,
-          Pokemon_Backwards: true,
+          PokeSprite: true,
         },
       },
     },

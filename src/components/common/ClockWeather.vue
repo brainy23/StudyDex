@@ -11,6 +11,12 @@ const {
   savedLocation,
   locationBusy,
   locationNotice,
+  deviceLocationPreference,
+  preferenceLoaded,
+  preferenceBusy,
+  preferenceError,
+  loadLocationPreference,
+  saveLocationPreference,
   beginLocationRequest,
   isCurrentLocationRequest
 } = useWeatherLocation()
@@ -20,8 +26,7 @@ const {
 // =====================================================
 
 const props = defineProps({
-  // true: offer the location chooser on the first visit.
-  // false: use Singapore without asking on the first visit.
+  // Offer the chooser only when the profile's device_loc is null.
   useDeviceLocation: {
     type: Boolean,
     default: true
@@ -70,7 +75,7 @@ const locationLabel = computed(() => {
   }
 
   if (savedLocation.value) {
-    return 'Singapore (default)'
+    return 'Singapore'
   }
 
   return 'Choose location'
@@ -171,22 +176,32 @@ function closeLocationDialog() {
 }
 
 async function chooseDevice() {
-  await useDeviceLoc()
-  closeLocationDialog()
+  if (preferenceBusy.value || locationBusy.value) return
+  try {
+    if (!await saveLocationPreference(true)) return
+    closeLocationDialog()
+    await useDeviceLoc()
+  } catch { /* The modal shows the preference save error and allows retry. */ }
 }
 
-function chooseSingapore() {
-  useSingaporeLocation()
-  closeLocationDialog()
+async function chooseSingapore() {
+  if (preferenceBusy.value) return
+  try {
+    if (!await saveLocationPreference(false)) return
+    useSingaporeLocation()
+    closeLocationDialog()
+  } catch { /* Keep the modal open until the choice can be saved. */ }
 }
 
 function cancelLocationDialog(event) {
   event.preventDefault()
+  if (preferenceBusy.value) return
 
   // Escape means Not Now on the first visit.
   // Later it keeps the current choice.
-  if (!savedLocation.value) {
-    useSingaporeLocation()
+  if (!preferenceLoaded.value || deviceLocationPreference.value === null) {
+    void chooseSingapore()
+    return
   }
 
   closeLocationDialog()
@@ -322,8 +337,9 @@ function getDistance(lat1, lon1, lat2, lon2) {
 // =====================================================
 
 let stopLocationWatcher
+let active = true
 
-onMounted(() => {
+onMounted(async () => {
   stopLocationWatcher = watch(
     savedLocation,
     (location, previous, onCleanup) => {
@@ -588,13 +604,31 @@ onMounted(() => {
   // INITIAL LOCATION CHOICE
   // -----------------------------------------------
 
-  if (!savedLocation.value && !locationBusy.value) {
-    if (props.useDeviceLocation) {
+  if (!props.useDeviceLocation) {
+    if (!savedLocation.value && !locationBusy.value) useSingaporeLocation()
+    return
+  }
+  try {
+    await loadLocationPreference()
+    if (!active || !preferenceLoaded.value) return
+    if (deviceLocationPreference.value === null) {
       openLocationDialog()
-    } else {
-      useSingaporeLocation()
+    } else if (deviceLocationPreference.value === false) {
+      if (savedLocation.value?.source !== 'default') useSingaporeLocation()
+    } else if (!savedLocation.value && !locationBusy.value) {
+      await useDeviceLoc()
+    }
+  } catch {
+    if (active) {
+      // An unread preference must not be mistaken for an unanswered preference.
+      // Keep using default weather without automatically asking again.
+      useSingaporeLocation(preferenceError.value)
     }
   }
+})
+
+watch(deviceLocationPreference, preference => {
+  if (preference !== null) closeLocationDialog()
 })
 
 // =====================================================
@@ -602,6 +636,7 @@ onMounted(() => {
 // =====================================================
 
 onUnmounted(() => {
+  active = false
   stopLocationWatcher?.()
   closeLocationDialog()
 })
@@ -630,6 +665,7 @@ onUnmounted(() => {
         class="location-change-button"
         title="Change location"
         aria-label="Change weather location"
+        :disabled="preferenceBusy"
         aria-haspopup="dialog"
         @click.stop="openLocationDialog"
       >
@@ -660,7 +696,7 @@ onUnmounted(() => {
     <dialog ref="locationDialog" class="location-dialog" aria-label="Choose weather location"
       @cancel="cancelLocationDialog" @close="restoreLocationFocus">
       <div class="modal-content p-4">
-        <div class="location-header">STUDYDEX / TOWN SETUP</div>
+        <div class="location-header">Town setup</div>
         <div class="modal-body text-center px-0 pb-0">
           <div class="location-icon d-flex align-items-center justify-content-center mx-auto mb-3" aria-hidden="true">🗺️</div>
           <h2 class="mb-3">Find Your Town!</h2>
@@ -669,6 +705,7 @@ onUnmounted(() => {
           <p class="location-notice p-3">Use your device location for nearby weather, or use Singapore’s default location.</p>
           <p v-if="savedLocation" class="small-note">Currently using: {{ locationLabel }}</p>
           <p v-if="locationBusy" class="small-note" role="status">Finding your location… Please respond to your browser’s permission prompt.</p>
+          <p v-if="preferenceError" class="small-note" role="alert">{{ preferenceError }}</p>
           <!-- LOCATION ACTION BUTTONS -->
           <div class="location-actions">
 
@@ -676,7 +713,7 @@ onUnmounted(() => {
             <button
               type="button"
               class="location-action location-allow"
-              :disabled="locationBusy"
+              :disabled="locationBusy || preferenceBusy"
               @click="chooseDevice"
             >
               <span class="location-action-icon">📍</span>
@@ -689,6 +726,7 @@ onUnmounted(() => {
             <button
               type="button"
               class="location-action location-skip"
+              :disabled="preferenceBusy"
               @click="chooseSingapore"
             >
               {{ savedLocation ? 'Use Singapore' : 'Not Now' }}
@@ -778,7 +816,7 @@ onUnmounted(() => {
 
 }
 
-.location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: 12px; }
+.location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: var(--text-sm); }
 
 /* =========================================
    STUDYDEX LOCATION MODAL
@@ -815,11 +853,10 @@ onUnmounted(() => {
   color: #293c60;
 }
 
-/* Header */
+/* Header: a plain label, not tiny pixel caps */
 .location-header {
-  font-family: 'Silkscreen', monospace;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: var(--text-sm);
+  font-weight: 700;
   color: #8f7440;
 }
 
@@ -859,7 +896,7 @@ onUnmounted(() => {
   border-radius: 14px;
 
   color: #6c6046;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -892,7 +929,7 @@ onUnmounted(() => {
   border: 2px solid transparent;
   border-radius: 14px;
 
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 900;
   line-height: 1.3;
   text-align: center;
@@ -967,7 +1004,7 @@ onUnmounted(() => {
 /* Footer text */
 .location-dialog .small-note {
   color: #7c8290;
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -975,7 +1012,7 @@ onUnmounted(() => {
    MOBILE RESPONSIVENESS
    ========================================= */
 
-@media (max-width: 420px) {
+@media (max-width: 575.98px) {
   .location-dialog {
     width: calc(100vw - 24px);
   }
@@ -992,7 +1029,6 @@ onUnmounted(() => {
 
   .location-dialog .location-action {
     min-height: 52px;
-    font-size: 13px;
   }
 }
 
@@ -1005,23 +1041,23 @@ onUnmounted(() => {
 .clock-weather-widget {
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   max-width: 100%;
   padding: 0;
 }
 .clock-weather-widget > .clock-weather {
-  align-self: flex-start;
+  align-self: center;
   margin: 0;
   box-sizing: border-box;
 }
 .weather-location-badge {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  gap: 8px;
+  align-self: center;
+  gap: var(--sd-space-2);
   max-width: 100%;
   box-sizing: border-box;
-  margin: 8px 0 0;
+  margin: var(--sd-space-2) 0 0;
   padding: 4px 5px 4px 11px;
   border: 1px solid #eadbb6;
   border-radius: 999px;
@@ -1029,7 +1065,7 @@ onUnmounted(() => {
   color: #665536;
   box-shadow: 0 3px 0 rgb(75 58 29 / 12%);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 700;
   line-height: 1.4;
 }
@@ -1042,6 +1078,7 @@ onUnmounted(() => {
 .location-badge-icon { flex-shrink: 0; font-size: 15px; }
 .location-badge-label { overflow-wrap: anywhere; }
 .location-change-button {
+  position: relative;
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
@@ -1061,6 +1098,18 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background-color 150ms ease;
 }
+/* Keep the small pencil, but give it a full 44 × 44 tap area. */
+.location-change-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.location-change-button:focus-visible { outline: 3px solid var(--sd-focus); outline-offset: 2px; }
 .location-change-button:hover { background: #ffedb5; }
 .location-change-button:active { background: #ffe28b; }
 @media (max-width: 991.98px) {
@@ -1071,7 +1120,7 @@ onUnmounted(() => {
       clamp(3px, calc(2.048px + 0.298vw), 5px)
       clamp(2px, calc(1.048px + 0.298vw), 4px)
       clamp(7px, calc(5.095px + 0.595vw), 11px);
-    font-size: clamp(9px, calc(8.048px + 0.298vw), 11px);
+    font-size: var(--text-sm);
   }
 
   .location-badge-status {
@@ -1079,7 +1128,7 @@ onUnmounted(() => {
   }
 
   .location-badge-icon {
-    font-size: clamp(12px, calc(10.571px + 0.446vw), 15px);
+    font-size: 15px;
   }
 
   .location-change-button {
@@ -1090,6 +1139,22 @@ onUnmounted(() => {
   .location-change-button svg {
     width: clamp(14px, calc(12.095px + 0.595vw), 18px);
     height: clamp(14px, calc(12.095px + 0.595vw), 18px);
+  }
+}
+
+@media (max-height: 500px) {
+  .clock-weather-widget {
+    flex-direction: row;
+    gap: var(--sd-space-2);
+  }
+
+  .clock-weather-widget > .clock-weather {
+    align-self: center;
+  }
+
+  .weather-location-badge {
+    align-self: center;
+    margin: 0;
   }
 }
 </style>

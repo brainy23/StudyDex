@@ -1,8 +1,7 @@
 <script setup>
 import axios from 'axios'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import NavBar from '../common/NavBar.vue'
-import PokemonBuddy from './PokemonBuddy.vue'
+import PokeSprite from './PokeSprite.vue'
 
 const API = 'https://pokeapi.co/api/v2'
 const MAX_XP = 100
@@ -110,7 +109,7 @@ watch([unallocatedXP, controlsLocked], ([amount, locked]) => {
 
 // =========================================
 // COLLECTION IMAGES
-// Evolution requests belong to PokemonBuddy.
+// Evolution requests belong to PokeSprite.
 // These requests load collection images/new Pokémon.
 // =========================================
 
@@ -193,7 +192,7 @@ function selectPokemon(pokemon) {
 
 function savePokemonUpdate({ pokemon, changes }) {
   // Update the same owned record.
-  // Both PokemonBuddy and the Pokédex read this record.
+  // Both PokeSprite and the Pokédex read this record.
   if (user.value.pokemons.includes(pokemon)) {
     Object.assign(pokemon, changes)
   }
@@ -261,7 +260,7 @@ async function removeXP() {
 
 // =========================================
 // TRANSFER LEFTOVER XP
-// PokemonBuddy still calculates the result.
+// PokeSprite still calculates the result.
 // =========================================
 
 async function transferXP(pokemon) {
@@ -384,7 +383,6 @@ async function addRandomPokemon(asGift = false) {
 <template>
   <main class="trainer-page">
     <div class="page-content">
-      <NavBar />
 
       <div class="page-layout">
         <!-- AVATAR AND ACTIVE BUDDY -->
@@ -419,7 +417,7 @@ async function addRandomPokemon(asGift = false) {
           </div>
 
           <div class="buddy-panel">
-            <PokemonBuddy
+            <PokeSprite
               ref="buddyRef"
               :active-pokemon="activePokemon"
               @update-pokemon="savePokemonUpdate"
@@ -586,7 +584,7 @@ async function addRandomPokemon(asGift = false) {
             <button type="button" class="gift-close" aria-label="Close reward popup"
               :disabled="controlsLocked" @click="closeRewardPopup">×</button>
             <span class="gift-emblem" aria-hidden="true">🎁</span>
-            <p class="gift-brand">STUDYDEX · TRAINER REWARDS</p>
+            <p class="gift-brand">Trainer Rewards</p>
             <h2 id="gift-title">{{ collectionExhausted ? 'Your Pokédex is complete!' : giftPokemon ? 'Meet your new buddy!' : 'Keep your journey growing' }}</h2>
             <div role="status" aria-live="polite" :aria-busy="controlsLocked">
               <img v-if="giftPokemon" class="gift-sprite" :src="giftPokemon.animated_img || giftPokemon.static_img" :alt="giftPokemon.name" />
@@ -849,7 +847,7 @@ button:disabled {
 .gift-dialog h2 { font-size: 26px; margin: 8px 0 16px; }
 .gift-dialog h3 { font-size: 20px; }
 .gift-emblem { display: block; font-size: 42px; }
-.gift-brand { font-size: 12px; letter-spacing: 1px; color: #8b7c50; }
+.gift-brand { font-size: var(--sd-text-small, 14px); font-family: var(--sd-font-body); letter-spacing: 0; color: #8b7c50; }
 .gift-close { position: absolute; top: 10px; right: 10px; width: 40px; height: 40px; border: 0; border-radius: 50%; background: #f5f0e3; color: #26365b; font-size: 26px; cursor: pointer; }
 .gift-sprite { height: 88px; max-width: 100%; object-fit: contain; image-rendering: pixelated; }
 .gift-xp { display: flex; flex-direction: column; padding: 14px; margin: 14px 0; border-radius: 16px; background: #f0f7e9; color: #40754b; }

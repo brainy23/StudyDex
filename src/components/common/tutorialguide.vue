@@ -249,11 +249,13 @@ function endTutorial() {
 .count {
   margin-right: auto;
   color: #ffd117;
+  white-space: nowrap; /* keep "1 / 10" on one line */
 }
 
 
 
 button {
+  min-height: var(--tap-min);
   padding: 6px 16px;
   border: 2px solid #ffd117;
   border-radius: 12px;
@@ -275,5 +277,42 @@ button.skip {
 
 button:disabled {
   opacity: 0.4;
+}
+
+/* Below lg: Mewtwo sits small above the dialog, so the sprite never covers
+   the Study button or the dock, and the dialog stays inside the screen.
+   (At sm-md the full-size sprite still landed on the Study button.) */
+@media (max-width: 991.98px) {
+  .scene {
+    left: 16px;
+    right: 16px;
+    bottom: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .scene.top {
+    top: 16px;
+  }
+
+  .teacher {
+    width: 48px;
+  }
+
+  .box {
+    flex: none;
+    width: 100%;
+    max-width: calc(100vw - 32px);
+    padding: 12px 14px;
+  }
+
+  .box p {
+    font-size: var(--text-md);
+  }
+
+  .buttons {
+    align-items: center;
+  }
 }
 </style>

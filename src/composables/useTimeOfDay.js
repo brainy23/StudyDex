@@ -97,38 +97,89 @@ function mixColor(firstHex, secondHex, t) {
   return `rgb(${result.join(',')})`
 }
 
+// Shared across every component using this file.
+const globalPreviewHour = ref(null)
+
+export function useTimePreview() {
+  function setPreviewHour(value) {
+    if (value === '' || value === null || value === undefined) return
+
+    const number = Number(value)
+    if (!Number.isFinite(number)) return
+
+    const clamped = Math.max(0, Math.min(24, number))
+    globalPreviewHour.value = clamped === 24 ? 0 : clamped
+  }
+
+  function resetPreview() {
+    globalPreviewHour.value = null
+  }
+
+  return {
+    previewHour: computed(() => globalPreviewHour.value),
+    isPreview: computed(() => globalPreviewHour.value !== null),
+    setPreviewHour,
+    resetPreview,
+  }
+}
+
 export function useTimeOfDay({
   live = true,
-  previewHour = 12
+  previewHour = 12,
 } = {}) {
-  const currentTime = ref(new Date())
-
+  const realTime = ref(new Date())
   let clockInterval
 
   function refreshClock() {
-    currentTime.value = new Date()
+    realTime.value = new Date()
   }
 
   function refreshOnVisibilityChange() {
-    if (document.visibilityState === 'visible') {
-      refreshClock()
-    }
+    if (document.visibilityState === 'visible') refreshClock()
   }
 
-  const hour = computed(() => {
+  const effectivePreviewHour = computed(() => {
+    // Global testing controls take priority over local page previews.
+    if (globalPreviewHour.value !== null) {
+      return globalPreviewHour.value
+    }
+
+    // Preserve existing per-page preview support.
     if (!unref(live)) {
       const value = Number(unref(previewHour))
 
       if (Number.isFinite(value)) {
-        // Clamp preview input to 0–24.
-        // Treat 24:00 as midnight so sleeping behaviour also stays correct.
         const clamped = Math.max(0, Math.min(24, value))
         return clamped === 24 ? 0 : clamped
       }
     }
 
-    // Invalid preview values fall back to device-local time.
-    const now = currentTime.value
+    return null
+  })
+
+  const currentTime = computed(() => {
+    const preview = effectivePreviewHour.value
+    if (preview === null) return realTime.value
+
+    const date = new Date(realTime.value)
+    const totalSeconds = Math.floor(preview * 3600)
+
+    date.setHours(
+      Math.floor(totalSeconds / 3600),
+      Math.floor((totalSeconds % 3600) / 60),
+      totalSeconds % 60,
+      0,
+    )
+
+    return date
+  })
+
+  const hour = computed(() => {
+    if (effectivePreviewHour.value !== null) {
+      return effectivePreviewHour.value
+    }
+
+    const now = realTime.value
 
     return (
       now.getHours() +
@@ -150,19 +201,15 @@ export function useTimeOfDay({
 
     const progress = Math.max(
       0,
-      Math.min(
-        1,
-        (hour.value - a.hour) / (b.hour - a.hour)
-      )
+      Math.min(1, (hour.value - a.hour) / (b.hour - a.hour)),
     )
 
-    // Preserve the existing smoothstep interpolation.
     const t = progress * progress * (3 - 2 * progress)
 
     const result = {
       name: t < 0.5 ? a.name : b.name,
       top: mixColor(a.top, b.top, t),
-      horizon: mixColor(a.horizon, b.horizon, t)
+      horizon: mixColor(a.horizon, b.horizon, t),
     }
 
     for (const property of numericalProperties) {
@@ -174,12 +221,11 @@ export function useTimeOfDay({
 
   onMounted(() => {
     refreshClock()
-
     clockInterval = setInterval(refreshClock, 1000)
 
     document.addEventListener(
       'visibilitychange',
-      refreshOnVisibilityChange
+      refreshOnVisibilityChange,
     )
     window.addEventListener('focus', refreshClock)
   })
@@ -189,7 +235,7 @@ export function useTimeOfDay({
 
     document.removeEventListener(
       'visibilitychange',
-      refreshOnVisibilityChange
+      refreshOnVisibilityChange,
     )
     window.removeEventListener('focus', refreshClock)
   })
@@ -197,6 +243,6 @@ export function useTimeOfDay({
   return {
     currentTime,
     hour,
-    lighting
+    lighting,
   }
 }
