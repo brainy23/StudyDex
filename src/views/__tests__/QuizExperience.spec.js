@@ -185,3 +185,36 @@ it('allows skipping questions but prevents final submission until every question
   expect(wrapper.get('#arena-question').text()).toBe('Question 1')
   expect(submitQuiz).not.toHaveBeenCalled()
 })
+
+it('returns Continue to quiz topics with the same subject selected', async () => {
+  const router = await open()
+  await answerAll()
+  await flushPromises()
+  await wrapper.get('.xp-prompt .action-button').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('selection-topics')
+  expect(router.currentRoute.value.query).toEqual({ flow: 'quiz', subject: 'maths' })
+  expect(submitQuiz).toHaveBeenCalledTimes(1)
+})
+
+it('only dismisses the XP popup when its close button is clicked', async () => {
+  const router = await open()
+  await answerAll()
+  await flushPromises()
+  await wrapper.get('.xp-close').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('quiz-battle')
+  expect(wrapper.findComponent(XpPrompt).props('result')).toBeNull()
+})
+
+it('keeps a return button and reports a cancelled topic navigation', async () => {
+  const router = await open()
+  router.beforeEach(to => to.name === 'selection-topics' ? false : true)
+  await answerAll()
+  await flushPromises()
+  await wrapper.get('.xp-prompt .action-button').trigger('click')
+  await flushPromises()
+  expect(router.currentRoute.value.name).toBe('quiz-battle')
+  expect(wrapper.text()).toContain('Could not return to topics')
+  expect(button('Choose topic')).toBeDefined()
+})

@@ -12,6 +12,12 @@ the last question links back to the first unanswered question when needed.
 Navigation and answer changes are disabled during submission and after grading.
 Boss battles retain their existing single-choice locking behavior.
 
+The XP popup's Continue button dismisses the receipt and returns to
+`selection-topics` with `flow=quiz` and the current subject ID. Boss reward
+Continue uses the existing encounter return handler, preserving the flashcard
+return query and win/loss restore behavior. The close button and Escape only
+dismiss the popup. Saving and evolution animations must finish before Continue.
+
 The percentage is rounded first. XP is then interpolated within the matching
 range and rounded to an integer:
 

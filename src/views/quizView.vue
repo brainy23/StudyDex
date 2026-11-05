@@ -276,8 +276,16 @@ onUnmounted(() => {
 })
 
 const enteredArena = ref(false)
-function returnToSelection() {
-  router.push({ name:'selection-topics', query:{ flow:'quiz', ...(previewSubject.value ? { subject:previewSubject.value.id } : {}) } })
+const navigationError = ref('')
+async function returnToSelection() {
+  navigationError.value = ''
+  const subjectId = previewSubject.value?.id || route.query.subject
+  try {
+    const failure = await router.push({ name:'selection-topics', query:{ flow:'quiz', ...(subjectId ? { subject:subjectId } : {}) } })
+    if (failure) navigationError.value = 'Could not return to topics. Please try again.'
+  } catch {
+    navigationError.value = 'Could not return to topics. Please try again.'
+  }
 }
 const spriteLoading = ref(false)
 const spriteError = ref('')
@@ -442,7 +450,7 @@ const battleOptions = computed(() =>
 
 </script>
 <template>
-  <XpPrompt :result="xpResult" @close="xpResult = null" />
+  <XpPrompt :result="xpResult" @close="xpResult = null" @continue="returnToSelection" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
@@ -536,6 +544,7 @@ const battleOptions = computed(() =>
         <div class="demo-caption"><span>{{ previewSubject?.name }} · {{ selectedPreviewTopic?.name }}</span><span>{{ previewFinished ? 'Complete' : `${previewIndex + 1} / ${previewQuestions.length}` }}</span></div>
         <h2 id="arena-question">{{ previewFinished ? 'Quiz complete, trainer!' : previewQuestion?.question_text }}</h2>
         <p v-if="previewFinished">{{ quizResult.correct }} / {{ quizResult.total }} correct · {{ quizResult.scorePercent }}% · {{ quizResult.appliedDelta }} XP saved</p>
+        <p v-if="navigationError" role="alert">{{ navigationError }}</p>
       </section>
 
       <!-- Classic battle menu: dialogue left, four choices right. -->
