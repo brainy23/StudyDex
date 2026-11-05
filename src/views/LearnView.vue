@@ -1,5 +1,4 @@
 <script setup>
-import { useTransitionPageReady } from '../composables/useTransitionPageReady'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
@@ -12,10 +11,13 @@ import {
 } from '../services/studyService'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
+import { useRoomTransitionReady } from '../composables/useRoomTransition'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 
 const route = useRoute()
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
 const profile = ref(null)
 const activeBuddyRecord = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
@@ -116,6 +118,14 @@ const enteredLab = computed(() => !!topic.value)
 const POKE_API_BASE = 'https://pokeapi.co/api/v2'
 const activeBuddyName = computed(() => activeBuddyRecord.value?.pokemon?.name || 'your Pokémon')
 const lessonResource = computed(() => currentResources.value?.lesson)
+useRoomTransitionReady('learn', () => !loading.value && (
+  !!error.value || !topic.value || !profile.value?.school_level_id ||
+  !!lessonResource.value && !lessonResource.value.loading
+), cause => {
+  generation++
+  error.value = cause
+  loading.value = false
+})
 const lessonConcepts = computed(() => [...(lessonResource.value?.data?.concepts || [])]
   .sort((a, b) => (a.concept_order ?? Infinity) - (b.concept_order ?? Infinity)))
 const lessonGoals = computed(() => lessonResource.value?.data?.goals || [])
@@ -278,7 +288,6 @@ async function backToFlashcards() {
   finally { learningNavigationBusy.value = false }
 }
 
-useTransitionPageReady('learn:' + route.query.topic, () => !loading.value && (!!error.value || !topic.value || !!lessonResource.value && !lessonResource.value.loading))
 </script>
 <template>
   <div class="study-page">
@@ -292,7 +301,7 @@ useTransitionPageReady('learn:' + route.query.topic, () => !loading.value && (!!
         <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
         <button type="button" class="home-link" @click="returnToSelection">Topics</button>
       </nav>
-      <div v-show="enteredLab" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>

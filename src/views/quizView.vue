@@ -1,5 +1,4 @@
 <script setup>
-import { useTransitionPageReady } from '../composables/useTransitionPageReady'
 import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -10,6 +9,9 @@ import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
 import { getQuizTopicPreview } from '../services/quizPreviewService'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
+import { useRoomTransitionReady } from '../composables/useRoomTransition'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
+const pokemonTransition = usePokemonTransition()
 const profile = ref(null)
 const activeBuddy = ref(null)
 const activeBuddyMessage = ref('')
@@ -18,6 +20,11 @@ const loading = ref(true)
 const error = ref(null)
 let alive = true
 let generation = 0
+useRoomTransitionReady('quiz-battle', () => !loading.value, cause => {
+  generation++
+  error.value = cause
+  loading.value = false
+})
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -343,7 +350,6 @@ const battleOptions = computed(() =>
   })),
 )
 
-useTransitionPageReady('arena:' + route.query.topic, () => !loading.value)
 </script>
 <template>
   <div class="arena-with-preview">
@@ -484,7 +490,7 @@ useTransitionPageReady('arena:' + route.query.topic, () => !loading.value)
       </RouterLink>
 
       <button v-if="enteredArena" type="button" class="home-link change-topic" @click="returnToSelection">Topics</button>
-      <div v-show="enteredArena" class="quiz-clock-weather">
+      <div v-if="enteredArena && !pokemonTransition.state.active" class="quiz-clock-weather">
         <ClockWeather />
       </div>
     </header>

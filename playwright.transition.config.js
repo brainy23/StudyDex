@@ -5,6 +5,6 @@ import base from './playwright.content.config.js'
 
 export default defineConfig({
   ...base,
-  testMatch: ['pokemon-transition.spec.js', 'town-entry.spec.js', 'boss-entry.spec.js'],
+  testMatch: ['pokemon-transition.spec.js', 'town-entry.spec.js', 'room-entry.spec.js', 'boss-entry.spec.js'],
   outputDir: join(tmpdir(), 'studydex-transition-browser-results'),
 })
