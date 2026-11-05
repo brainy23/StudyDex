@@ -208,3 +208,23 @@ function selectSubject(item) {
     
   </main>
 </template>
+
+<style scoped>
+.sd-picker .sd-path {
+  min-height: 160px;
+  padding: 28px 36px 28px 180px;
+  gap: 24px;
+}
+
+.sd-path-copy {
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .sd-picker .sd-path {
+    min-height: 140px;
+    padding: 24px 20px 24px 130px;
+    gap: 14px;
+  }
+}
+</style>
