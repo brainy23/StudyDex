@@ -883,10 +883,6 @@ onUnmounted(() => {
       </div>
 
      <header class="trainer-hud">
-      <div class="title-card">
-        <span class="title-eyebrow">STUDYDEX</span>
-        <h1>Trainer Home</h1>
-      </div>
       <div class="trainer-clock">
         <ClockWeather
           :use-device-location="true"

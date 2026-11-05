@@ -655,7 +655,30 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
               <p>Your cards loaded, but this view could not read their format.</p>
             </div>
             <div v-else-if="!cards.length" class="screen-message"><h2>No flashcards yet</h2><p>Choose another topic using the Topics button.</p></div>
-            <div v-else-if="!currentCard" class="screen-message" role="status"><h2>Round complete!</h2><p>All {{ cards.length }} cards marked Easy.</p><button @click="restartCards">Study again</button></div>
+            <div v-else-if="!currentCard" class="screen-message" role="status">
+              <h2>Round complete!</h2>
+              <p>All {{ cards.length }} cards marked Easy.</p>
+
+              <div style="display: flex; flex-wrap: wrap; gap: 12px;">
+                <button type="button" @click="restartCards">
+                  Study again
+                </button>
+
+                <button
+                  type="button"
+                  :disabled="!topic"
+                  @click="router.push({
+                    name: 'quiz-battle',
+                    query: {
+                      subject: topic.subject_id,
+                      topic: topic.id
+                    }
+                  })"
+                >
+                  Take topic quiz →
+                </button>
+              </div>
+            </div>
             <div v-else class="answer-content" aria-live="polite">
               <template v-if="answerVisible">
                 <p class="question-reminder">{{ currentCard.front }}</p>
