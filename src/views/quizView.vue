@@ -12,6 +12,8 @@ import { getQuizTopicPreview } from '../services/quizPreviewService'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
+
 const pokemonTransition = usePokemonTransition()
 const profile = ref(null)
 const activeBuddy = ref(null)
@@ -502,7 +504,7 @@ const battleOptions = computed(() =>
 
 
   </main>
-
+  <StudydexBubbleNav current="quiz"/>
   </div>
 </template>
 

@@ -16,6 +16,7 @@ import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
 
 const pageLoading = computed(() =>
@@ -384,6 +385,7 @@ async function backToFlashcards() {
     </div>
   </main>
   </div>
+  <StudydexBubbleNav current="study"/>
 </template>
 <style scoped>
 
