@@ -1297,7 +1297,7 @@ watch(
        STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
        ================================================= -->
   <div class="world-page">
-    <p v-if="buddySleeping" class="sleep-hours-notice" role="status">Your Pokémon is sleeping. Learning opens at 7am Singapore time.</p>
+    <p v-if="buddySleeping" class="sleep-hours-notice" role="status">Learning opens at 7am.</p>
     <p v-if="buildingNavigationError" class="building-navigation-error" role="alert">{{ buildingNavigationError }}</p>
 
   <!-- tutorial -->
@@ -1918,7 +1918,19 @@ watch(
 </template>
 
 <style scoped>
-.sleep-hours-notice { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 14px; background: #fff6dc; color: #303557; text-align: center; }
+.sleep-hours-notice {
+  position: fixed;
+  bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  left: calc(24px + env(safe-area-inset-left, 0px));
+  z-index: 1050;
+  max-width: calc(100% - 48px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  margin: 0;
+  padding: 10px 16px;
+  border-radius: 14px;
+  background: #fff6dc;
+  color: #303557;
+  text-align: center;
+}
 .building-navigation-error {
   position: fixed;
   z-index: 2000;
