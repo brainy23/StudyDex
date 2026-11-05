@@ -96,15 +96,15 @@ onMounted(() => {
   </section>
 
   <section class="maincards">
-    <h2>
+    <p>
       <span class="maincards-label">The StudyDex Experience</span>
-    </h2>
+    </p>
     <h2>
       Big Adventures. Bigger Learning.
     </h2>
     
 
-    <p class="maincards-intro">From mastering new concepts to battling through quizzes, StudyDex turns everyday learning into an <span class="underline">adventure!</span></p>
+    <p class="maincards-intro">From mastering new concepts to battling through quizzes, StudyDex turns everyday learning into an adventure!</p>
     
     <div class="maincards-cards">
 
@@ -150,7 +150,6 @@ onMounted(() => {
       Explore <span class="underline">Mathematics from Primary 1-6</span> and <span class="underline">Science from Primary 3-6.</span>
     </h3>
 
-    <br>
     
     <div id="features" class="carousel slide">
       <div class="carousel-inner">
@@ -217,8 +216,17 @@ onMounted(() => {
           </div>
         </div>
 
+
         <div class="carousel-item">
           <div class="feature-cards">
+
+            <div class="feature-card">
+              <img src="/landing/timer.png" alt="timer" class="screenshot" />
+              <h3>Study Timer</h3>
+              <p>
+                Focus for 25 minutes. Only 4 sessions a day earn XP.
+              </p>
+            </div>
 
             <div class="feature-card">
               <img src="/landing/dashboard.png" alt="Dashboard" class="screenshot" />
@@ -231,15 +239,8 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="feature-card">
-              <div class="screenshot-placeholder">
-                Study Timer Screenshot
-              </div>
-              <h3>Study Timer</h3>
-              <p>
-                Focus for 25 minutes. Only 4 sessions a day earn XP.
-              </p>
-          </div>
+    
+        
 
       </div>
 
@@ -445,6 +446,12 @@ h1 {
   font-size: 36px;
   font-weight: 800;
   margin-bottom: 40px;
+}
+
+.features h3 {
+  margin-bottom: 40px;
+  font-size: 24px;
+  font-weight: 800;
 }
 
 .carousel {
@@ -669,7 +676,6 @@ h1 {
   margin: 4px 0 8px;
   font-size: 20px;
   font-weight: 800;
-  color: #072578;
 }
 
 .maincards-card p {
