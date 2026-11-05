@@ -5,6 +5,12 @@ import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon } from '../services/studyService'
 import { checkedRpc } from '../services/backendClient'
 import playSound from '../../scripts/soundEffect'
+let leaving = false
+function goBack() {
+  if (leaving) return
+  leaving = true
+  history.back()
+}
 const collection = ref([])
 const ownedRecords = ref([])
 const loading = ref(true)
@@ -195,7 +201,7 @@ onUnmounted(() => {
     </header>
 
     <div style="background: rgba(255, 255, 255, 0.78); padding-bottom:15px; padding-left:28px">
-      <button type="button" class="back" @click="$router.back()">Back</button>
+      <button type="button" class="back" @click="goBack">Back</button>
     </div>
 
     <div class="body">

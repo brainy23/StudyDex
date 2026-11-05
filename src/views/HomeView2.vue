@@ -685,8 +685,6 @@ onUnmounted(() => {
 
 })
 
-
-
 // POKÉAPI BUDDY DATA
 const buddyData = ref(null)
 const buddyLoading = ref(false)
@@ -780,14 +778,29 @@ async function getPokeBall() {
 
 
 // Call this when a Pokémon is selected as the active buddy.
+const buddySelectionSaving = ref(false)
 async function setActiveBuddy(pokemon) {
   const selectedRecord = savedOwnedPokemon.value.find(record => record.id === pokemon.ownedId)
-  if (!selectedRecord) return
+  if (!selectedRecord || selectedRecord.is_selected || buddySelectionSaving.value) return
+  buddySelectionSaving.value = true
+  const previousRecords = savedOwnedPokemon.value
+  const previousBuddy = savedActiveBuddy.value
+  savedOwnedPokemon.value = previousRecords.map(record => ({
+    ...record, is_selected: record.id === selectedRecord.id,
+  }))
+  savedActiveBuddy.value = savedOwnedPokemon.value.find(record => record.id === selectedRecord.id)
   try {
     const profile = await getCurrentProfile()
+    if (!trainerProfileActive) return
     await checkedRpc('select_user_pokemon', { p_owned_id: selectedRecord.id }, profile.id)
     await refreshTrainerProfile()
-  } catch (cause) { profileNotice.value = cause.message || 'Your buddy could not be saved.' }
+  } catch (cause) {
+    if (trainerProfileActive) {
+      savedOwnedPokemon.value = previousRecords
+      savedActiveBuddy.value = previousBuddy
+      profileNotice.value = cause.message || 'Your buddy could not be saved.'
+    }
+  } finally { buddySelectionSaving.value = false }
 }
 
 const ballShaking = ref(false)
