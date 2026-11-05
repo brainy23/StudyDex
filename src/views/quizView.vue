@@ -485,16 +485,25 @@ const battleOptions = computed(() =>
 
     <!-- CLOCK / EXIT -->
     <header class="arena-hud">
-      <RouterLink to="/home" class="home-link">
-        ‹ Back to town
-      </RouterLink>
+      <nav class="arena-navigation" aria-label="Quiz navigation">
+        <RouterLink to="/home" class="home-link">
+          ‹ Back to town
+        </RouterLink>
 
-      <button v-if="enteredArena" type="button" class="home-link change-topic" @click="returnToSelection">Topics</button>
-      <div v-if="enteredArena && !pokemonTransition.state.active" class="quiz-clock-weather">
+        <button
+          v-if="enteredArena"
+          type="button"
+          class="home-link change-topic"
+          @click="returnToSelection"
+        >
+          Topics
+        </button>
+      </nav>
+
+      <div v-show="enteredArena" class="quiz-clock-weather">
         <ClockWeather />
       </div>
     </header>
-
 
     <section v-if="!enteredArena" class="arena-picker redesigned-picker" style="padding:100px 24px;">
       <p v-if="loading" role="status">Opening your questions…</p>
@@ -702,15 +711,15 @@ img.layer {
 /* CLOCK AND NAVIGATION */
 
 .arena-hud {
-  position: absolute;
+  position: fixed;
   top: max(16px, env(safe-area-inset-top));
   left: 16px;
   right: 16px;
-  z-index: 10;
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 12px;
+  z-index: 30;
   pointer-events: none;
 }
 
@@ -976,4 +985,51 @@ input:focus-visible {
 
 
 .arena-image { transform: none; }
+
+.arena-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  pointer-events: auto;
+}
+
+.arena-hud .arena-navigation .home-link {
+  position: static;
+  margin: 0;
+  padding: 10px 16px;
+  border: 1px solid #ffffff66;
+  border-radius: 14px;
+  background: #203956;
+  color: #fff;
+  font: inherit;
+  font-weight: 750;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.arena-hud .arena-navigation .home-link:hover {
+  background: #31547a;
+  color: #fff;
+}
+
+.arena-navigation .home-link:focus-visible {
+  outline: 3px solid #ffe194;
+  outline-offset: 3px;
+}
+
+.arena-hud .quiz-clock-weather {
+  position: static;
+  align-self: flex-start;
+  margin: 0;
+  pointer-events: auto;
+}
+
+@media (max-width: 600px) {
+  .arena-hud .arena-navigation .home-link {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
 </style>
