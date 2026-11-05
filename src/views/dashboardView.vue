@@ -202,6 +202,7 @@ const nextChallenge = computed(() => {
   const priority = topic => topic.score === null ? 1 : topic.score < 80 ? 0 : 2
   return [...topicProgress.value].sort((a, b) => priority(a) - priority(b) || (a.score ?? 0) - (b.score ?? 0))[0]
 })
+const studyLink = topic => ({ name: 'study-mode', query: { subject: topic.subject_id, topic: topic.id } })
 const quizLink = topic => ({ name: 'quiz', query: { subject: topic.subject_id, topic: topic.id } })
 const quizXP = computed(() => attempts.value.reduce((sum, row) => sum + row.xp_change, 0))
 const studyXP = computed(() => sessions.value.reduce((sum, row) => sum + (row.xp_change || 0), 0) + blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
@@ -318,6 +319,7 @@ onUnmounted(() => {
               <div class="topic-list">
                 <article v-for="topic in topicProgress" :key="topic.id" class="topic-item" :class="`topic-${topic.color}`">
                   <button class="topic-toggle" :aria-expanded="expandedTopic === topic.id" :aria-controls="`topic-${topic.id}`" @click="expandedTopic = expandedTopic === topic.id ? null : topic.id"><span class="topic-icon" aria-hidden="true">📖</span><span class="topic-name">{{ topic.name }}</span><span class="topic-status">{{ topic.status }}</span><span class="topic-score">{{ topic.score === null ? '—' : `${topic.score}%` }}</span><span class="topic-chevron">{{ expandedTopic === topic.id ? '−' : '+' }}</span></button>
+                  <RouterLink :to="studyLink(topic)" class="button button-secondary topic-study-link" :aria-label="`Go to topic: ${topic.name}`">Go to topic →</RouterLink>
                   <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><RouterLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</RouterLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span><button type="button" class="review-link" :aria-label="`Review ${topic.name} quiz completed ${formatDate(attempt.completed_at)}`" @click="openQuizReview(attempt.id)">Review answers</button></li></ul></div>
                 </article>
               </div>
@@ -786,6 +788,12 @@ summary:focus-visible,
 .topic-yellow {
   border-color: #eee5cb;
   background: #fffbf1;
+}
+
+.topic-item > .topic-study-link {
+  display: flex;
+  width: fit-content;
+  margin: 0 12px 12px auto;
 }
 
 .topic-toggle {

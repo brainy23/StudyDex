@@ -18,6 +18,11 @@ async function user(id, sql, args = []) {
   finally { await db.exec('RESET ROLE') }
 }
 const call = async (id, sql, args) => (await user(id, sql, args))[0].result
+async function completeTopic(student, topic) {
+  const session = randomUUID()
+  await call(student, "SELECT study_session_action($1,$2,'learn','open',NULL) AS result", [session,topic])
+  await call(student, "SELECT study_session_action($1,$2,'learn','complete',NULL) AS result", [session,topic])
+}
 const uid = randomUUID(), other = randomUUID()
 try {
   await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role BYPASSRLS;
@@ -37,6 +42,13 @@ try {
     await assert.rejects(user(uid, 'UPDATE user_pokemon SET xp=900 WHERE user_id=$1', [uid]), /permission denied/)
     await assert.rejects(user(uid, 'INSERT INTO user_pokemon(user_id,pokemon_id) SELECT $1,id FROM pokemon LIMIT 1', [uid]), /permission denied/)
     await assert.rejects(user(uid, 'SELECT * FROM question_answers'), /permission denied/)
+  })
+  await check('quizzes require the current user’s saved study completion and locked requests use no attempts', async () => {
+    await assert.rejects(call(uid, 'SELECT start_learning_quiz($1,$2) AS result', [topic,randomUUID()]), /Complete this topic in Study/)
+    await completeTopic(other, topic)
+    await assert.rejects(call(uid, 'SELECT start_learning_quiz($1,$2) AS result', [topic,randomUUID()]), /Complete this topic in Study/)
+    assert.equal((await db.query('SELECT count(*)::int n FROM private.learning_quiz_runs WHERE user_id=$1',[uid])).rows[0].n,0)
+    await completeTopic(uid, topic)
   })
   const runId = randomUUID()
   const run = await call(uid, 'SELECT start_learning_quiz($1,$2) AS result', [topic, runId])
@@ -133,8 +145,8 @@ try {
   })
   await check('deck completion and own history are durable and isolated', async () => {
     await study('complete')
-    assert.equal((await user(uid, 'SELECT * FROM study_sessions')).length, 1)
-    assert.equal((await user(other, 'SELECT * FROM study_sessions')).length, 0)
+    assert.equal((await user(uid, 'SELECT * FROM study_sessions WHERE id=$1', [session])).length, 1)
+    assert.equal((await user(other, 'SELECT * FROM study_sessions WHERE id=$1', [session])).length, 0)
     assert.equal((await user(uid, 'SELECT * FROM topic_completions')).length, 1)
     assert.equal((await user(uid, 'SELECT * FROM pomodoro_blocks')).length, 4)
     assert.equal((await user(other, 'SELECT * FROM quiz_attempts')).length, 0)
@@ -214,6 +226,7 @@ try {
     await call(student,'SELECT public.claim_starter(4) AS result')
     const recipient = (await db.query('SELECT id,pokemon_id FROM user_pokemon WHERE user_id=$1',[student])).rows[0]
     await db.query('UPDATE user_pokemon SET xp=190,level=1 WHERE id=$1',[recipient.id])
+    await completeTopic(student, topic)
     const run = await call(student,'SELECT start_learning_quiz($1,$2) AS result',[topic,randomUUID()])
     const answers = {}
     for (const q of run.questions) answers[q.id]=(await db.query('SELECT correct_option_id FROM question_answers WHERE question_id=$1',[q.id])).rows[0].correct_option_id

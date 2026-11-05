@@ -7,6 +7,7 @@ import { startQuiz, submitQuiz } from '../../services/quizService'
 import { getCurrentProfile } from '../../services/profileService'
 import { getStudentStudyCatalogue, getSelectedStudyBuddy } from '../../services/studyService'
 import { awardExperience } from '../../services/experienceService'
+import { getTopicCompletions } from '../../services/learningService'
 import { studentProfile, studyCatalogue } from '../../test/studyFixtures'
 import { pokemonFetch } from '../../test/pokemonFixtures'
 vi.mock('../../../scripts/soundEffect', () => ({ default: vi.fn() }))
@@ -28,6 +29,7 @@ let wrapper
 beforeEach(() => {
   vi.resetAllMocks()
   sessionStorage.clear()
+  getTopicCompletions.mockImplementation(async (_userId, flow) => flow === 'study' ? [{ topic_id: 'topic-1' }] : [])
   getCurrentProfile.mockResolvedValue(structuredClone(studentProfile))
   getStudentStudyCatalogue.mockResolvedValue(structuredClone(studyCatalogue))
   getSelectedStudyBuddy.mockResolvedValue({ id: 'owned', xp: 100, level: 1, pokemon: { name: 'Charmander' } })
@@ -240,4 +242,22 @@ it('opens a reusable review with every question and saved selection without awar
   expect(wrapper.find('.quiz-review-modal').exists()).toBe(false)
   expect(submitQuiz).not.toHaveBeenCalled()
   expect(awardExperience).not.toHaveBeenCalled()
+})
+
+it('blocks a direct quiz link until study completion is saved, without consuming an attempt', async () => {
+  getTopicCompletions.mockResolvedValue([])
+  await open()
+  expect(wrapper.text()).toContain('Complete this topic in Study to unlock its quiz.')
+  expect(wrapper.findAll('a').some(link => link.text().includes('Go to Study'))).toBe(true)
+  expect(startQuiz).not.toHaveBeenCalled()
+  expect(submitQuiz).not.toHaveBeenCalled()
+})
+it('does not start a quiz if study progress cannot be verified', async () => {
+  getTopicCompletions.mockImplementation(async (_userId, flow) => {
+    if (flow === 'study') throw Error('Study progress unavailable')
+    return []
+  })
+  await open()
+  expect(wrapper.text()).toContain('Study progress unavailable')
+  expect(startQuiz).not.toHaveBeenCalled()
 })

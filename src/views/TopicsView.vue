@@ -13,6 +13,7 @@ const router = useRouter()
 const flow = computed(() => route.query.flow === 'quiz' ? 'quiz' : 'study')
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
 const topicCompletion = useTopicCompletion()
+const studyCompletion = useTopicCompletion()
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
@@ -23,16 +24,20 @@ async function load() {
   const request = ++requestId
   const requestedFlow = flow.value
   topicCompletion.bindStudent(null, null)
+  studyCompletion.bindStudent(null, null)
   loading.value = true
   error.value = ''
   try {
     const student = await getCurrentProfile()
     if (!active || request !== requestId) return
     profile.value = student
-    topicCompletion.bindStudent(student.id, student.school_level_id, requestedFlow)
+    const progress = Promise.all([
+      topicCompletion.bindStudent(student.id, student.school_level_id, requestedFlow),
+      studyCompletion.bindStudent(requestedFlow === 'quiz' ? student.id : null, student.school_level_id, 'study'),
+    ])
     catalogue.value = { subjects: [], topics: [] }
     if (student.school_level_id) {
-      const data = await (requestedFlow === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student)
+      const [data] = await Promise.all([(requestedFlow === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student), progress])
       if (active && request === requestId) catalogue.value = data
     }
   } catch (cause) { if (active && request === requestId) error.value = studyErrorMessage(cause, 'Your subjects') }
@@ -62,8 +67,17 @@ const topics = computed(() => catalogue.value.topics
   .filter(t => t.subject_id === selectedSubject.value?.id)
   .map(t => ({ ...t, theme:selectedSubject.value?.name })))
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
-function disabled(item) { return flow.value === 'quiz' && !item.quiz_question_count }
-function actionText() { return flow.value === 'quiz' ? 'Start quiz →' : 'Choose Learn or Study →' }
+function disabled(item) {
+  return flow.value === 'quiz' && (!item.quiz_question_count ||
+    !studyCompletion.savedInBrowser.value || !studyCompletion.isComplete(item.id))
+}
+function actionText(item) {
+  if (flow.value !== 'quiz') return 'Choose Learn or Study →'
+  if (!item.quiz_question_count) return 'Quiz coming soon'
+  if (!studyCompletion.savedInBrowser.value) return 'Study progress unavailable'
+  if (!studyCompletion.isComplete(item.id)) return '🔒 Complete this topic in Study to unlock'
+  return 'Start quiz →'
+}
 const navigationError = ref('')
 async function selectTopic(item) {
   if (disabled(item)) return
@@ -89,7 +103,7 @@ async function selectTopic(item) {
     <div class="sd-topic-toolbar"><span class="sd-level">{{ selectedSubject?.name || 'STUDY' }} · {{ profile.school_level?.name }}</span><span class="sd-count">{{ topics.length }} topics</span></div>
     <label class="sd-search"><span>Find a topic</span><input v-model="search" type="search" :placeholder="`Search ${selectedSubject?.name || 'study'} topics…`" /></label>
     <div class="sd-topic-list">
-      <button v-for="item in shownTopics" :key="item.id" class="sd-topic-card" :disabled="disabled(item)" @click="selectTopic(item)">
+      <button v-for="item in shownTopics" :key="item.id" class="sd-topic-card" :class="{ 'sd-quiz-locked': disabled(item) }" :disabled="disabled(item)" @click="selectTopic(item)">
         <span class="sd-topic-copy"><small>{{ item.theme || selectedSubject?.name || 'Study' }}</small><strong>{{ item.name }}</strong><span>{{ item.description }}</span><em>{{ actionText(item) }}</em></span>
         <span class="sd-topic-art"><span class="sd-topic-ring" aria-hidden="true"><svg class="topic-pokeball" viewBox="0 0 100 100" focusable="false" aria-hidden="true">
           <circle cx="50" cy="50" r="46" fill="white" />
@@ -101,6 +115,8 @@ async function selectTopic(item) {
       </button>
     </div>
     <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : `No ${selectedSubject?.name || 'study'} topics are available for your school level yet.` }}</p>
+    <p v-if="flow === 'quiz'" class="sd-footnote">Complete a topic in Study to unlock its quiz. <RouterLink :to="{ name:'selection-topics', query:{ flow:'study', subject:selectedSubject?.id } }">Go to Study →</RouterLink></p>
+    <p v-if="flow === 'quiz' && !studyCompletion.savedInBrowser.value" class="sd-footnote" role="status">Your study progress could not load. Quizzes stay locked until it can be checked. <button @click="studyCompletion.refresh">Retry study progress</button></p>
     <p v-if="flow === 'quiz'" class="sd-footnote">Three attempts per topic per Singapore day. Scores and XP are saved to Study History.</p>
     <p v-if="!topicCompletion.savedInBrowser.value" class="sd-footnote" role="status">Completion badges could not load. <button @click="topicCompletion.refresh">Retry</button></p>
   </section>
@@ -108,6 +124,12 @@ async function selectTopic(item) {
 </template>
 
 <style scoped>
+.sd-colour-topics .sd-topic-card.sd-quiz-locked {
+  filter: grayscale(1);
+  opacity: .65;
+  cursor: not-allowed;
+}
+
 .sd-colour-topics .sd-done-badge {
   display: inline-flex;
   align-items: center;

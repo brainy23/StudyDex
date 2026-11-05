@@ -15,6 +15,7 @@ import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 
 
 import { getStudentStudyCatalogue } from '../services/studyService'
+import { getTopicCompletions } from '../services/learningService'
 import { startQuiz, submitQuiz } from '../services/quizService'
 import XpPrompt from '../components/common/xpPrompt.vue'
 import QuizReviewModal from '../components/common/QuizReviewModal.vue'
@@ -64,6 +65,11 @@ async function initialise() {
     if (!alive || request !== generation) return
     const topic = catalogue.topics.find(item => item.id === route.query.topic && (!route.query.subject || item.subject_id === route.query.subject))
     if (!topic) throw new Error('Choose a topic for your school level.')
+    const studiedTopics = await getTopicCompletions(student.id, 'study')
+    if (!alive || request !== generation) return
+    if (!studiedTopics.some(item => item.topic_id === topic.id)) {
+      throw Object.assign(new Error('Complete this topic in Study to unlock its quiz.'), { code: 'QUIZ_LOCKED' })
+    }
     const key = `studydex:quiz:${student.id}:${topic.id}:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())}`
     let requestId
     try { requestId = sessionStorage.getItem(key) } catch { /* optional recovery */ }
@@ -615,7 +621,7 @@ const battleOptions = computed(() =>
 
     <section v-if="!enteredArena" class="arena-picker redesigned-picker" style="padding:100px 24px;">
       <p v-if="loading" role="status">Opening your questions…</p>
-      <div v-else-if="error" role="alert"><p>{{ studyErrorMessage(error, 'Your Arena content') }}</p><button @click="initialise">Try again</button></div>
+      <div v-else-if="error" role="alert"><p>{{ studyErrorMessage(error, 'Your Arena content') }}</p><RouterLink v-if="error.code === 'QUIZ_LOCKED'" :to="{ name:'selection-topics', query:{ flow:'study', subject:route.query.subject } }">Go to Study →</RouterLink><button @click="initialise">Try again</button></div>
       <div v-else-if="!profile?.school_level_id"><p>Set your school level to see the right quizzes.</p><RouterLink to="/account">Account settings</RouterLink></div>
       <div v-else role="status"><p>Choose a topic for your school level.</p><button @click="returnToSelection">Choose a topic</button></div>
     </section>
