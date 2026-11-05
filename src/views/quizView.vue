@@ -17,6 +17,7 @@ import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { getStudentStudyCatalogue } from '../services/studyService'
 import { startQuiz, submitQuiz } from '../services/quizService'
 import XpPrompt from '../components/common/xpPrompt.vue'
+import QuizReviewModal from '../components/common/QuizReviewModal.vue'
 import { quizExperienceResult } from '../utils/quizRewards'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
@@ -364,6 +365,12 @@ const previewFinished = ref(false)
 const previewQuestions = ref([])
 const quizRun = ref(null)
 const quizResult = ref(null)
+const showQuizReview = ref(false)
+const completedQuizReview = computed(() => quizResult.value ? {
+  ...quizResult.value,
+  quizName: selectedPreviewTopic.value?.name || 'Quiz',
+  questions: previewQuestions.value,
+} : null)
 const answers = ref({})
 const submitting = ref(false)
 const submitError = ref('')
@@ -374,6 +381,7 @@ const unansweredQuestions = computed(() => previewQuestions.value.filter(questio
   !question.options.some(option => option.id === answers.value[question.id]),
 ))
 function resetPreview() {
+  showQuizReview.value = false
   previewIndex.value = 0
   previewFinished.value = false
   answers.value = {}
@@ -450,6 +458,7 @@ const battleOptions = computed(() =>
 
 </script>
 <template>
+  <QuizReviewModal v-if="showQuizReview && previewFinished" :review="completedQuizReview" @close="showQuizReview = false" />
   <XpPrompt :result="xpResult" @close="xpResult = null" @continue="returnToSelection" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
@@ -560,7 +569,7 @@ const battleOptions = computed(() =>
             <span class="dialogue-kicker">RESULT SAVED</span>
             <p>Your result is saved in Study History.</p>
             <button type="button" class="battle-next" @click="showSavedReward">View XP reward</button>
-            <details><summary>Review answers</summary><p v-for="(item,index) in quizResult.review" :key="item.question_id">{{ index + 1 }}. {{ item.selected_option_id === item.correct_option_id ? 'Correct' : 'Incorrect' }} — {{ item.explanation || 'Review this topic in Poké Lab.' }}</p></details>
+            <button type="button" class="battle-next" @click="showQuizReview = true">Review answers</button>
           </template>
           <template v-else>
             <p class="battle-explanation">{{ submitting ? 'Saving your result…' : previewChoice === null ? 'Choose your answer.' : 'Answer selected. You can change it before submitting.' }}</p>

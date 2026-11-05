@@ -218,3 +218,26 @@ it('keeps a return button and reports a cancelled topic navigation', async () =>
   expect(wrapper.text()).toContain('Could not return to topics')
   expect(button('Choose topic')).toBeDefined()
 })
+
+it('opens a reusable review with every question and saved selection without awarding again', async () => {
+  const review = questions.map((q, i) => ({ question_id: q.id, selected_option_id: i === 4 ? `b${i}` : `a${i}`,
+    correct_option_id: `a${i}`, explanation: `Explanation ${i + 1}` }))
+  startQuiz.mockResolvedValueOnce({ run_id: 'attempt-1', questions, result: { ...savedResult, review }, attempt_number: 1, attempt_limit: 3 })
+  await open()
+  expect(wrapper.find('.quiz-review-modal').exists()).toBe(false)
+  await button('Review answers').trigger('click')
+  await flushPromises()
+  expect(wrapper.findAll('.review-question')).toHaveLength(5)
+  expect(wrapper.get('.quiz-review-modal').attributes('open')).toBeDefined()
+  expect(wrapper.get('.review-header h2').text()).toContain(studyCatalogue.topics[0].name)
+  const last = wrapper.findAll('.review-question')[4]
+  expect(last.text()).toContain('Question 5')
+  expect(last.text()).toContain('Your answer: Second answer')
+  expect(last.text()).toContain('Wrong')
+  expect(last.text()).toContain('Correct answer: First answer')
+  expect(last.text()).toContain('Explanation 5')
+  await wrapper.get('[aria-label="Close quiz review"]').trigger('click')
+  expect(wrapper.find('.quiz-review-modal').exists()).toBe(false)
+  expect(submitQuiz).not.toHaveBeenCalled()
+  expect(awardExperience).not.toHaveBeenCalled()
+})

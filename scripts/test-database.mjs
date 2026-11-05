@@ -62,6 +62,41 @@ try {
     const changed = { ...answers, [run.questions[0].id]: run.questions[0].options.find(o => o.id !== answers[run.questions[0].id]).id }
     await assert.rejects(call(uid, 'SELECT submit_learning_quiz($1,$2) AS result', [run.run_id, changed]), /different answers/)
   })
+  await check('quiz review uses owned completed snapshots without awarding XP or exposing pending keys', async () => {
+    const before = (await db.query('SELECT xp,level FROM user_pokemon WHERE id=$1', [buddy])).rows[0]
+    const eventCount = (await db.query('SELECT count(*)::int n FROM studydex_xp_events')).rows[0].n
+    const review = await call(uid, 'SELECT get_learning_quiz_review($1) AS result', [run.run_id])
+    assert.equal(review.questions.length, 5)
+    assert.equal(review.review.length, 5)
+    assert.equal(review.correct, 5)
+    assert.equal(review.scorePercent, 100)
+    assert(review.quizName)
+    assert.deepEqual(review.questions, run.questions)
+    assert.equal(review.review[0].selected_option_id, answers[run.questions[0].id])
+    assert.equal(review.review[0].correct_option_id, answers[run.questions[0].id])
+    await assert.rejects(call(other, 'SELECT get_learning_quiz_review($1) AS result', [run.run_id]), /could not be found/)
+    await assert.rejects(call('', 'SELECT get_learning_quiz_review($1) AS result', [run.run_id]), /Sign in/)
+    const pending = await call(other, 'SELECT start_learning_quiz($1,$2) AS result', [topic, randomUUID()])
+    await assert.rejects(call(other, 'SELECT get_learning_quiz_review($1) AS result', [pending.run_id]), /could not be found/)
+    const questionId = run.questions[0].id
+    const originalText = run.questions[0].question_text
+    await db.query('UPDATE questions SET question_text=$1 WHERE id=$2', ['Changed after submission', questionId])
+    assert.equal((await call(uid, 'SELECT get_learning_quiz_review($1) AS result', [run.run_id])).questions[0].question_text, originalText)
+    await db.query('UPDATE questions SET question_text=$1 WHERE id=$2', [originalText, questionId])
+    assert.deepEqual((await db.query('SELECT xp,level FROM user_pokemon WHERE id=$1', [buddy])).rows[0], before)
+    assert.equal((await db.query('SELECT count(*)::int n FROM studydex_xp_events')).rows[0].n, eventCount)
+  })
+  await check('legacy quiz review reads saved selections and reports missing snapshots', async () => {
+    const legacy = randomUUID()
+    await db.query("INSERT INTO quiz_attempts(id,user_id,topic_id,attempt_type,score,total_questions,xp_change) VALUES($1,$2,$3,'quiz',1,1,5)", [legacy,uid,topic])
+    const questionId = run.questions[0].id
+    await db.query('INSERT INTO quiz_attempt_answers(attempt_id,question_id,selected_option_id) VALUES($1,$2,$3)', [legacy,questionId,answers[questionId]])
+    const result = await call(uid, 'SELECT get_learning_quiz_review($1) AS result', [legacy])
+    assert.equal(result.questions.length, 1)
+    assert.equal(result.review[0].selected_option_id, answers[questionId])
+    assert.match(result.notice, /older attempt/)
+    assert.equal(result.questions[0].options.find(o => o.id === answers[questionId]).option_text, run.questions[0].options.find(o => o.id === answers[questionId]).option_text)
+  })
   await check('three attempts per topic per Singapore day', async () => {
     for (let n = 0; n < 2; n++) {
       const next = await call(uid, 'SELECT start_learning_quiz($1,$2) AS result', [topic, randomUUID()])

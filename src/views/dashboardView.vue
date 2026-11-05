@@ -6,6 +6,8 @@ import BackToHome from '../components/common/BackToHome.vue'
 import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
 import { getDashboardData } from '@/services/dashboardService'
+import QuizReviewModal from '@/components/common/QuizReviewModal.vue'
+import { getQuizReview } from '@/services/quizReviewService'
 import { studyErrorMessage, resolveStudyImage } from '@/services/studyService'
 import { getSupabase } from '@/lib/supabase'
 
@@ -17,6 +19,38 @@ const selectedPeriod = ref('7')
 const expandedTopic = ref(null)
 const showAllProgress = ref(false)
 const now = ref(new Date())
+const reviewAttemptId = ref(null)
+const quizReview = ref(null)
+const reviewLoading = ref(false)
+const reviewError = ref('')
+let reviewRequest = 0
+function closeQuizReview() {
+  reviewRequest++
+  reviewAttemptId.value = null
+  quizReview.value = null
+  reviewError.value = ''
+  reviewLoading.value = false
+}
+async function openQuizReview(attemptId) {
+  const userId = profile.value?.id
+  if (!userId) return
+  const request = ++reviewRequest
+  reviewAttemptId.value = attemptId
+  quizReview.value = null
+  reviewError.value = ''
+  reviewLoading.value = true
+  try {
+    const result = await getQuizReview(attemptId, userId)
+    if (disposed || request !== reviewRequest || profile.value?.id !== userId) return
+    quizReview.value = result
+  } catch (error) {
+    if (!disposed && request === reviewRequest && profile.value?.id === userId) {
+      reviewError.value = studyErrorMessage(error, 'Your quiz review')
+    }
+  } finally {
+    if (!disposed && request === reviewRequest) reviewLoading.value = false
+  }
+}
 let requestId = 0
 let disposed = false
 let subscription
@@ -24,6 +58,7 @@ let clockInterval
 
 // No user ID comes from the UI. The service resolves the authenticated profile.
 async function loadDashboard() {
+  closeQuizReview()
   const request = ++requestId
   loading.value = true
   errorMessage.value = ''
@@ -196,7 +231,7 @@ const chartOptions = computed(() => ({
 const history = computed(() => {
   const topicName = id => topics.value.find(topic => topic.id === id)?.name ?? 'Topic unavailable'
   return [
-    ...attempts.value.map(row => ({ id: `quiz-${row.id}`, title: topicName(row.topic_id), type: row.attempt_type === 'boss_battle' ? 'Boss battle' : 'Quiz', badge: 'quiz', score: percentage(row), xp: row.xp_change, date: row.completed_at })),
+    ...attempts.value.map(row => ({ id: `quiz-${row.id}`, attemptId: row.attempt_type === 'quiz' ? row.id : null, title: topicName(row.topic_id), type: row.attempt_type === 'boss_battle' ? 'Boss battle' : 'Quiz', badge: 'quiz', score: percentage(row), xp: row.xp_change, date: row.completed_at })),
     ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: row.mode === 'learn' ? 'Learn' : 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? (row.xp_change || 0) + blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))
 })
@@ -211,6 +246,7 @@ onMounted(() => {
     // Defer service calls outside the Supabase auth callback.
     subscription = getSupabase().auth.onAuthStateChange(event => {
       if (['SIGNED_OUT', 'SIGNED_IN', 'USER_UPDATED'].includes(event)) {
+        closeQuizReview()
         requestId++
         dashboard.value = null
         loading.value = true
@@ -221,6 +257,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   disposed = true
+  closeQuizReview()
   requestId++
   subscription?.unsubscribe()
   clearInterval(clockInterval)
@@ -230,6 +267,8 @@ onUnmounted(() => {
 </script>
 
 <template>
+  <QuizReviewModal v-if="reviewAttemptId" :review="quizReview" :loading="reviewLoading" :error="reviewError"
+    @close="closeQuizReview" @retry="openQuizReview(reviewAttemptId)" />
   <main class="trainer-dashboard student-dashboard">
     <div class="dashboard-shell">
       <div v-if="loading" class="dashboard-panel" role="status" aria-live="polite">Loading your dashboard…</div>
@@ -279,7 +318,7 @@ onUnmounted(() => {
               <div class="topic-list">
                 <article v-for="topic in topicProgress" :key="topic.id" class="topic-item" :class="`topic-${topic.color}`">
                   <button class="topic-toggle" :aria-expanded="expandedTopic === topic.id" :aria-controls="`topic-${topic.id}`" @click="expandedTopic = expandedTopic === topic.id ? null : topic.id"><span class="topic-icon" aria-hidden="true">📖</span><span class="topic-name">{{ topic.name }}</span><span class="topic-status">{{ topic.status }}</span><span class="topic-score">{{ topic.score === null ? '—' : `${topic.score}%` }}</span><span class="topic-chevron">{{ expandedTopic === topic.id ? '−' : '+' }}</span></button>
-                  <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><RouterLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</RouterLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span></li></ul></div>
+                  <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><RouterLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</RouterLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span><button type="button" class="review-link" :aria-label="`Review ${topic.name} quiz completed ${formatDate(attempt.completed_at)}`" @click="openQuizReview(attempt.id)">Review answers</button></li></ul></div>
                 </article>
               </div>
             </template>
@@ -294,7 +333,7 @@ onUnmounted(() => {
         <section class="dashboard-panel history-panel" aria-labelledby="history-title">
           <div class="panel-heading"><div><span class="eyebrow">EVERY STEP COUNTS</span><h2 id="history-title">📋 Recent Progress</h2><p>Your completed study sessions, quizzes and boss battles.</p></div><button v-if="history.length > 5" class="button button-secondary" :aria-expanded="showAllProgress" @click="showAllProgress = !showAllProgress">{{ showAllProgress ? 'Show recent 5' : 'View all activity' }}</button></div>
           <p v-if="!quizAvailable || !sessionsAvailable" class="section-notice">Some activity is unavailable. Only successfully loaded records are shown.</p>
-          <div v-if="visibleHistory.length" class="history-table-wrap" tabindex="0" aria-label="Recent activity table, scrollable"><table class="progress-table"><thead><tr><th scope="col">Topic / Activity</th><th scope="col">Type</th><th scope="col">Score</th><th scope="col">XP</th><th scope="col">Completed · SGT</th></tr></thead><tbody><tr v-for="item in visibleHistory" :key="item.id"><td>{{ item.title }}</td><td><span class="type-badge" :class="item.badge">{{ item.type }}</span></td><td>{{ item.score === null ? '—' : `${item.score}%` }}</td><td class="history-xp" :class="{ 'xp-negative': item.xp < 0 }">{{ signed(item.xp) }}</td><td class="history-date">{{ formatDate(item.date) }}</td></tr></tbody></table></div>
+          <div v-if="visibleHistory.length" class="history-table-wrap" tabindex="0" aria-label="Recent activity table, scrollable"><table class="progress-table"><thead><tr><th scope="col">Topic / Activity</th><th scope="col">Type</th><th scope="col">Score</th><th scope="col">XP</th><th scope="col">Completed · SGT</th></tr></thead><tbody><tr v-for="item in visibleHistory" :key="item.id"><td><button v-if="item.attemptId" type="button" class="review-link" :aria-label="`Review ${item.title} quiz completed ${formatDate(item.date)}`" @click="openQuizReview(item.attemptId)">{{ item.title }} · Review answers</button><template v-else>{{ item.title }}</template></td><td><span class="type-badge" :class="item.badge">{{ item.type }}</span></td><td>{{ item.score === null ? '—' : `${item.score}%` }}</td><td class="history-xp" :class="{ 'xp-negative': item.xp < 0 }">{{ signed(item.xp) }}</td><td class="history-date">{{ formatDate(item.date) }}</td></tr></tbody></table></div>
           <p v-else-if="quizAvailable && sessionsAvailable" class="simple-empty">No completed activity yet. Your first achievement will appear here.</p>
         </section>
       </template>
@@ -303,6 +342,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.review-link { border: 0; background: none; padding: 4px 0; color: #285d94; font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
 /* BASE */
 .trainer-dashboard,
 .trainer-dashboard * {
@@ -856,7 +896,7 @@ summary:focus-visible,
 
 .attempt-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 14px;
   padding: 12px 0;
@@ -1352,6 +1392,11 @@ summary:focus-visible,
   .attempt-row {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 5px 10px;
+  }
+
+  .attempt-row .review-link {
+    grid-column: 1 / -1;
+    grid-row: 3;
   }
 
   .attempt-date {
