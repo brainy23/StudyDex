@@ -4,8 +4,11 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon } from '../services/studyService'
 import { checkedRpc } from '../services/backendClient'
+import playSound from '../../scripts/soundEffect'
 const collection = ref([])
 const ownedRecords = ref([])
+const loading = ref(true)
+const selectedRow = computed(() => ownedRecords.value.find(row => row.pokemon.pokeapi_id === selectedId.value))
 const sorted = computed(() => [...collection.value].sort((a,b) => a-b))
 const activeId = ref(null)
 const selectedId = ref(null)
@@ -14,6 +17,7 @@ const saving = ref(false)
 const collectionError = ref('')
 let alive = true
 async function loadCollection() {
+  loading.value = true
   try {
     const profile = await getCurrentProfile()
     const records = await getOwnedStudyPokemon(profile.id)
@@ -25,6 +29,7 @@ async function loadCollection() {
     selectedId.value = sorted.value.includes(selectedId.value) ? selectedId.value : activeId.value || sorted.value[0]
     collectionError.value = ''
   } catch (cause) { if (alive) collectionError.value = cause.message }
+  finally { if (alive) loading.value = false }
 }
 
 const SCALE = window.innerWidth < 800 ? 2 : 4 // whole numbers keep the pixel art crisp
@@ -181,7 +186,6 @@ onUnmounted(() => {
 
 <template>
   <main class="collection">
-    <p v-if="collectionError" role="alert">{{ collectionError }} <button @click="loadCollection">Retry</button></p>
     <header class="topbar">
       <div class="title"><span class="title-icon" aria-hidden="true"></span>MY COLLECTION</div>
       <div class="registered">
@@ -189,13 +193,17 @@ onUnmounted(() => {
         Number registered: <strong>{{ sorted.length }}</strong>
       </div>
     </header>
+
     <div style="background: rgba(255, 255, 255, 0.78); padding-bottom:15px; padding-left:28px">
-        <button onclick="history.back()" class="back">Back</button> 
+      <button type="button" class="back" @click="$router.back()">Back</button>
     </div>
-  
+
     <div class="body">
       <section class="list-panel" aria-label="Your Pokémon">
-        <div v-if="sorted.length" ref="grid" class="grid" @keydown="onKey">
+        <div v-if="collectionError" role="alert">{{ collectionError }} <button @click="loadCollection">Retry</button></div>
+        <div v-if="loading" class="empty">Loading…</div>
+
+        <div v-else-if="sorted.length" ref="grid" class="grid" @keydown="onKey">
           <button
             v-for="id in sorted"
             :key="id"
@@ -204,11 +212,13 @@ onUnmounted(() => {
             :aria-pressed="id === selectedId"
             :title="nameOf(id)"
             @click="select(id)"
+            @mouseenter="playSound('selectingPokemon');"
           >
             <img :src="tileSprite(id)" :alt="nameOf(id)" loading="lazy" />
             <span v-if="id === activeId" class="star" aria-label="Active Pokémon">★</span>
           </button>
         </div>
+
         <div v-else class="empty">
           <p>No Pokémon yet. Open a pack to start your collection!</p>
           <RouterLink to="/rewards" class="activate link">Open a pack</RouterLink>
@@ -234,13 +244,19 @@ onUnmounted(() => {
 
           <div class="plate">
             <div class="no">{{ nameOf(selectedId) }}</div>
-            <div class="name">[fetch XP bar]</div>
-          </div>
-          <div v-if="detail" class="types">
-            <span v-for="t in detail.types" :key="t" class="chip" :style="{ '--tc': TYPE_COLORS[t] }">{{ t }}</span>
+            <div class="name">Lv {{ selectedRow?.level }} · {{ selectedRow?.xp }} XP</div>
           </div>
 
-          <button class="activate" :disabled="saving || selectedId === activeId" @click="makeActive">
+          <div v-if="detail" class="types">
+            <span
+              v-for="t in detail.types"
+              :key="t"
+              class="chip"
+              :style="{ '--tc': TYPE_COLORS[t] }"
+            >{{ t }}</span>
+          </div>
+
+          <button class="activate" :disabled="saving || selectedId === activeId" @click="makeActive(); playSound('selectedPokemon')">
             {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
           </button>
         </template>

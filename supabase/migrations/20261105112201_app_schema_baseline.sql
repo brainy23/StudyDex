@@ -1227,4 +1227,3 @@ GRANT SELECT ("school_level_id") ON "public"."profiles" TO "authenticated";
 GRANT UPDATE ("school_level_id") ON "public"."profiles" TO "authenticated";
 DROP TRIGGER IF EXISTS studydex_registration_profile ON auth.users;
 CREATE TRIGGER studydex_registration_profile AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION private.create_registration_profile();
-

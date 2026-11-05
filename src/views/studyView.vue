@@ -1,4 +1,5 @@
 <script setup>
+import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
@@ -23,6 +24,17 @@ import { usePokemonTransition } from '../composables/usePokemonTransition'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
+
+const pageLoading = computed(() =>
+  loading.value ||
+  (
+    !error.value &&
+    !!topic.value &&
+    (!flashResource.value || flashResource.value.loading)
+  )
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -577,6 +589,10 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
 
 </script>
 <template>
+  <LoadingScreen
+  :show="pageLoading && !pokemonTransition.state.active"
+  message="Opening your Flashcards…"
+/>
   <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
   <p v-if="persistedStudy.error.value" class="lab-state" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().then(result => showSavedExperience(result?.xp)).catch(() => {})">Retry saving</button></p>
@@ -586,11 +602,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
       <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
     </nav>
     <header class="study-header">
-      <nav class="study-navigation" aria-label="Study navigation">
-        <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-
-        <button type="button" class="home-link" @click="returnToSelection">Topics</button>
-      </nav>
+      <StudyPageNavigation @topics="returnToSelection" />
       <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
     </header>
     <div class="study-content">
@@ -702,6 +714,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
     </div>
   </main>
   </div>
+  <StudydexBubbleNav current="study"/>
 </template>
 <style scoped>
 

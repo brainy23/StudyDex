@@ -9,8 +9,11 @@ export async function studyAction({ sessionId, topicId, mode, action, blockId, u
   if (result.xp || ['complete', 'abandon'].includes(action)) activityChanged(result)
   return result
 }
-export async function getTopicCompletions(userId) {
-  const { data, error } = await getSupabase().from('topic_completions').select('topic_id, completed_at').eq('user_id', userId)
+export async function getTopicCompletions(userId, flow = 'study') {
+  const query = flow === 'quiz'
+    ? getSupabase().from('quiz_attempts').select('topic_id, completed_at').eq('attempt_type', 'quiz')
+    : getSupabase().from('topic_completions').select('topic_id, completed_at')
+  const { data, error } = await query.eq('user_id', userId)
   if (error) throw error
   return data || []
 }

@@ -31,6 +31,9 @@ publishable key; no service-role credential is needed in the browser.
   silently imported into whichever account happens to sign in next. Pending
   writes pin the verified user's token; route state and weather are reset when
   the account changes. Optional recovery keys include the account ID.
+- **Completion badges:** the merged topic badges read saved Supabase records.
+  Quiz badges use submitted quiz attempts, separately from study completions;
+  browser-local completion flags cannot mark a quiz done.
 - **Account deletion:** password confirmation stays in a non-persisted Auth
   client. MFA-enrolled users receive a TOTP or phone-code challenge in that same
   confirmation session. The existing deletion Edge Function still verifies
@@ -108,12 +111,14 @@ pnpm exec vite build --config vite.onboarding.fixture.config.js --configLoader r
 - 13 isolated PostgreSQL integration checks passed, including all curriculum
   seeding, grading, duplicate submissions, three-attempt limits, elapsed-time
   enforcement, daily reset, fifth-block zero XP, ownership and deletion cascades.
-- 137 focused unit tests passed, including token pinning/account switches and MFA
+- 138 focused unit tests passed, including separate quiz/study completion badges,
+  token pinning/account switches and MFA
   challenge acceptance, refusal and cancellation.
-- Six browser checks passed, including real supabase-js HTTP requests routed into the
+- Seven browser checks passed, including real supabase-js HTTP requests routed into the
   isolated PostgreSQL schema: quiz/history, Learn completion/history, verified
   focus/daily progress/history, a failed submission followed by a safe retry,
-  to-do persistence across reloads and HTTP denial of server-only SQL files.
+  to-do persistence across reloads, saved collection XP/buddy selection and HTTP
+  denial of server-only SQL files. Quiz badges persist and do not mark study done.
 - A live Supabase smoke check passed using two synthetic records in one rolled-back
   SQL transaction. No Auth API signup/email or real account deletion was invoked.
   The repeatable SQL is `database/verify-connected-learning.sql`.

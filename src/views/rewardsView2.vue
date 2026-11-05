@@ -1,5 +1,74 @@
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import { getCurrentProfile } from '../services/profileService'
+import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
+
+const rewardsBuddy = ref(null)
+const buddyLoading = ref(true)
+const buddyError = ref('')
+let buddyActive = true
+let buddyRequest = 0
+let buddyController
+async function loadRewardsBuddy() {
+    const request = ++buddyRequest
+    buddyController?.abort()
+    buddyLoading.value = true
+    buddyError.value = ''
+    try {
+        const profile = await getCurrentProfile()
+        const record = await getSelectedStudyBuddy(profile.id)
+        if (!buddyActive || request !== buddyRequest) return
+        if (!record?.pokemon) {
+            rewardsBuddy.value = null
+            return
+        }
+        const savedSprite = resolveStudyImage(record.pokemon.sprite_url)
+        let sprite = savedSprite
+        let staticSprite = savedSprite
+        // PokemonBuddy displays animated_img; supply actual animated sprite frames.
+        const apiName = String(record.pokemon.name || '').toLowerCase()
+            .replace(/[.'’]/g, '').replace(/\s+/g, '-')
+        if (apiName) {
+            const controller = new AbortController()
+            buddyController = controller
+            const timeout = setTimeout(() => controller.abort(), 8000)
+            try {
+                const base = (import.meta.env.VITE_POKE_API_URL || 'https://pokeapi.co/api/v2').replace(/\/+$/, '')
+                const response = await fetch(base + '/pokemon/' + encodeURIComponent(apiName), {
+                    signal: controller.signal,
+                })
+                if (response.ok) {
+                    const data = await response.json()
+                    sprite = data.sprites?.versions?.['generation-v']?.['black-white']
+                        ?.animated?.front_default || data.sprites?.front_default || savedSprite
+                    staticSprite = data.sprites?.front_default || savedSprite
+                }
+            } catch { /* The saved sprite remains available if the API fails. */ }
+            finally { clearTimeout(timeout) }
+        }
+        if (!buddyActive || request !== buddyRequest) return
+        rewardsBuddy.value = {
+            ...record.pokemon,
+            ownedId: record.id,
+            xp: record.xp ?? 0,
+            level: record.level ?? 1,
+            evolution_stage: record.evolution_stage ?? 0,
+            isDefeated: record.is_defeated ?? false,
+            animated_img: sprite,
+            static_img: staticSprite,
+        }
+    } catch {
+        if (buddyActive && request === buddyRequest) buddyError.value = 'Your Pokémon could not load.'
+    } finally {
+        if (buddyActive && request === buddyRequest) buddyLoading.value = false
+    }
+}
+onMounted(loadRewardsBuddy)
+onUnmounted(() => { buddyActive = false; buddyRequest++; buddyController?.abort() })
+
+import { getSupabase } from '../lib/supabase'
+import { uuidFromDex, dexFromUuid, loadPokemonMap } from '../lib/pokemon'
 
 // stages: browse > idle > zoom > ready > tear > rise > flip > revealed
 const stage = ref('browse')
@@ -44,7 +113,24 @@ const packMessage = computed(() =>
 )
 
 // Pokemon the user already owns (replace with a Supabase fetch)
-const owned = ref(new Set([4, 25]))
+const owned = ref(new Set())
+
+async function loadOwned() {
+  const supabase = getSupabase()
+  await loadPokemonMap()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data, error } = await supabase
+    .from('user_pokemon')
+    .select('pokemon_id')
+    .eq('user_id', user.id)
+
+  if (error) { console.error(error); return }
+  owned.value = new Set(data.map(r => dexFromUuid(r.pokemon_id)))
+}
+
+onMounted(loadOwned)
 
 // Only base forms can be pulled: every Pokemon in #1-151 that does not evolve
 // from another Pokemon in #1-151. Delete IDs to trim the pool.
@@ -316,12 +402,44 @@ function completeTear(ms) {
     dragging.value = false
     animateTear(1, ms, tear)
 }
+async function saveCard(card) {
+  const supabase = getSupabase()
+  await loadPokemonMap()
+
+  const pokemonUuid = uuidFromDex(card.id)
+  if (!pokemonUuid) {
+    console.error('No row in the pokemon table for dex #' + card.id)
+    return
+  }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  if (card.isNew) {
+    const { error } = await supabase.from('user_pokemon').insert({
+      user_id: user.id,
+      pokemon_id: pokemonUuid,
+      xp: 0,
+      level: 1,
+      is_selected: false,
+      is_defeated: false,
+    })
+    if (error) console.error('Could not save Pokémon', error)
+  } else {
+    const { error } = await supabase.rpc('add_duplicate_xp', {
+      p_pokemon_id: pokemonUuid,
+      p_xp: 25,
+    })
+    if (error) console.error('Could not add XP', error)
+  }
+}
 
 function tear() {
     if (stage.value !== 'ready' || !card.value) return
     packCount.value--
     owned.value.add(card.value.id)
     // TODO: save the card to Supabase and mark one pack as opened.
+    saveCard({ ...card.value })
     // Duplicates (card.isNew === false) should give bonus XP.
     burst()
     makeConfetti()
@@ -377,7 +495,18 @@ function backToPacks() {
       <aside class="buddy">
         <div class="bubble">{{ packMessage }}</div>
         <div class="buddy-circle">
-          <img class="buddy-img" src="https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/6.png" alt="Your buddy" />
+          <PokemonBuddy
+            v-if="rewardsBuddy"
+            :key="rewardsBuddy.ownedId"
+            class="rewards-pokemon"
+            :active-pokemon="rewardsBuddy"
+          />
+          <p v-else-if="buddyLoading" role="status">Loading your Pokémon…</p>
+          <div v-else-if="buddyError" role="alert">
+            <p>{{ buddyError }}</p>
+            <button type="button" @click="loadRewardsBuddy">Try again</button>
+          </div>
+          <p v-else>Select an active Pokémon from your collection.</p>
         </div>
       </aside>
       <section class="shelf">
@@ -564,7 +693,7 @@ function backToPacks() {
     .back{
         font-family: inherit;
         font-size: 24px;
-        padding: 8px 20px;
+        padding: 4px 20px;
         border: 3px solid rgb(200, 160, 0);
         border-radius: 12px;
         background-color: rgb(255, 215, 37);
@@ -1237,8 +1366,6 @@ function backToPacks() {
         display: grid;
         place-items: center;
     }
-    .buddy-circle img{ width: 85%; }
-    .buddy-img{ animation: bob-slow 3.2s ease-in-out infinite; }
 
     .shelf{
         background-color: rgba(255, 255, 255, 0.55);
@@ -1481,7 +1608,28 @@ function backToPacks() {
         .card-name{ font-size: 44px; }
     }
     @media (prefers-reduced-motion: reduce){
-        .shaking, .aura, .rays, .confetti, .shine-sweep, .buddy-img, .hero-pack, .backdrop, .tear-arrow,
+        .shaking, .aura, .rays, .confetti, .shine-sweep, .hero-pack, .backdrop, .tear-arrow,
         .stage-ready .pack-body, .stage-ready .pack-top{ animation: none !important; }
     }
+
+/* Shared buddy: show only the large animated sprite on this page. */
+.buddy-circle { position:relative; aspect-ratio:1; overflow:hidden; }
+.buddy-circle .rewards-pokemon {
+    display:grid; place-items:center; width:100%; height:100%;
+    min-width:0; margin:0; padding:0; border:0;
+    background:transparent; box-shadow:none;
+}
+.buddy-circle .rewards-pokemon :deep(h2),
+.buddy-circle .rewards-pokemon :deep(h3),
+.buddy-circle .rewards-pokemon :deep(p),
+.buddy-circle .rewards-pokemon :deep(.buddy-xp) { display:none !important; }
+.buddy-circle .rewards-pokemon :deep(.buddy-image-container) {
+    display:grid; place-items:center; width:100%; height:100%;
+    min-height:0; margin:0; padding:0; background:transparent;
+}
+.buddy-circle .rewards-pokemon :deep(img.buddy-sprite) {
+    width:90% !important; height:90% !important;
+    max-width:none !important; max-height:none !important;
+    object-fit:contain; image-rendering:pixelated;
+}
 </style>

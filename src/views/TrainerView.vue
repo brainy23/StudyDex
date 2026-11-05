@@ -965,7 +965,7 @@ onUnmounted(() => {
 
 .trainer-figure { width: 63%; flex-shrink: 0; }
 
-.buddy-figure { width: 26.36%; flex-shrink: 0; min-width: 0; }
+.buddy-figure { width: 70%; flex-shrink: 0; min-width: 0; }
 
 .trainer-sprite {
   display: block;

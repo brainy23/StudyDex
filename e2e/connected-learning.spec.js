@@ -44,6 +44,32 @@ test('graded quiz saves a real result and history without exposing answer keys',
     await expect(page.locator('.history-table-wrap')).toContainText('Quiz')
     expect((await fixture.db.query('SELECT count(*)::int n FROM public.quiz_attempts')).rows[0].n).toBe(1)
     expect((await fixture.db.query('SELECT count(*)::int n FROM public.user_packs')).rows[0].n).toBe(0)
+    await page.goto('/subjects?flow=quiz')
+    await page.locator('.sd-path').filter({ hasText:/Mathematics/i }).click()
+    await expect(page.locator('.sd-topic-card').first().locator('.sd-done-badge')).toContainText('Done')
+    await page.goto('/subjects?flow=study')
+    await page.locator('.sd-path').filter({ hasText:/Mathematics/i }).click()
+    await expect(page.locator('.sd-done-badge')).toHaveCount(0)
+    expect(fixture.errors).toEqual([])
+    expect(fixture.liveRequests).toEqual([])
+  } finally { await fixture.close() }
+})
+
+test('merged collection displays saved XP and persists an owned buddy selection', async ({ page }) => {
+  const fixture = await learningFixture(page)
+  try {
+    await fixture.db.exec('RESET ROLE')
+    await fixture.db.query(`INSERT INTO user_pokemon(user_id,pokemon_id,xp,level,is_selected,is_defeated)
+      SELECT $1,id,0,1,false,false FROM pokemon WHERE pokeapi_id=7`, [fixture.session.user.id])
+    await fixture.db.exec('SET ROLE authenticated')
+    await page.goto('/collection')
+    await expect(page.locator('.tile')).toHaveCount(2)
+    await expect(page.locator('.plate')).toContainText('Lv 1 · 0 XP')
+    await page.locator('.tile').last().click()
+    await page.getByRole('button', { name:'Make active Pokémon', exact:true }).click()
+    await expect(page.getByRole('button', { name:'✓ Active Pokémon', exact:true })).toBeDisabled()
+    await page.reload()
+    await expect(page.locator('.tile').last()).toHaveClass(/active/)
     expect(fixture.errors).toEqual([])
     expect(fixture.liveRequests).toEqual([])
   } finally { await fixture.close() }

@@ -8,7 +8,6 @@ import {
 } from '../services/studyService'
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
 import { getSubjectTheme, isScienceSubject } from '../data/subjectThemes'
-import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
 import '../assets/selection-pages.css'
 
@@ -206,6 +205,6 @@ function selectSubject(item) {
       No subjects are available for your school level yet.
     </p>
 
-    <StudydexBubbleNav :current="flow" />
+
   </main>
 </template>
