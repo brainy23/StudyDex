@@ -22,6 +22,16 @@ import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
+
+const pageLoading = computed(() =>
+  loading.value ||
+  (
+    !error.value &&
+    !!topic.value &&
+    (!flashResource.value || flashResource.value.loading)
+  )
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -518,6 +528,10 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
 useTransitionPageReady('study-decks:' + route.query.topic, () => !loading.value && (!!error.value || !topic.value || !!flashResource.value && !flashResource.value.loading))
 </script>
 <template>
+  <LoadingScreen
+  :show="pageLoading && !pokemonTransition.state.active"
+  message="Opening your Flashcards…"
+/>
   <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">

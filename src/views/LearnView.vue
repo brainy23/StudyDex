@@ -13,6 +13,20 @@ import {
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import '../assets/study.css'
+import LoadingScreen from '../components/common/LoadingScreen.vue'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
+
+
+const pokemonTransition = usePokemonTransition()
+
+const pageLoading = computed(() =>
+  loading.value ||
+  (
+    !error.value &&
+    !!topic.value &&
+    (!lessonResource.value || lessonResource.value.loading)
+  )
+)
 
 const route = useRoute()
 const router = useRouter()
@@ -281,6 +295,10 @@ async function backToFlashcards() {
 useTransitionPageReady('learn:' + route.query.topic, () => !loading.value && (!!error.value || !topic.value || !!lessonResource.value && !lessonResource.value.loading))
 </script>
 <template>
+  <LoadingScreen
+  :show="pageLoading && !pokemonTransition.state.active"
+  message="Opening your Classroom…"
+/>
   <div class="study-page">
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab, 'is-learning': true }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
