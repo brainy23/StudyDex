@@ -15,8 +15,10 @@ import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 
 
 import { getStudentStudyCatalogue } from '../services/studyService'
+import { getTopicCompletions } from '../services/learningService'
 import { startQuiz, submitQuiz } from '../services/quizService'
 import XpPrompt from '../components/common/xpPrompt.vue'
+import QuizReviewModal from '../components/common/QuizReviewModal.vue'
 import { quizExperienceResult } from '../utils/quizRewards'
 import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
@@ -63,6 +65,11 @@ async function initialise() {
     if (!alive || request !== generation) return
     const topic = catalogue.topics.find(item => item.id === route.query.topic && (!route.query.subject || item.subject_id === route.query.subject))
     if (!topic) throw new Error('Choose a topic for your school level.')
+    const studiedTopics = await getTopicCompletions(student.id, 'study')
+    if (!alive || request !== generation) return
+    if (!studiedTopics.some(item => item.topic_id === topic.id)) {
+      throw Object.assign(new Error('Complete this topic in Study to unlock its quiz.'), { code: 'QUIZ_LOCKED' })
+    }
     const key = `studydex:quiz:${student.id}:${topic.id}:${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Singapore' }).format(new Date())}`
     let requestId
     try { requestId = sessionStorage.getItem(key) } catch { /* optional recovery */ }
@@ -276,8 +283,16 @@ onUnmounted(() => {
 })
 
 const enteredArena = ref(false)
-function returnToSelection() {
-  router.push({ name:'selection-topics', query:{ flow:'quiz', ...(previewSubject.value ? { subject:previewSubject.value.id } : {}) } })
+const navigationError = ref('')
+async function returnToSelection() {
+  navigationError.value = ''
+  const subjectId = previewSubject.value?.id || route.query.subject
+  try {
+    const failure = await router.push({ name:'selection-topics', query:{ flow:'quiz', ...(subjectId ? { subject:subjectId } : {}) } })
+    if (failure) navigationError.value = 'Could not return to topics. Please try again.'
+  } catch {
+    navigationError.value = 'Could not return to topics. Please try again.'
+  }
 }
 const spriteLoading = ref(false)
 const spriteError = ref('')
@@ -356,6 +371,12 @@ const previewFinished = ref(false)
 const previewQuestions = ref([])
 const quizRun = ref(null)
 const quizResult = ref(null)
+const showQuizReview = ref(false)
+const completedQuizReview = computed(() => quizResult.value ? {
+  ...quizResult.value,
+  quizName: selectedPreviewTopic.value?.name || 'Quiz',
+  questions: previewQuestions.value,
+} : null)
 const answers = ref({})
 const submitting = ref(false)
 const submitError = ref('')
@@ -366,6 +387,7 @@ const unansweredQuestions = computed(() => previewQuestions.value.filter(questio
   !question.options.some(option => option.id === answers.value[question.id]),
 ))
 function resetPreview() {
+  showQuizReview.value = false
   previewIndex.value = 0
   previewFinished.value = false
   answers.value = {}
@@ -442,7 +464,8 @@ const battleOptions = computed(() =>
 
 </script>
 <template>
-  <XpPrompt :result="xpResult" @close="xpResult = null" />
+  <QuizReviewModal v-if="showQuizReview && previewFinished" :review="completedQuizReview" @close="showQuizReview = false" />
+  <XpPrompt :result="xpResult" @close="xpResult = null" @continue="returnToSelection" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
@@ -536,6 +559,7 @@ const battleOptions = computed(() =>
         <div class="demo-caption"><span><span class="sd-subject-name">{{ previewSubject?.name }}</span> · {{ selectedPreviewTopic?.name }}</span><span>{{ previewFinished ? 'Complete' : `${previewIndex + 1} / ${previewQuestions.length}` }}</span></div>
         <h2 id="arena-question">{{ previewFinished ? 'Quiz complete, trainer!' : previewQuestion?.question_text }}</h2>
         <p v-if="previewFinished">{{ quizResult.correct }} / {{ quizResult.total }} correct · {{ quizResult.scorePercent }}% · {{ quizResult.appliedDelta }} XP saved</p>
+        <p v-if="navigationError" role="alert">{{ navigationError }}</p>
       </section>
 
       <!-- Classic battle menu: dialogue left, four choices right. -->
@@ -551,7 +575,7 @@ const battleOptions = computed(() =>
             <span class="dialogue-kicker">RESULT SAVED</span>
             <p>Your result is saved in Study History.</p>
             <button type="button" class="battle-next" @click="showSavedReward">View XP reward</button>
-            <details><summary>Review answers</summary><p v-for="(item,index) in quizResult.review" :key="item.question_id">{{ index + 1 }}. {{ item.selected_option_id === item.correct_option_id ? 'Correct' : 'Incorrect' }} — {{ item.explanation || 'Review this topic in Poké Lab.' }}</p></details>
+            <button type="button" class="battle-next" @click="showQuizReview = true">Review answers</button>
           </template>
           <template v-else>
             <p class="battle-explanation">{{ submitting ? 'Saving your result…' : previewChoice === null ? 'Choose your answer.' : 'Answer selected. You can change it before submitting.' }}</p>
@@ -597,7 +621,7 @@ const battleOptions = computed(() =>
 
     <section v-if="!enteredArena" class="arena-picker redesigned-picker" style="padding:100px 24px;">
       <p v-if="loading" role="status">Opening your questions…</p>
-      <div v-else-if="error" role="alert"><p>{{ studyErrorMessage(error, 'Your Arena content') }}</p><button @click="initialise">Try again</button></div>
+      <div v-else-if="error" role="alert"><p>{{ studyErrorMessage(error, 'Your Arena content') }}</p><RouterLink v-if="error.code === 'QUIZ_LOCKED'" :to="{ name:'selection-topics', query:{ flow:'study', subject:route.query.subject } }">Go to Study →</RouterLink><button @click="initialise">Try again</button></div>
       <div v-else-if="!profile?.school_level_id"><p>Set your school level to see the right quizzes.</p><RouterLink to="/account">Account settings</RouterLink></div>
       <div v-else role="status"><p>Choose a topic for your school level.</p><button @click="returnToSelection">Choose a topic</button></div>
     </section>

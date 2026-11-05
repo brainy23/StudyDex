@@ -1,40 +1,11 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink } from 'vue-router'
+import GoBackBtn from '../components/common/goBackbtn.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon } from '../services/studyService'
 import { checkedRpc } from '../services/backendClient'
 import playSound from '../../scripts/soundEffect'
-
-const router = useRouter()
-const leaving = ref(false)
-const navigationError = ref('')
-
-function goBack() {
-  if (leaving.value) return
-
-  leaving.value = true
-  navigationError.value = ''
-
-  // Go back exactly one entry. Direct visits return to town.
-  if (window.history.state?.back) {
-    router.back()
-  } else {
-    router.replace('/home').catch(() => {
-      leaving.value = false
-      navigationError.value = 'Could not return to town. Please try again.'
-    })
-  }
-}
-
-// Allow retry if a route guard prevents navigation.
-const removeAfterEach = router.afterEach((_to, _from, failure) => {
-  if (failure) leaving.value = false
-})
-const removeRouterError = router.onError(() => {
-  leaving.value = false
-  navigationError.value = 'Could not go back. Please try again.'
-})
 
 const collection = ref([])
 const ownedRecords = ref([])
@@ -301,26 +272,22 @@ onUnmounted(() => {
   token++
   clearTimeout(toastTimer)
   clearTimeout(celebrateTimer)
-  removeAfterEach()
-  removeRouterError()
 })
 </script>
 
 <template>
   <main class="collection">
     <header class="topbar">
-      <div class="title"><span class="title-icon" aria-hidden="true"></span>MY COLLECTION</div>
+      <div class="collection-back-navigation"><GoBackBtn /></div>
+
+      <h1 class="title">POKEDEX</h1>
+
       <div class="registered">
         <span class="ball" aria-hidden="true"></span>
         Number registered: <strong>{{ sorted.length }}</strong>
       </div>
     </header>
 
-    <div style="background: rgba(255, 255, 255, 0.78); padding-bottom:15px; padding-left:28px">
-      <button type="button" class="back" :disabled="leaving" @click.stop="goBack">Back</button>
-    </div>
-
-    <p v-if="navigationError" role="alert">{{ navigationError }}</p>
     <div class="body">
       <section class="list-panel" aria-label="Your Pokémon">
         <div v-if="collectionError" role="alert">{{ collectionError }} <button @click="loadCollection">Retry</button></div>
@@ -637,140 +604,381 @@ onUnmounted(() => {
         pointer-events: none;
     }
 
-    .plate{
-        width: min(300px, 100%);
-        border-radius: 6px;
-        overflow: hidden;
-        text-align: center;
-        box-shadow: 0 6px 14px rgba(103, 72, 176, 0.25);
-    }
-    .no{
-        padding: 8px;
-        font-size: 22px;
-        font-weight: bold;
-        color: #fff;
-        background-color: #a78bdc;
-    }
-    .name{
-        padding: 10px;
-        font-size: 24px;
-        background-color: #fff;
-    }
-    .types{
-        display: flex;
-        gap: 8px;
-    }
-    .chip{
-        padding: 3px 14px;
-        border-radius: 999px;
-        font-size: 16px;
-        font-weight: bold;
-        text-transform: capitalize;
-        color: #fff;
-        background-color: rgb(var(--tc));
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
-        box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
-    }
-    .back{
-        font-family: inherit;
-        font-size: 24px;
-        padding: 8px 20px;
-        border: 3px solid rgb(200, 160, 0);
-        border-radius: 12px;
-        background-color: rgb(255, 215, 37);
-        color: rgb(100, 45, 0);
-        box-shadow: 0 6px 0 rgb(200, 160, 0);
-        cursor: pointer;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
+.collection-back-navigation {
+  grid-column: 1;
+  justify-self: start;
+}
 
-    .activate{
-        font-family: inherit;
-        font-size: 22px;
-        padding: 10px 28px;
-        border: 3px solid rgb(200, 160, 0);
-        border-radius: 12px;
-        background-color: rgb(255, 215, 37);
-        color: rgb(100, 45, 0);
-        box-shadow: 0 6px 0 rgb(200, 160, 0);
-        cursor: pointer;
-        transition: transform 0.15s ease, box-shadow 0.15s ease;
-    }
-    .activate.link{
-        display: inline-block;
-        text-decoration: none;
-    }
-    .activate:hover:not(:disabled){
-        box-shadow: 0 6px 0 rgb(200, 160, 0), 0 0 20px rgba(255, 230, 0, 0.8);
-    }
-    .activate:active:not(:disabled){
-        transform: translateY(5px);
-        box-shadow: 0 1px 0 rgb(200, 160, 0);
-    }
-    .activate:disabled{
-        background-color: #d9d2ea;
-        border-color: #b9afd3;
-        box-shadow: 0 6px 0 #b9afd3;
-        color: #6f6890;
-        cursor: default;
-    }
+.activate:focus-visible {
+  outline: 3px solid #664298;
+  outline-offset: 4px;
+}
 
-    /* ---------- toast ---------- */
-    .toast{
-        position: fixed;
-        left: 50%;
-        bottom: 28px;
-        translate: -50% 30px;
-        padding: 12px 24px;
-        border-radius: 999px;
-        font-size: 18px;
-        font-weight: bold;
-        color: #fff;
-        background-color: #4a4560;
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.25s ease, translate 0.35s cubic-bezier(0.2, 1.4, 0.4, 1);
-    }
-    .toast.show{
-        opacity: 1;
-        translate: -50% 0;
-    }
+.collection-error {
+  padding: 12px;
+  color: #8c253a;
+}
 
-    /* ---------- keyframes ---------- */
-    @keyframes breathe{
-        0%, 100%{ scale: 0.94; opacity: 0.7; }
-        50%{ scale: 1.05; opacity: 1; }
-    }
-    @keyframes cursor-bob{
-        0%, 100%{ translate: -50% 0; }
-        50%{ translate: -50% 4px; }
-    }
-    @keyframes celebrate{
-        0%{ transform: scale(1); }
-        35%{ transform: scale(1.18) translateY(-12px); }
-        100%{ transform: scale(1); }
-    }
-    @keyframes ring{
-        0%{ opacity: 0.95; scale: 0.2; }
-        100%{ opacity: 0; scale: 3.4; }
-    }
+/* Main layout */
+.body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 32px;
+  padding: 20px 28px 28px;
+}
 
-    /* ---------- small screens and reduced motion ---------- */
-    @media (max-width: 800px){
-        .body{
-            grid-template-columns: 1fr;
-            grid-template-rows: auto minmax(0, 1fr);
-            gap: 16px;
-            padding: 14px;
-        }
-        .detail{ order: -1; }
-        .spot{ min-height: 200px; }
-        .title{ font-size: 20px; }
-        .registered{ font-size: 14px; }
-        .subbar{ font-size: 16px; }
-    }
-    @media (prefers-reduced-motion: reduce){
-        .sprite, .glow, .tile.selected::before{ animation: none; }
-    }
+.list-panel {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+}
+
+.grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-auto-rows: 100px;
+  gap: 6px;
+  align-content: start;
+  padding: 20px 12px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #8d6ad6 transparent;
+}
+
+.grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.grid::-webkit-scrollbar-thumb {
+  background: #8d6ad6;
+  border-radius: 999px;
+}
+
+.tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 14px;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.tile img {
+  width: 96px;
+  height: 96px;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 4px 4px rgba(60, 40, 110, 0.25));
+}
+
+.tile:hover,
+.tile:focus-visible {
+  background: rgba(255, 255, 255, 0.65);
+  transform: translateY(-4px);
+}
+
+.tile:focus-visible {
+  outline: 3px solid #664298;
+  outline-offset: 2px;
+}
+
+.tile.selected {
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 3px #8d6ad6,
+    0 8px 18px rgba(103, 72, 176, 0.35);
+}
+
+.tile.selected::before {
+  content: '';
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  translate: -50% 0;
+  border: 9px solid transparent;
+  border-top: 12px solid #4a4560;
+  animation: cursor-bob 0.9s ease-in-out infinite;
+}
+
+.star {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  font-size: 20px;
+  color: #ffb400;
+  text-shadow: 0 1px 0 #fff, 0 0 8px rgba(255, 180, 0, 0.9);
+}
+
+.empty {
+  margin: auto;
+  text-align: center;
+  font-size: 18px;
+  color: #5c5478;
+}
+
+/* Selected Pokémon */
+.detail {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding-bottom: 20px;
+}
+
+.spot {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  max-height: 420px;
+  display: grid;
+  place-items: center;
+}
+
+.stage {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-items: end;
+  max-width: 100%;
+}
+
+.sprite {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+}
+
+.loading {
+  padding: 60px 0;
+  color: #5c5478;
+  text-align: center;
+}
+
+.badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 4px 14px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: bold;
+  color: rgb(100, 45, 0);
+  background: rgb(255, 215, 37);
+  box-shadow: 0 3px 0 rgb(200, 160, 0);
+}
+
+.spot.celebrate .stage {
+  animation: celebrate 0.8s cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.spot.celebrate::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 120px;
+  height: 120px;
+  margin: -60px 0 0 -60px;
+  border-radius: 50%;
+  border: 4px solid rgb(var(--c1));
+  box-shadow: 0 0 24px rgb(var(--c1));
+  opacity: 0;
+  animation: ring 0.9s ease-out forwards;
+  pointer-events: none;
+}
+
+.plate {
+  width: min(300px, 100%);
+  border-radius: 6px;
+  overflow: hidden;
+  text-align: center;
+  box-shadow: 0 6px 14px rgba(103, 72, 176, 0.25);
+}
+
+.no {
+  padding: 8px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #fff;
+  background: #a78bdc;
+}
+
+.name {
+  padding: 10px;
+  font-size: 24px;
+  background: #fff;
+}
+
+.types {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.chip {
+  padding: 3px 14px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: bold;
+  text-transform: capitalize;
+  color: #fff;
+  background: rgb(var(--tc));
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.2);
+}
+
+.activate {
+  font-family: inherit;
+  font-size: 22px;
+  padding: 10px 28px;
+  border: 3px solid rgb(200, 160, 0);
+  border-radius: 12px;
+  background: rgb(255, 215, 37);
+  color: rgb(100, 45, 0);
+  box-shadow: 0 6px 0 rgb(200, 160, 0);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.activate.link {
+  display: inline-block;
+  text-decoration: none;
+}
+
+.activate:hover:not(:disabled) {
+  box-shadow:
+    0 6px 0 rgb(200, 160, 0),
+    0 0 20px rgba(255, 230, 0, 0.8);
+}
+
+.activate:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 rgb(200, 160, 0);
+}
+
+.activate:disabled {
+  background: #d9d2ea;
+  border-color: #b9afd3;
+  box-shadow: 0 6px 0 #b9afd3;
+  color: #6f6890;
+  cursor: default;
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  translate: -50% 30px;
+  max-width: calc(100% - 32px);
+  box-sizing: border-box;
+  padding: 12px 24px;
+  border-radius: 999px;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+  color: #fff;
+  background: #4a4560;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, translate 0.35s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  translate: -50% 0;
+}
+
+@keyframes cursor-bob {
+  0%, 100% { translate: -50% 0; }
+  50% { translate: -50% 4px; }
+}
+
+@keyframes celebrate {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.18) translateY(-12px); }
+  100% { transform: scale(1); }
+}
+
+@keyframes ring {
+  0% { opacity: 0.95; scale: 0.2; }
+  100% { opacity: 0; scale: 3.4; }
+}
+
+@media (max-width: 800px) {
+  .topbar {
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .title {
+    font-size: 22px;
+  }
+
+  .registered {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    justify-self: center;
+    font-size: 14px;
+  }
+
+  .collection {
+    height: auto;
+    min-height: 100dvh;
+  }
+
+  .body {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 14px;
+  }
+
+  .detail {
+    order: -1;
+  }
+
+  .spot {
+    min-height: 200px;
+  }
+
+  .grid {
+    max-height: 420px;
+  }
+
+  .activate {
+    font-size: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile.selected::before,
+  .spot.celebrate .stage,
+  .spot.celebrate::after {
+    animation: none;
+  }
+
+  .tile,
+  .activate,
+  .toast {
+    transition: none;
+  }
+}
 </style>

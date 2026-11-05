@@ -261,7 +261,7 @@ const battleOptions = computed(() =>
 
 </script>
 <template>
-  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
+  <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" @continue="finishEncounter" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
