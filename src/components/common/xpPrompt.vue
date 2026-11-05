@@ -1,6 +1,5 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
-import PokeSprite from '../pokebuddy/PokeSprite.vue'
 
 // Existing XP-result contract is preserved.
 // New optional result fields:
@@ -13,7 +12,6 @@ import PokeSprite from '../pokebuddy/PokeSprite.vue'
 //   unallocatedXP: number (optional leftover XP display)
 // The parent handles creating/saving a gift after @open-gift.
 const props = defineProps({
-  offerGift: { type: Boolean, default: false },
   result: {
     type: Object,
     default: null
@@ -24,45 +22,8 @@ const emit = defineEmits(['close', 'open-gift'])
 
 const dialog = ref(null)
 const step = ref('xp') // 'xp' -> 'gift' -> 'revealed'
-const evolutionSprite = ref(null)
-const evolutionFinished = ref(false)
-const animating = ref(false)
-const evolutionError = ref('')
-let animationSequence = 0
-const busy = computed(() => props.result?.saving || animating.value || giftOpening.value)
-const displayedPokemon = computed(() =>
-  evolutionFinished.value || props.result?.duplicate || !props.result?.evolutions?.length
-    ? props.result?.pokemon
-    : props.result?.originalPokemon || props.result?.pokemon
-)
-
-watch([() => props.result, () => props.result?.saving], async ([result], _, onCleanup) => {
-  const sequence = ++animationSequence
-  let cancelled = false
-  onCleanup(() => { cancelled = true })
-  evolutionFinished.value = false
-  evolutionError.value = ''
-  animating.value = false
-  if (!result || result.saving || result.error || result.duplicate || !result.evolutions?.length) return
-  animating.value = true
-  result.animating = true
-  await nextTick()
-  try {
-    const played = await evolutionSprite.value?.playEvolution(result.evolutions)
-    if (!played && !cancelled) evolutionError.value = 'Progress saved. The animation could not load.'
-  } catch {
-    if (!cancelled) evolutionError.value = 'Progress saved. The animation could not load.'
-  } finally {
-    result.animating = false
-    if (!cancelled && sequence === animationSequence) {
-      evolutionFinished.value = true
-      animating.value = false
-    }
-  }
-}, { immediate: true, flush: 'post' })
 
 const isLoss = computed(() => (props.result?.delta ?? 0) < 0)
-const isQuiz = computed(() => props.result?.rewardType === 'quiz')
 
 const hasAdjustedDeduction = computed(() => {
   const result = props.result
@@ -116,14 +77,14 @@ const pokemonName = computed(() =>
 )
 
 function closePrompt() {
-  if (busy.value) return
+  if (props.result?.saving || giftOpening.value) return
   emit('close')
 }
 
 function continueFromXp() {
-  if (busy.value || props.result?.error) return
+  if (props.result?.saving || props.result?.error) return
 
-  if (reachedMaxEvolution.value && props.offerGift) {
+  if (reachedMaxEvolution.value) {
     step.value = giftPokemon.value ? 'revealed' : 'gift'
   } else {
     closePrompt()
@@ -180,7 +141,7 @@ onBeforeUnmount(() => dialog.value?.close())
           type="button"
           class="xp-close"
           aria-label="Close experience popup"
-          :disabled="busy"
+          :disabled="result.saving || giftOpening"
           @click="closePrompt"
         >
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -211,19 +172,15 @@ onBeforeUnmount(() => dialog.value?.close())
               </svg>
             </div>
 
-            <p class="brand">Trainer Journey</p>
+            <p class="brand">STUDYDEX · TRAINER JOURNEY</p>
             <h2 id="xp-title">{{ result.title || 'Experience update!' }}</h2>
           </header>
 
           <div class="xp-content" role="status" aria-live="polite">
-            <div v-if="displayedPokemon" class="evolution-preview">
-              <PokeSprite ref="evolutionSprite" :active-pokemon="displayedPokemon"
-                :fallback-src="displayedPokemon.static_img" facing="front" embedded progress-position="hidden" />
-            </div>
             <div v-if="result.saving" class="feedback-panel">
               <span class="saving-spinner" aria-hidden="true"></span>
-              <h3>{{ isQuiz ? 'Checking your quiz…' : 'Updating your Pokémon…' }}</h3>
-              <p>{{ isQuiz ? 'Grading your answers and saving your XP.' : 'Saving your progress.' }}</p>
+              <h3>Updating your Pokémon…</h3>
+              <p>Saving your progress.</p>
             </div>
 
             <div v-else-if="result.error" class="feedback-panel error-panel">
@@ -233,10 +190,6 @@ onBeforeUnmount(() => dialog.value?.close())
             </div>
 
             <template v-else>
-              <div v-if="isQuiz" class="quiz-score">
-                <strong>{{ result.scorePercent }}%</strong>
-                <span>{{ result.correct }} / {{ result.total }} correct</span>
-              </div>
               <div class="reward-panel">
                 <span class="reward-label">
                   {{
@@ -266,10 +219,6 @@ onBeforeUnmount(() => dialog.value?.close())
                 </p>
               </div>
 
-              <p v-if="isQuiz && Number.isFinite(result.appliedDelta) && result.appliedDelta < result.delta" class="info-note">
-                {{ result.delta }} XP earned. {{ result.appliedDelta }} XP applied to your buddy because of its XP limit.
-              </p>
-
               <div class="buddy-summary">
                 <span class="buddy-icon" aria-hidden="true">✦</span>
                 <div class="buddy-copy">
@@ -278,28 +227,21 @@ onBeforeUnmount(() => dialog.value?.close())
                 </div>
                 <div class="buddy-total">
                   <strong>{{ result.xp ?? 0 }}</strong>
-                  <span>Lv. {{ result.level ?? 1 }} · XP</span>
+                  <span>total XP</span>
                 </div>
               </div>
 
-              <p v-if="result.evolved || result.devolved" class="evolution-note">
-                {{ animating ? (result.devolved ? 'Devolving…' : 'Evolving…')
-                  : `${result.pokemonName} ${result.devolved ? 'devolved' : 'evolved'}!` }}
-              </p>
-              <p v-if="evolutionError || result.progressionError" class="info-note" role="status">
-                {{ evolutionError || result.progressionError }}
-              </p>
               <p v-if="reachedMaxEvolution" class="evolution-note">
                 <span aria-hidden="true">✨</span>
                 {{ result.pokemonName || 'Your Pokémon' }} reached its final evolution!
-                <template v-if="offerGift">A special gift is ready.</template>
+                A special gift is ready.
               </p>
 
               <p v-if="result.delta === 0" class="info-note">
-                All four focus-timer rewards for today have been earned.
+                All four focus-timer rewards have been earned.
               </p>
               <p v-if="hasAdjustedDeduction" class="info-note">
-                XP stops at the base form’s zero XP. Actual deduction:
+                XP stops at zero. Actual deduction:
                 {{ Math.abs(result.appliedDelta) }} XP.
               </p>
               <p v-if="result.duplicate" class="info-note">
@@ -328,10 +270,10 @@ onBeforeUnmount(() => dialog.value?.close())
               v-else
               type="button"
               class="action-button"
-              :disabled="busy"
+              :disabled="result.saving"
               @click="continueFromXp"
             >
-              {{ result.saving ? 'Saving…' : animating ? 'Transforming…' : reachedMaxEvolution && offerGift ? 'Continue to gift' : 'Continue' }}
+              {{ result.saving ? 'Saving…' : reachedMaxEvolution ? 'Continue to gift' : 'Continue' }}
               <span v-if="!result.saving" aria-hidden="true">→</span>
             </button>
           </footer>
@@ -341,7 +283,7 @@ onBeforeUnmount(() => dialog.value?.close())
         <template v-else>
           <header class="xp-header gift-header">
             <div class="gift-emblem" aria-hidden="true">{{ step === 'revealed' ? '🎉' : '🎁' }}</div>
-            <p class="brand">Trainer Rewards</p>
+            <p class="brand">STUDYDEX · TRAINER REWARDS</p>
             <h2 id="gift-title">
               {{ step === 'revealed' ? 'Meet your new buddy!' : 'A special gift awaits!' }}
             </h2>
@@ -511,10 +453,9 @@ onBeforeUnmount(() => dialog.value?.close())
 .brand {
   margin: 0 0 8px;
   color: #8b7c50;
-  font-size: var(--sd-text-small, 14px);
-  font-family: var(--sd-font-body);
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0;
+  letter-spacing: 1.4px;
 }
 
 .xp-header h2 {
@@ -527,14 +468,6 @@ onBeforeUnmount(() => dialog.value?.close())
 }
 
 .xp-content { margin-top: 22px; }
-.quiz-score { display: flex; align-items: baseline; justify-content: center; gap: 12px; margin-bottom: 16px; color: #26365b; }
-.quiz-score strong { font-size: 32px; }
-.quiz-score span { font-size: 14px; }
-.evolution-preview { height: 200px; margin-bottom: 16px; }
-.evolution-preview :deep(.buddy-stage) { min-height: 0; height: 100%; flex: 1 1 0; }
-.evolution-preview :deep(h3),
-.evolution-preview :deep(.buddy-message),
-.evolution-preview :deep(.buddy-feedback) { display: none; }
 
 .reward-panel {
   padding: 20px 16px;
@@ -735,6 +668,7 @@ onBeforeUnmount(() => dialog.value?.close())
   .xp-card { padding: 26px 18px 22px; }
   .reward-emblem, .gift-emblem { width: 84px; height: 84px; border-radius: 26px; }
   .pokeball { width: 70px; height: 70px; }
+  .brand { font-size: 11px; letter-spacing: 1px; }
   .buddy-summary { gap: 10px; padding: 12px; }
 }
 

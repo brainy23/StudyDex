@@ -2,7 +2,7 @@
 <script setup>
 import AdminNav from '@/components/common/adminNav.vue';
 // import { getSupabase } from '../../lib/supabase';
-import { ref, computed } from 'vue';
+import { onMounted, ref, computed } from 'vue';
 
 // async function fetchUsers() {
 //   const { data:profile, error } = await getSupabase()

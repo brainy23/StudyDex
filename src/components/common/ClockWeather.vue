@@ -11,12 +11,6 @@ const {
   savedLocation,
   locationBusy,
   locationNotice,
-  deviceLocationPreference,
-  preferenceLoaded,
-  preferenceBusy,
-  preferenceError,
-  loadLocationPreference,
-  saveLocationPreference,
   beginLocationRequest,
   isCurrentLocationRequest
 } = useWeatherLocation()
@@ -26,7 +20,8 @@ const {
 // =====================================================
 
 const props = defineProps({
-  // Offer the chooser only when the profile's device_loc is null.
+  // true: offer the location chooser on the first visit.
+  // false: use Singapore without asking on the first visit.
   useDeviceLocation: {
     type: Boolean,
     default: true
@@ -75,7 +70,7 @@ const locationLabel = computed(() => {
   }
 
   if (savedLocation.value) {
-    return 'Singapore'
+    return 'Singapore (default)'
   }
 
   return 'Choose location'
@@ -176,32 +171,22 @@ function closeLocationDialog() {
 }
 
 async function chooseDevice() {
-  if (preferenceBusy.value || locationBusy.value) return
-  try {
-    if (!await saveLocationPreference(true)) return
-    closeLocationDialog()
-    await useDeviceLoc()
-  } catch { /* The modal shows the preference save error and allows retry. */ }
+  await useDeviceLoc()
+  closeLocationDialog()
 }
 
-async function chooseSingapore() {
-  if (preferenceBusy.value) return
-  try {
-    if (!await saveLocationPreference(false)) return
-    useSingaporeLocation()
-    closeLocationDialog()
-  } catch { /* Keep the modal open until the choice can be saved. */ }
+function chooseSingapore() {
+  useSingaporeLocation()
+  closeLocationDialog()
 }
 
 function cancelLocationDialog(event) {
   event.preventDefault()
-  if (preferenceBusy.value) return
 
   // Escape means Not Now on the first visit.
   // Later it keeps the current choice.
-  if (!preferenceLoaded.value || deviceLocationPreference.value === null) {
-    void chooseSingapore()
-    return
+  if (!savedLocation.value) {
+    useSingaporeLocation()
   }
 
   closeLocationDialog()
@@ -337,9 +322,8 @@ function getDistance(lat1, lon1, lat2, lon2) {
 // =====================================================
 
 let stopLocationWatcher
-let active = true
 
-onMounted(async () => {
+onMounted(() => {
   stopLocationWatcher = watch(
     savedLocation,
     (location, previous, onCleanup) => {
@@ -604,31 +588,13 @@ onMounted(async () => {
   // INITIAL LOCATION CHOICE
   // -----------------------------------------------
 
-  if (!props.useDeviceLocation) {
-    if (!savedLocation.value && !locationBusy.value) useSingaporeLocation()
-    return
-  }
-  try {
-    await loadLocationPreference()
-    if (!active || !preferenceLoaded.value) return
-    if (deviceLocationPreference.value === null) {
+  if (!savedLocation.value && !locationBusy.value) {
+    if (props.useDeviceLocation) {
       openLocationDialog()
-    } else if (deviceLocationPreference.value === false) {
-      if (savedLocation.value?.source !== 'default') useSingaporeLocation()
-    } else if (!savedLocation.value && !locationBusy.value) {
-      await useDeviceLoc()
-    }
-  } catch {
-    if (active) {
-      // An unread preference must not be mistaken for an unanswered preference.
-      // Keep using default weather without automatically asking again.
-      useSingaporeLocation(preferenceError.value)
+    } else {
+      useSingaporeLocation()
     }
   }
-})
-
-watch(deviceLocationPreference, preference => {
-  if (preference !== null) closeLocationDialog()
 })
 
 // =====================================================
@@ -636,7 +602,6 @@ watch(deviceLocationPreference, preference => {
 // =====================================================
 
 onUnmounted(() => {
-  active = false
   stopLocationWatcher?.()
   closeLocationDialog()
 })
@@ -665,7 +630,6 @@ onUnmounted(() => {
         class="location-change-button"
         title="Change location"
         aria-label="Change weather location"
-        :disabled="preferenceBusy"
         aria-haspopup="dialog"
         @click.stop="openLocationDialog"
       >
@@ -705,7 +669,6 @@ onUnmounted(() => {
           <p class="location-notice p-3">Use your device location for nearby weather, or use Singapore’s default location.</p>
           <p v-if="savedLocation" class="small-note">Currently using: {{ locationLabel }}</p>
           <p v-if="locationBusy" class="small-note" role="status">Finding your location… Please respond to your browser’s permission prompt.</p>
-          <p v-if="preferenceError" class="small-note" role="alert">{{ preferenceError }}</p>
           <!-- LOCATION ACTION BUTTONS -->
           <div class="location-actions">
 
@@ -713,7 +676,7 @@ onUnmounted(() => {
             <button
               type="button"
               class="location-action location-allow"
-              :disabled="locationBusy || preferenceBusy"
+              :disabled="locationBusy"
               @click="chooseDevice"
             >
               <span class="location-action-icon">📍</span>
@@ -726,7 +689,6 @@ onUnmounted(() => {
             <button
               type="button"
               class="location-action location-skip"
-              :disabled="preferenceBusy"
               @click="chooseSingapore"
             >
               {{ savedLocation ? 'Use Singapore' : 'Not Now' }}

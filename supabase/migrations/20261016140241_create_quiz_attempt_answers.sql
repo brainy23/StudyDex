@@ -1,4 +1,0 @@
--- Historical migration version already present on the shared project.
--- Its application schema is consolidated in 20261105112201_app_schema_baseline.sql.
--- This explicit no-op keeps existing remote migration history aligned while a
--- fresh Supabase instance is recreated from the consolidated baseline.

@@ -1,25 +1,63 @@
 import { computed, ref } from 'vue'
-import { getTopicCompletions } from '../services/learningService'
+
+// This is browser-only learning progress, never evidence for grading or rewards.
+// Keep an in-memory fallback so navigation still works if browser storage is blocked.
+const records = new Map()
+
+function topicIds(value) {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((id) => typeof id === 'string' && id.length))]
+    : []
+}
+
+function readTopicIds(key) {
+  const stored = globalThis.localStorage.getItem(key)
+  try { return stored ? topicIds(JSON.parse(stored)) : [] } catch { return [] }
+}
 
 export function useTopicCompletion() {
-  const ids = ref([])
-  const saved = ref(true)
-  let owner = null, generation = 0, flow = 'study'
-  async function refresh() {
-    const request = ++generation
-    if (!owner) { ids.value = []; return }
+  const record = ref(null)
+  let storageKey = null
+
+  function bindStudent(userId, levelId, flow = 'study') {
+    storageKey = userId && levelId
+      ? `studydex:completed-topics:${encodeURIComponent(userId)}:${encodeURIComponent(levelId)}${flow === 'quiz' ? ':quiz' : ''}`
+      : null
+    if (!storageKey) {
+      record.value = null
+      return
+    }
+    if (!records.has(storageKey)) records.set(storageKey, ref({ ids: [], saved: true }))
+    record.value = records.get(storageKey).value
     try {
-      const records = await getTopicCompletions(owner, flow)
-      if (request !== generation) return
-      ids.value = [...new Set(records.map(row => row.topic_id))]
-      saved.value = true
-    } catch { if (request === generation) saved.value = false }
+      const stored = readTopicIds(storageKey)
+      record.value.ids = record.value.saved ? stored : topicIds([...stored, ...record.value.ids])
+      record.value.saved = record.value.ids.every((id) => stored.includes(id))
+    } catch {
+      record.value.saved = false
+    }
   }
-  function bindStudent(userId, _levelId, requestedFlow = 'study') {
-    owner = userId; flow = requestedFlow; ids.value = []; return refresh()
+
+  function markComplete(topicId) {
+    if (!record.value || typeof topicId !== 'string' || !topicId) return
+    record.value.ids = topicIds([...record.value.ids, topicId])
+    try {
+      // Merge the latest stored list so another tab's completions are retained.
+      const previous = readTopicIds(storageKey)
+      record.value.ids = topicIds([...previous, ...record.value.ids])
+      globalThis.localStorage.setItem(storageKey, JSON.stringify(record.value.ids))
+      record.value.saved = true
+    } catch {
+      record.value.saved = false
+    }
   }
+
+  const completedTopicIds = computed(() => record.value?.ids || [])
   return {
-    bindStudent, refresh, completedTopicIds: computed(() => ids.value),
-    savedInBrowser: computed(() => saved.value), isComplete: id => ids.value.includes(id),
+    bindStudent,
+    markComplete,
+    completedTopicIds,
+    savedInBrowser: computed(() => record.value?.saved ?? true),
+    isComplete: (topicId) => completedTopicIds.value.includes(topicId),
   }
 }

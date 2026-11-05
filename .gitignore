@@ -45,5 +45,3 @@ playwright-report/
 .env
 .env.*
 !.env.example
-supabase/.temp/
-supabase/.branches/

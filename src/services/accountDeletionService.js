@@ -8,8 +8,6 @@ export function clearDeletedAccountBrowserData(userId) {
   const prefixes = [
     `studydex:completed-topics:${encodeURIComponent(userId)}:`,
     `studydex-learn-return-v1:${userId}:`,
-    `studydex:study-session:${userId}:`,
-    `studydex:quiz:${userId}:`,
   ]
   const exact = [`studydex:focus:v1:${userId}`, `studydex-focus-completions-v1:${userId}`]
   let complete = true
@@ -31,7 +29,7 @@ export function clearDeletedAccountBrowserData(userId) {
   return complete
 }
 
-export async function deleteOwnAccount({ password, confirmation, expectedUserId, requestMfaCode }) {
+export async function deleteOwnAccount({ password, confirmation, expectedUserId }) {
   if (!expectedUserId || confirmation !== 'DELETE' || !password)
     throw new Error('Enter your password and type DELETE to confirm.')
   const client = getSupabase()
@@ -48,34 +46,13 @@ export async function deleteOwnAccount({ password, confirmation, expectedUserId,
       throw new Error('We couldn’t confirm your password. Check it and try again.')
     if (data.user?.id !== expectedUserId || data.session.user?.id !== expectedUserId)
       throw changedAccount()
-    let accessToken = data.session.access_token
-    // Verify the factor in the same non-persisted confirmation session. The
-    // primary app session is never replaced by the password/MFA confirmation.
-    if (temporary.auth.mfa) {
-      const { data: factors, error: factorError } = await temporary.auth.mfa.listFactors()
-      if (factorError) throw new Error('Your verification methods could not be loaded. Try again.')
-      const verified = factors?.all?.filter(factor => factor.status === 'verified') || []
-      if (verified.length) {
-        const factor = verified.find(item => item.factor_type === 'totp') || verified.find(item => item.factor_type === 'phone')
-        if (!factor || !requestMfaCode) throw new Error('Two-factor verification is required to delete this account.')
-        const { data: challenge, error: challengeError } = await temporary.auth.mfa.challenge({ factorId: factor.id })
-        if (challengeError) throw new Error('Your verification challenge could not be started. Try again.')
-        const code = await requestMfaCode({ type: factor.factor_type, name: factor.friendly_name || 'your verification method' })
-        if (!code) throw new Error('Account deletion cancelled.')
-        const { data: verifiedSession, error: verificationError } = await temporary.auth.mfa.verify({ factorId: factor.id, challengeId: challenge.id, code })
-        if (verificationError || !verifiedSession?.access_token) throw new Error('The verification code was not accepted. Try again.')
-        accessToken = verifiedSession.access_token
-      }
-    } else if (original.user.factors?.some(factor => factor.status === 'verified')) {
-      throw new Error('Two-factor verification is required to delete this account.')
-    }
     const { data: current, error: currentError } = await client.auth.getUser()
     if (currentError || current?.user?.id !== expectedUserId) throw changedAccount()
 
     // The deletion endpoint derives its sole target from this verified, fresh token.
     const { data: result, error: deletionError } = await client.functions.invoke('delete-account', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${data.session.access_token}` },
       body: { confirmation: 'DELETE' },
     })
     if (deletionError || result?.deleted !== true) {

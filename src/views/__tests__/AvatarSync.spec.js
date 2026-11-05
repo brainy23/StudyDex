@@ -8,7 +8,7 @@ import { getCurrentProfile } from '../../services/profileService'
 import { updateCurrentAvatar, updateCurrentProfile } from '../../services/accountService'
 import { avatarOptions } from '../../data/avatarOptions'
 import { getSelectedStudyBuddy } from '../../services/studyService'
-import PokeSprite from '../../components/pokebuddy/PokeSprite.vue'
+import PokemonBuddy from '../../components/pokebuddy/PokemonBuddy.vue'
 
 // A mutable fixture stands in for the saved profile; no live database writes occur.
 const { saved } = vi.hoisted(() => ({ saved: { profile: null, buddy: null } }))
@@ -70,7 +70,7 @@ it('loads the saved buddy and retains all ten new avatar styles after the merge'
     avatar_choice: 'male-1', school_level: { name: 'Primary 3' } }
   await open()
   expect(getSelectedStudyBuddy).toHaveBeenCalledWith('student-ash')
-  expect(wrapper.findComponent(PokeSprite).props('activePokemon')).toMatchObject({
+  expect(wrapper.findComponent(PokemonBuddy).props('activePokemon')).toMatchObject({
     ownedId: 'owned-charmander', name: 'Charmander', xp: 35, level: 2,
   })
   await wrapper.get('.wardrobe-hotspot').trigger('click')
@@ -80,7 +80,7 @@ it('loads the saved buddy and retains all ten new avatar styles after the merge'
 it('does not substitute a sample Pokémon when no saved buddy exists', async () => {
   await open()
   expect(getSelectedStudyBuddy).toHaveBeenCalledWith('student-ash')
-  expect(wrapper.findComponent(PokeSprite).exists()).toBe(false)
+  expect(wrapper.findComponent(PokemonBuddy).exists()).toBe(false)
 })
 
 async function equip(avatar) {
