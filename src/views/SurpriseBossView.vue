@@ -1,4 +1,5 @@
 <script setup>
+import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import ExpriencePrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt.js'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
@@ -16,7 +17,6 @@ const storedEncounter = readEncounter()
 const encounter = ref(storedEncounter?.id === route.query.encounter && storedEncounter?.status === 'pending' ? storedEncounter : null)
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, getStudyCatalogue, studyErrorMessage } from '../services/studyService'
-import TownBackground from '@/components/common/TownBackground.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import Pokemon_Backwards from '@/components/pokebuddy/Pokemon_Backwards.vue'
@@ -73,48 +73,17 @@ watch(() => pokemonTransition.state.outcome, outcome => {
   error.value = new Error(pokemonTransition.state.error || 'Could not load your boss battle. Please retry.')
   loading.value = false
 })
-// Preview bar has its own layout row below the arena.
+// Use the live clock for the forest lighting and battle availability.
 const live = ref(true)
 const previewHour = ref(12)
-const autoPreview = ref(false)
-let previewInterval
-function stopAutoPreview() {
-  clearInterval(previewInterval)
-  previewInterval = undefined
-  autoPreview.value = false
-}
-function useLiveTime() {
-  stopAutoPreview()
-  live.value = true
-}
-function setPreview(value) {
-  const next = Number(value)
-  if (!Number.isFinite(next)) return
-  stopAutoPreview()
-  live.value = false
-  previewHour.value = ((next % 24) + 24) % 24
-}
-function toggleAutoPreview() {
-  if (autoPreview.value) { stopAutoPreview(); return }
-  previewHour.value = hour.value
-  live.value = false
-  autoPreview.value = true
-  const startedAt = performance.now()
-  const startHour = previewHour.value
-  previewInterval = setInterval(() => {
-    previewHour.value = (startHour + (performance.now() - startedAt) / 60000 * 24) % 24
-  }, 50)
-}
-onUnmounted(stopAutoPreview)
-
-// Shared time source is still needed by the preview controls and opening rule.
 const { hour, lighting } = useTimeOfDay({ live, previewHour })
 const rainActive = ref(false)
+const sceneBase = import.meta.env.BASE_URL
+const forestNight = computed(() => hour.value < 6 || hour.value >= 19)
+const forestArtStyle = computed(() => ({
+  filter: forestNight.value ? 'brightness(.56) saturate(.75)' : 'none',
+}))
 const quizzesOpen = computed(() => !!encounter.value || hour.value >= 7)
-const displayTime = computed(() => {
-  const minutes = Math.floor(hour.value * 60)
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
-})
 // Match the margins around the proportional scene to its shared sky colours.
 const skyStyle = computed(() => ({
   background: `linear-gradient(to bottom, ${lighting.value.top} 0%, ${lighting.value.horizon} 30%)`
@@ -771,19 +740,23 @@ async function finishEncounter() {
     if (failure) encounterError.value = 'Return navigation was cancelled. Please try again.'
   } catch { encounterError.value = 'Could not return to study. Check the study-decks route.' }
 }
+
+const battleOptions = computed(() =>
+  (demoQuestion.value?.[1] || []).map((text, index) => ({ id: index, text })),
+)
 </script>
 <template>
   <ExpriencePrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
-      <TownBackground
-        class="boss-background-layer"
-        scene="boss"
-        :live="live"
-        :preview-hour="previewHour"
-        :rain-active="rainActive"
-      />
+      <div class="boss-background-layer" :style="skyStyle" aria-hidden="true">
+        <img v-if="forestNight" class="forest-sky-texture" :src="`${sceneBase}town/bg_stars.png`" alt="" draggable="false" />
+        <img v-else class="forest-sky-texture" :src="`${sceneBase}town/bg_clouds.png`" alt="" draggable="false" />
+        <img class="forest-celestial" :src="`${sceneBase}town/${forestNight ? 'bg_moon.png' : 'bg_sun.png'}`" alt="" draggable="false" />
+        <img class="forest-art" :src="`${sceneBase}surprise-boss/forest-raised.png`" :style="forestArtStyle" alt="" draggable="false" />
+        <div v-if="rainActive" class="forest-rain" />
+      </div>
 
       <!-- The question stays on the arena's built-in screen. -->
       <section v-if="enteredArena && quizzesOpen" class="quiz-content demo-board" aria-label="Legendary boss question">
@@ -793,8 +766,15 @@ async function finishEncounter() {
       </section>
 
       <!-- Classic battle menu: dialogue left, four choices right. -->
-      <section v-if="enteredArena && quizzesOpen" class="battle-dock" aria-label="Battle answer controls">
-        <div class="battle-dialogue" aria-live="polite">
+      <BattleAnswerPanel v-if="enteredArena && quizzesOpen"
+        :options="battleOptions"
+        :selected-id="demoChoice"
+        :correct-id="demoQuestion?.[2] ?? null"
+        :finished="demoFinished"
+        :disabled="!quizzesOpen"
+        graded
+        @select="answerDemo">
+        <template #dialogue>
           <template v-if="demoFinished">
             <span class="dialogue-kicker">ENCOUNTER COMPLETE</span>
             <p>{{ demoScore >= hitsRequired ? 'Boss defeated! Your saved flashcards and remaining study time are ready.' : 'The boss won this round. Restart your full flashcard deck with a fresh 25-minute timer.' }}</p>
@@ -807,18 +787,11 @@ async function finishEncounter() {
             <p class="battle-explanation">{{ demoQuestion[3] }}</p>
             <button type="button" class="battle-next" @click="nextDemo">{{ demoIndex + 1 === demoQuestions.length ? 'See results' : 'Next question' }} →</button>
           </template>
-        </div>
-        <div v-if="demoFinished" class="battle-end-actions">
+        </template>
+        <template #actions>
           <button type="button" @click="finishEncounter">{{ demoScore >= hitsRequired ? 'Continue flashcards' : 'Restart flashcards · 25:00' }}</button>
-        </div>
-        <div v-else-if="demoQuestion" class="demo-answers" role="group" aria-labelledby="arena-question">
-          <button v-for="(answer, index) in demoQuestion[1]" :key="`${demoIndex}-${index}`" type="button" :class="['demo-answer-' + index, { correct: demoChoice !== null && index === demoQuestion[2], wrong: demoChoice === index && index !== demoQuestion[2] }]" :disabled="demoChoice !== null" @click="answerDemo(index)">
-            <b class="choice-letter">{{ ['A','B','C','D'][index] }}</b><span class="choice-text">{{ answer }}</span>
-            <span v-if="demoChoice !== null && index === demoQuestion[2]" aria-label="Correct answer">✓</span>
-            <span v-else-if="demoChoice === index" aria-label="Incorrect answer">✕</span>
-          </button>
-        </div>
-      </section>
+        </template>
+      </BattleAnswerPanel>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="[index === 0 ? 'player-fighter' : 'opponent-fighter', { 'is-hit': attackSide !== null && attackSide !== index }]">
         <div class="fighter-shadow"></div>
         <span v-if="index === 1" class="boss-name">{{ fighter.name }} · Boss HP {{ bossHp }} / {{ hitsRequired }}</span>
@@ -854,16 +827,6 @@ async function finishEncounter() {
 
 
   </main>
-  <footer class="time-preview-bar" aria-label="Time preview controls">
-    <div class="time-bar-inner">
-      <strong class="time-bar-title">Time preview <span>{{ displayTime }}</span></strong>
-      <button type="button" :aria-pressed="live" @click="useLiveTime">Live</button>
-      <button v-for="preset in [{ label: '7am', hour: 7 }, { label: 'Day', hour: 12 }, { label: 'Sunset', hour: 18.5 }, { label: 'Night', hour: 21 }, { label: 'Midnight', hour: 0 }]" :key="preset.label" type="button" :aria-pressed="!live && !autoPreview && Math.abs(previewHour - preset.hour) < .001" @click="setPreview(preset.hour)">{{ preset.label }}</button>
-      <button type="button" :aria-pressed="autoPreview" @click="toggleAutoPreview">{{ autoPreview ? 'Pause cycle' : '▶ Cycle day' }}</button>
-      <label class="time-bar-slider"><span>Time</span><input type="range" min="0" max="1439" step="1" :value="Math.floor(hour * 60)" :aria-valuetext="displayTime" @input="setPreview(Number($event.target.value) / 60)" /></label>
-      <span class="time-bar-status">{{ live ? 'Live clock' : autoPreview ? '24 hours in 60 seconds' : 'Preview paused' }}</span>
-    </div>
-  </footer>
   </div>
 </template>
 
@@ -986,36 +949,10 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 .demo-caption { display: flex; justify-content: space-between; gap: 10px; color: #ffe6a2; font-size: clamp(9px, .8cqw, 13px); font-weight: 800; }
 .demo-board h2 { margin: auto 0; padding: 12px 0; font-size: clamp(20px, 2cqw, 34px); line-height: 1.35; color: #fff8e7; }
 .demo-board > p { color: #fff8e7; }
-.battle-dock { position: absolute; z-index: 9; left: 2%; right: 2%; bottom: 1.5%; height: 19%; display: grid; grid-template-columns: 42% minmax(0, 1fr); gap: 12px; padding: 10px; border: 3px solid #344652; border-radius: 18px; background: #ede8d7; box-shadow: 0 5px 0 #192735, inset 0 0 0 2px #fff9dc; color: #263548; }
-.battle-dialogue { min-width: 0; overflow-y: auto; padding: 12px 16px; border: 3px solid #d6b254; border-radius: 9px; background: #183047; box-shadow: inset 0 0 0 2px #080f1d; color: #fff5dc; }
-.dialogue-kicker { color: #ffdc83; font-size: clamp(9px, .7cqw, 12px); font-weight: 900; letter-spacing: .1em; }
-.battle-dialogue p { margin: 8px 0; font-size: clamp(15px, 1.4cqw, 23px); line-height: 1.3; }
-.battle-dialogue strong { text-transform: capitalize; }
-.battle-dialogue small { font-size: clamp(10px, .85cqw, 14px); color: #d7e5ec; }
-.battle-dialogue .battle-explanation { font-size: clamp(12px, 1cqw, 17px); }
-.demo-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-height: 0; }
-.demo-answers button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 0; overflow-y: auto; padding: 8px 12px; border: 3px solid #fff4d2; outline: 2px solid #45515b; border-radius: 18px; color: white; font: inherit; font-size: clamp(11px, 1.1cqw, 18px); font-weight: 800; text-align: left; cursor: pointer; box-shadow: inset 0 -5px 0 #0002, inset 0 2px 0 #fff6; }
-.choice-letter { display: grid; place-items: center; flex: 0 0 25px; height: 25px; border-radius: 50%; background: #0002; font-size: 12px; }
-.choice-text { flex: 1; overflow-wrap: anywhere; }
-.demo-answer-0 { background: #be4358; }.demo-answer-1 { background: #dfb94e; color: #26334a !important; }.demo-answer-2 { background: #488247; }.demo-answer-3 { background: #396d99; }
-.demo-answers button:hover:not(:disabled) { filter: brightness(1.15); }
-.demo-answers button:disabled { cursor: default; }
-.demo-answers .correct { outline: 3px solid #ffe270; border-color: #ffe270; }
-.demo-answers .wrong { border-style: dashed; }
-.battle-next, .battle-end-actions button { padding: 8px 12px; border: 2px solid #b58d32; border-radius: 9px; background: #ffe08a; color: #26334a; font: inherit; font-weight: 800; cursor: pointer; }
-.battle-next { font-size: 12px; }
-.battle-end-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.battle-dock button:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 @media (max-width: 700px) {
   .arena-scene:not(.selection-blur) .quiz-content { margin-bottom: 12px; }
   .arena-scene:not(.selection-blur) .player-fighter { top: calc(100vw * 941 / 1672 * .77); }
   .arena-scene:not(.selection-blur) .opponent-fighter { top: calc(100vw * 941 / 1672 * .72); }
-  .battle-dock { position: relative; left: auto; right: auto; bottom: auto; width: calc(100% - 24px); height: auto; margin: 12px 12px 180px; grid-template-columns: 1fr; }
-  .battle-dialogue { max-height: 180px; }
-  .demo-answers { grid-template-rows: auto; }
-  .demo-answers button { min-height: 65px; font-size: 14px; overflow: visible; }
-  .battle-dialogue p { font-size: 18px; }
-  .battle-dialogue .battle-explanation { font-size: 14px; }
 }
 /* Recoil the wrapper so sprite foot-alignment remains intact. */
 .player-fighter.is-hit { animation: player-recoil .65s ease-out .22s both; }
@@ -1042,26 +979,40 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 @media(prefers-reduced-motion: reduce) { .arena-fighter, .arena-fighter > img, .arena-fighter .player-back-sprite :deep(img) { animation: none !important; } }
 
-/* The footer is a separate grid row, never an overlay on the battle. */
-.arena-with-preview { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: #101d30; }
+/* The battle occupies the full viewport. */
+.arena-with-preview { position: fixed; inset: 0; display: grid; grid-template-rows: minmax(0, 1fr); background: #101d30; }
 .arena-with-preview > .arena-page { position: relative; inset: auto; width: 100%; height: 100%; min-height: 0; container-type: size; }
 .arena-with-preview .arena-scene { width: min(100%, calc(100cqh * 1672 / 941)); }
-.time-preview-bar { position: relative; min-width: 0; overflow-x: auto; border-top: 2px solid #b99a58; background: #14243a; color: #fff1cf; padding: 10px 14px max(10px, env(safe-area-inset-bottom)); font-family: system-ui, sans-serif; }
-.time-bar-inner { display: flex; align-items: center; justify-content: center; gap: 8px; width: max-content; min-width: 100%; }
-.time-bar-title { display: flex; align-items: center; gap: 10px; margin-right: 8px; font-size: 12px; white-space: nowrap; }
-.time-bar-title span { color: #ffdf85; font-variant-numeric: tabular-nums; }
-.time-preview-bar button { min-height: 36px; padding: 7px 11px; border: 1px solid #718096; border-radius: 8px; background: #253951; color: #fff3d6; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
-.time-preview-bar button:hover { background: #3b526d; }
-.time-preview-bar button[aria-pressed='true'] { background: #ffdf85; border-color: #ffdf85; color: #233047; }
-.time-bar-slider { display: flex; align-items: center; gap: 8px; margin: 0 8px; font-size: 12px; }
-.time-bar-slider input { width: clamp(100px, 12vw, 200px); accent-color: #ffdf85; }
-.time-bar-status { font-size: 11px; color: #c6d4e7; white-space: nowrap; }
-.time-preview-bar button:focus-visible, .time-preview-bar input:focus-visible { outline: 2px solid #ffdf85; outline-offset: 2px; }
-@media (max-width: 700px) {
-  .arena-with-preview .arena-scene { width: 100%; }
-  .time-bar-inner { justify-content: flex-start; }
-  .arena-picker { padding-bottom: 24px; }
-  .battle-dock { margin-bottom: 24px; }
+@media (min-width: 701px) {
+  .arena-with-preview {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+  }
+
+  .arena-with-preview > .arena-page {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .arena-with-preview .arena-scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    aspect-ratio: auto;
+    margin: 0;
+  }
 }
 
 /* Forest scene coordinates, based on the 1672 × 941 transparent artwork. */
@@ -1072,16 +1023,14 @@ button:focus-visible, a:focus-visible, input:focus-visible {
 }
 .arena-scene .demo-board h2 { font-size: clamp(16px, 1.65cqw, 30px); line-height: 1.35; }
 .arena-scene .demo-caption { font-size: clamp(9px, .7cqw, 13px); }
-.arena-scene .player-fighter { left: 30%; top: 78%; width: 16%; }
-.arena-scene .opponent-fighter { left: 78%; top: 57%; width: 18%; }
+.arena-scene .player-fighter { left: 30%; top: 68%; width: 16%; }
+.arena-scene .opponent-fighter { left: 78%; top: 55%; width: 18%; }
 .boss-name { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); white-space: nowrap; text-transform: capitalize; font: 700 clamp(10px, .9cqw, 16px)/1.3 system-ui; background: #17352fe8; color: #fff0ae; padding: 5px 12px; border: 1px solid #d6b362; border-radius: 20px; }
-.battle-dock { bottom: 1.5%; height: 18%; border-color: #805e34; background: #f6edce; }
 @media (max-width: 700px) {
   .arena-scene:not(.selection-blur) .quiz-content { position: relative; left: auto; top: auto; width: calc(100% - 24px); height: auto; min-height: 110px; margin: 12px; padding: 18px; background: #193246; border: 2px solid #cfa75b; border-radius: 14px; }
   .arena-scene:not(.selection-blur) .player-fighter { top: calc(100vw * 941 / 1672 * .78); }
   .arena-scene:not(.selection-blur) .opponent-fighter { top: calc(100vw * 941 / 1672 * .57); }
   .arena-scene .demo-board h2 { font-size: 20px; }
-  .battle-dock { position: relative; bottom: auto; height: auto; margin-bottom: 24px; }
   .boss-name { top: 5px; padding: 2px 6px; font-size: 9px; }
 }
 
@@ -1110,4 +1059,30 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   padding: 6px;
   font-size: 11px;
 }
+
+/* This view owns its background so the shared town artwork stays unchanged. */
+.boss-background-layer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; }
+.forest-art, .forest-sky-texture { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; user-select: none; }
+.forest-celestial { position: absolute; left: 48%; top: 0; width: 8%; height: auto; }
+.forest-art { transition: filter 1s; }
+.forest-rain { position: absolute; inset: -50%; background: repeating-linear-gradient(105deg, transparent 0 29px, #c9e8ff55 30px, transparent 31px 60px); opacity: .35; animation: forest-rain-fall .7s linear infinite; }
+@keyframes forest-rain-fall { to { transform: translate(-20px, 60px); } }
+@media (prefers-reduced-motion: reduce) { .forest-rain { animation: none; } }
+@media (min-width: 701px) {
+  .arena-scene .quiz-content { left: 22%; top: 12%; width: 56%; height: 29%; padding: 1cqw; }
+  .arena-scene .demo-board h2 { font-size: clamp(18px, 1.8cqw, 32px); }
+  .arena-scene .demo-caption { font-size: clamp(10px, .8cqw, 14px); }
+}
+.arena-scene .player-fighter { left: 30%; top: 68%; width: 14%; }
+.arena-scene .opponent-fighter { left: 75%; top: 66%; width: 12.5%; }
+.arena-scene .boss-name { top: 8px; }
+@media (max-width: 700px) {
+  .arena-scene:not(.selection-blur) .player-fighter { top: calc(100vw * 941 / 1672 * .68); }
+  .arena-scene:not(.selection-blur) .opponent-fighter { top: calc(100vw * 941 / 1672 * .66); }
+}
+
+
+.forest-art { transform: none; }
+
+
 </style>

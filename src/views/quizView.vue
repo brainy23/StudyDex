@@ -1,4 +1,5 @@
 <script setup>
+import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 const route = useRoute()
@@ -68,7 +69,7 @@ onUnmounted(() => { alive = false; generation++ })
 const base = import.meta.env.BASE_URL
 
 const images = {
-  arena: `${base}poke-arena/poke-arena4.png`,
+  arena: `${base}poke-arena/arena-raised.png`,
   sun: `${base}town/bg_sun.png`,
   moon: `${base}town/bg_moon.png`,
   clouds: `${base}town/bg_clouds.png`,
@@ -217,8 +218,8 @@ function celestialStyle(isMoon) {
 // The latest arena artwork has two visible outer floodlight banks.
 // Adjust these percentages if you change the background image.
 const floodlights = [
-  { id: 'left', left: 8.7, top: 16.8, angle: -24 },
-  { id: 'right', left: 91.3, top: 16.8, angle: 24 },
+  { id: 'left', left: 8.7, top: 12.3, angle: -24 },
+  { id: 'right', left: 91.3, top: 12.3, angle: 24 },
 ]
 
 function refreshClock() {
@@ -333,6 +334,13 @@ function nextPreview() {
   else { previewIndex.value++; previewChoice.value = null }
 }
 
+
+const battleOptions = computed(() =>
+  (previewQuestion.value?.options || []).map(option => ({
+    id: option.id,
+    text: option.option_text,
+  })),
+)
 </script>
 <template>
   <div class="arena-with-preview">
@@ -431,8 +439,12 @@ function nextPreview() {
       </section>
 
       <!-- Classic battle menu: dialogue left, four choices right. -->
-      <section v-if="enteredArena" class="battle-dock" aria-label="Battle answer controls">
-        <div class="battle-dialogue" aria-live="polite">
+      <BattleAnswerPanel v-if="enteredArena"
+        :options="battleOptions"
+        :selected-id="previewChoice"
+        :finished="previewFinished"
+        @select="choosePreview">
+        <template #dialogue>
           <template v-if="previewFinished">
             <span class="dialogue-kicker">PREVIEW COMPLETE</span>
             <p>Great practice, trainer! Ready for another challenge?</p>
@@ -445,18 +457,12 @@ function nextPreview() {
             <p class="battle-explanation">Choice selected. This preview does not check answers.</p>
             <button type="button" class="battle-next" @click="nextPreview">{{ previewIndex + 1 === previewQuestions.length ? 'Finish preview' : 'Next question' }} →</button>
           </template>
-        </div>
-        <div v-if="previewFinished" class="battle-end-actions">
+        </template>
+        <template #actions>
           <button type="button" @click="resetPreview">Preview again</button>
           <button type="button" @click="returnToSelection">Choose topic</button>
-        </div>
-        <div v-else-if="previewQuestion" class="demo-answers" role="group" aria-labelledby="arena-question">
-          <button v-for="(option, index) in previewQuestion.options" :key="option.id" type="button" :class="['demo-answer-' + index, { 'preview-selected': previewChoice === option.id }]" :aria-pressed="previewChoice === option.id" :disabled="previewChoice !== null" @click="choosePreview(option.id)">
-            <b class="choice-letter">{{ ['A','B','C','D'][index] }}</b><span class="choice-text">{{ option.option_text }}</span>
-            <span v-if="previewChoice === option.id" aria-label="Selected option">●</span>
-          </button>
-        </div>
-      </section>
+        </template>
+      </BattleAnswerPanel>
       <div v-for="(fighter, index) in fighters" :key="index" class="arena-fighter" :class="index === 0 ? 'player-fighter' : 'opponent-fighter'">
         <div class="fighter-shadow"></div>
         <Pokemon_Backwards v-if="index === 0 && activeBuddy?.pokemon?.name" class="player-back-sprite" :pokename="activeBuddy.pokemon.name" :fallback-src="activeBuddySprite" />
@@ -806,8 +812,8 @@ input:focus-visible {
 .sprite-status { position: absolute; z-index: 8; bottom: 2%; left: 35%; background: #17304d; color: white; padding: 8px; border-radius: 10px; }
 .arena-picker button:focus-visible, .arena-picker a:focus-visible { outline: 3px solid #ffdf86; outline-offset: 4px; }
 .arena-fighter { position: absolute; z-index: 7; height: 0; transform: translateX(-50%); }
-.player-fighter { left: 32%; top: 77%; width: 11%; }
-.opponent-fighter { left: 67%; top: 72%; width: 10.5%; }
+.player-fighter { left: 23%; top: 68%; width: 11%; }
+.opponent-fighter { left: 77%; top: 68%; width: 10.5%; }
 .arena-fighter > .player-back-sprite { position: absolute; bottom: 0; left: 0; width: 100%; height: 11cqw; }
 .arena-fighter > img { position: absolute; bottom: 0; left: 0; width: 100%; height: auto; image-rendering: pixelated; filter: drop-shadow(0 3px 1px #1b253044); }
 .fighter-shadow { position: absolute; top: -.3cqw; left: 23%; width: 54%; height: 1cqw; border-radius: 50%; background: #31221466; filter: blur(3px); }
@@ -841,36 +847,10 @@ input:focus-visible {
 .demo-caption { display: flex; justify-content: space-between; gap: 10px; color: #ffe6a2; font-size: clamp(9px, .8cqw, 13px); font-weight: 800; }
 .demo-board h2 { white-space: pre-wrap; margin: auto 0; padding: 12px 0; font-size: clamp(20px, 2cqw, 34px); line-height: 1.35; color: #fff8e7; }
 .demo-board > p { color: #fff8e7; }
-.battle-dock { position: absolute; z-index: 9; left: 2%; right: 2%; bottom: 1.5%; height: 19%; display: grid; grid-template-columns: 42% minmax(0, 1fr); gap: 12px; padding: 10px; border: 3px solid #344652; border-radius: 18px; background: #ede8d7; box-shadow: 0 5px 0 #192735, inset 0 0 0 2px #fff9dc; color: #263548; }
-.battle-dialogue { min-width: 0; overflow-y: auto; padding: 12px 16px; border: 3px solid #d6b254; border-radius: 9px; background: #183047; box-shadow: inset 0 0 0 2px #080f1d; color: #fff5dc; }
-.dialogue-kicker { color: #ffdc83; font-size: clamp(9px, .7cqw, 12px); font-weight: 900; letter-spacing: .1em; }
-.battle-dialogue p { margin: 8px 0; font-size: clamp(15px, 1.4cqw, 23px); line-height: 1.3; }
-.battle-dialogue strong { text-transform: capitalize; }
-.battle-dialogue small { font-size: clamp(10px, .85cqw, 14px); color: #d7e5ec; }
-.battle-dialogue .battle-explanation { font-size: clamp(12px, 1cqw, 17px); }
-.demo-answers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 8px; min-height: 0; }
-.demo-answers button { display: flex; align-items: center; gap: 8px; min-width: 0; min-height: 0; overflow-y: auto; padding: 8px 12px; border: 3px solid #fff4d2; outline: 2px solid #45515b; border-radius: 18px; color: white; font: inherit; font-size: clamp(11px, 1.1cqw, 18px); font-weight: 800; text-align: left; cursor: pointer; box-shadow: inset 0 -5px 0 #0002, inset 0 2px 0 #fff6; }
-.choice-letter { display: grid; place-items: center; flex: 0 0 25px; height: 25px; border-radius: 50%; background: #0002; font-size: 12px; }
-.choice-text { white-space: pre-wrap; flex: 1; overflow-wrap: anywhere; }
-.demo-answer-0 { background: #be4358; }.demo-answer-1 { background: #dfb94e; color: #26334a !important; }.demo-answer-2 { background: #488247; }.demo-answer-3 { background: #396d99; }
-.demo-answers button:hover:not(:disabled) { filter: brightness(1.15); }
-.demo-answers button:disabled { cursor: default; }
-.demo-answers .preview-selected { outline: 3px solid #ffe270; border-color: #ffe270; }
-.demo-answers .wrong { border-style: dashed; }
-.battle-next, .battle-end-actions button { padding: 8px 12px; border: 2px solid #b58d32; border-radius: 9px; background: #ffe08a; color: #26334a; font: inherit; font-weight: 800; cursor: pointer; }
-.battle-next { font-size: 12px; }
-.battle-end-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.battle-dock button:focus-visible { outline: 3px solid #fff; outline-offset: -6px; }
 @media (max-width: 700px) {
   .arena-scene:not(.selection-blur) .quiz-content { margin-bottom: 12px; }
   .arena-scene:not(.selection-blur) .player-fighter { top: calc(100vw * 941 / 1672 * .77); }
   .arena-scene:not(.selection-blur) .opponent-fighter { top: calc(100vw * 941 / 1672 * .72); }
-  .battle-dock { position: relative; left: auto; right: auto; bottom: auto; width: calc(100% - 24px); height: auto; margin: 12px 12px 180px; grid-template-columns: 1fr; }
-  .battle-dialogue { max-height: 180px; }
-  .demo-answers { grid-template-rows: auto; }
-  .demo-answers button { min-height: 65px; font-size: 14px; overflow: visible; }
-  .battle-dialogue p { font-size: 18px; }
-  .battle-dialogue .battle-explanation { font-size: 14px; }
 }
 /* Recoil the wrapper so sprite foot-alignment remains intact. */
 .player-fighter.is-hit { animation: player-recoil .65s ease-out .22s both; }
@@ -912,11 +892,36 @@ input:focus-visible {
 .time-bar-slider input { width: clamp(100px, 12vw, 200px); accent-color: #ffdf85; }
 .time-bar-status { font-size: 11px; color: #c6d4e7; white-space: nowrap; }
 .time-preview-bar button:focus-visible, .time-preview-bar input:focus-visible { outline: 2px solid #ffdf85; outline-offset: 2px; }
-@media (max-width: 700px) {
-  .arena-with-preview .arena-scene { width: 100%; }
-  .time-bar-inner { justify-content: flex-start; }
-  .arena-picker { padding-bottom: 24px; }
-  .battle-dock { margin-bottom: 24px; }
+@media (min-width: 701px) {
+  .arena-with-preview {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    overflow: hidden;
+  }
+
+  .arena-with-preview > .arena-page {
+    display: block;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+
+  .arena-with-preview .arena-scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    aspect-ratio: auto;
+    margin: 0;
+  }
 }
 
 /* Shared Studydex shell: identical font, navigation and clock on both pages. */
@@ -945,4 +950,21 @@ input:focus-visible {
 .picker-course { display:flex; align-items:center; gap:12px; color:#684180; font-weight:700; font-size:13px; }
 .picker-course select { padding:8px; border:1px solid #b394c7; border-radius:8px; background:#fff; color:#684180; }
 
+
+/* Coordinates match public/battle-scenes/arena-raised.png. */
+@media (min-width: 701px) {
+  .arena-scene .quiz-content { left: 22%; top: 12%; width: 56%; height: 29%; }
+  .arena-scene .demo-board h2 { font-size: clamp(18px, 1.8cqw, 30px); }
+}
+.arena-scene .player-fighter { left: 30%; top: 68%; width: 11%; }
+.arena-scene .opponent-fighter { left: 70%; top: 68%; width: 10.5%; }
+@media (max-width: 700px) {
+  .arena-scene:not(.selection-blur) .player-fighter,
+  .arena-scene:not(.selection-blur) .opponent-fighter {
+    top: calc(100vw * 941 / 1672 * .68);
+  }
+}
+
+
+.arena-image { transform: none; }
 </style>
