@@ -1378,49 +1378,63 @@ input:focus-visible {
 
 
 
-/* Matching capsule navigation on both pages. */
 .poke-lab-page .study-mode-toggle {
-  position: fixed; z-index: 40;
-  top: max(12px, env(safe-area-inset-top));
-  left: 50%; transform: translateX(-50%);
-  display: grid; grid-template-columns: 1fr 1fr;
-  width: min(232px, calc(100vw - 32px)); height: 40px;
-  overflow: hidden; border: 2px solid #26354b; border-radius: 999px;
-  background: #fffdf5; box-shadow: 0 2px 0 #132139, 0 4px 9px #07162b30;
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   pointer-events: auto;
+  width: min(216px, calc(100vw - 32px));
+  height: 38px;
+  box-sizing: border-box;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid #b89556;
+  border-radius: 11px;
+  background: #182b43;
+  box-shadow:
+    inset 0 1px 0 #ffffff20,
+    0 2px 4px #101c2c40;
 }
-.poke-lab-page .study-mode-toggle button {
-  position: relative; display: grid; place-items: center;
-  min-width: 0; min-height: 0; margin: 0; padding: 0 14px;
-  border: 0; border-radius: 0; box-shadow: none;
-  background: linear-gradient(#fff, #e8e8df); color: #253550;
-  font: inherit; font-size: 12px; font-weight: 850;
-  line-height: 1.2; cursor: pointer; opacity: 1;
-  transform: none; text-shadow: none;
-}
-.poke-lab-page .study-mode-toggle button:first-child { padding-right: 20px; }
-.poke-lab-page .study-mode-toggle button:last-child { padding-left: 20px; }
-.poke-lab-page .study-mode-toggle::before {
-  content: ''; position: absolute; z-index: 2; top: 0; bottom: 0;
-  left: calc(50% - 2px); width: 4px; background: #26354b;
-  pointer-events: none;
-}
+
+/* Remove the Poké Ball seam and centre circle. */
+.poke-lab-page .study-mode-toggle::before,
 .poke-lab-page .study-mode-toggle::after {
-  content: ''; position: absolute; z-index: 3; top: 50%; left: 50%;
-  width: 18px; height: 18px; transform: translate(-50%, -50%);
-  border: 3px solid #26354b; border-radius: 50%; background: #fffdf5;
-  box-shadow: inset 0 0 0 2px #d9e0e9; pointer-events: none;
+  content: none;
 }
+
+.poke-lab-page .study-mode-toggle button,
+.poke-lab-page .study-mode-toggle button:first-child,
+.poke-lab-page .study-mode-toggle button:last-child {
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #f5efe3;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Gold follows the current page. */
 .poke-lab-page .study-mode-toggle button.is-current {
-  background: linear-gradient(#ff5d67 0%, #ed1730 45%, #ce1029 100%);
-  color: white; cursor: default;
+  background: linear-gradient(#fae9c2, #e5c78c);
+  color: #203149;
+  box-shadow: inset 0 1px 0 #fff6df;
+  opacity: 1;
 }
+
 .poke-lab-page .study-mode-toggle button:not(.is-current):hover:not(:disabled) {
-  background: #fff; color: #142d4e;
+  background: #304962;
+  color: #fff;
 }
-.poke-lab-page .study-mode-toggle button:disabled:not(.is-current) { opacity: .55; cursor: wait; }
+
 .poke-lab-page .study-mode-toggle button:focus-visible {
-  outline: 3px solid #153f72; outline-offset: -5px;
+  outline: 2px solid #ffe5a8;
+  outline-offset: -3px;
 }
 /* Reserve space above the room so the switch cannot cover either board. */
 
