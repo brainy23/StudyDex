@@ -23,6 +23,7 @@ import { useRoomTransitionReady } from '../composables/useRoomTransition'
 import '../assets/study.css'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
+import StudydexBubbleNav from '@/components/common/StudydexBubbleNav.vue'
 
 const pageLoading = computed(() =>
   loading.value ||
@@ -663,6 +664,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
     </div>
   </main>
   </div>
+  <StudydexBubbleNav current="study"/>
 </template>
 <style scoped>
 
