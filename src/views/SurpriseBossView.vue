@@ -328,10 +328,10 @@ const battleOptions = computed(() =>
 
     <header class="arena-hud">
       <ClockWeather :use-device-location="true" @rain-change="rainActive = $event" />
-      <button @click="toggleMute()">{{isMuted?'Unmute':'Mute'}}</button>
+      <button class="mute-button" @click="toggleMute()">{{isMuted?'Unmute':'Mute'}}</button>
     </header>
-
-
+    
+    
     <section v-if="!enteredArena" class="arena-picker">
       <div class="picker-shell">
         <h1>Surprise boss battle</h1>
@@ -400,6 +400,17 @@ button:focus-visible, a:focus-visible, input:focus-visible {
   outline: 3px solid #ffdc55;
   outline-offset: 4px;
 }
+
+.mute-button {
+  display: block;
+  border: 0;
+  border-radius: 10px;
+  background-color: #ffdc55;
+  font-weight: 700;
+  margin-top: 20px;
+  margin-left:3px;
+}
+
 @media (max-width: 600px) {
   .arena-hud { top: 10px; left: 10px; max-width: calc(100% - 20px); }
 }
