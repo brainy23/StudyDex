@@ -3,7 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import VueApexCharts from 'vue3-apexcharts'
 import BackToHome from '../components/common/BackToHome.vue'
-import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
+import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
 import { getDashboardData } from '@/services/dashboardService'
 import { studyErrorMessage, resolveStudyImage } from '@/services/studyService'
@@ -47,10 +47,16 @@ async function loadDashboard() {
   }
 }
 const readable = section => ['ready', 'empty'].includes(section?.status)
+const capitalizedName = name => {
+  const text = String(name ?? '').trim()
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
 const profile = computed(() => dashboard.value?.profile)
 const catalogue = computed(() => dashboard.value?.catalogue)
-const subjects = computed(() => catalogue.value?.data?.subjects ?? [])
-const topics = computed(() => catalogue.value?.data?.topics ?? [])
+const subjects = computed(() => (catalogue.value?.data?.subjects ?? [])
+  .map(subject => ({ ...subject, name: capitalizedName(subject.name) })))
+const topics = computed(() => (catalogue.value?.data?.topics ?? [])
+  .map(topic => ({ ...topic, name: capitalizedName(topic.name) })))
 const subject = computed(() => subjects.value.find(item => item.id === selectedSubjectId.value))
 const quizSection = computed(() => dashboard.value?.quizAttempts)
 const sessionSection = computed(() => dashboard.value?.studySessions)
@@ -165,19 +171,10 @@ const quizLink = topic => ({ name: 'quiz', query: { subject: topic.subject_id, t
 const quizXP = computed(() => attempts.value.reduce((sum, row) => sum + row.xp_change, 0))
 const studyXP = computed(() => sessions.value.reduce((sum, row) => sum + (row.xp_change || 0), 0) + blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
 const average = computed(() => regularAttempts.value.length ? Math.round(regularAttempts.value.reduce((sum, row) => sum + percentage(row), 0) / regularAttempts.value.length) : null)
-const streak = computed(() => {
-  const days = new Set(completedSessions.value.map(row => dayKey(row.completed_at)))
-  let day = dayKey(now.value)
-  if (!days.has(day)) day = shiftDay(day, -1)
-  let count = 0
-  while (days.has(day)) { count++; day = shiftDay(day, -1) }
-  return count
-})
 const stats = computed(() => [
   { title: 'Total earned XP', value: quizAvailable.value && blocksAvailable.value ? quizXP.value + studyXP.value : '—', description: 'Quiz XP and recorded study XP', color: 'yellow', icon: '⭐' },
   { title: 'Study sessions', value: sessionsAvailable.value ? completedSessions.value.length : '—', description: 'Completed sessions', color: 'blue', icon: '📚' },
   { title: 'Quiz average', value: quizAvailable.value && average.value !== null ? `${average.value}%` : '—', description: quizAvailable.value && !regularAttempts.value.length ? 'No quizzes completed yet' : 'Regular quizzes only', color: 'pink', icon: '🎯' },
-  { title: 'Study streak', value: sessionsAvailable.value ? streak.value : '—', description: 'Consecutive study days · SGT', color: 'purple', icon: '🔥' },
 ])
 const notices = computed(() => [quizSection.value, sessionSection.value, blockSection.value].filter(section => section && !readable(section)))
 const chartDays = computed(() => Array.from({ length: Number(selectedPeriod.value) }, (_, index) => shiftDay(dayKey(now.value), index - Number(selectedPeriod.value) + 1)))
@@ -252,7 +249,8 @@ onUnmounted(() => {
           </div>
           <div class="dashboard-buddy">
             <h3 class="town-buddy-heading">Your Town Buddy Progress</h3>
-            <PokemonBuddy v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy" :active-pokemon="activeBuddy" />
+            <PokeSprite v-if="activeBuddy" :key="activeBuddy.ownedId" class="dashboard-pokemon-buddy"
+              :active-pokemon="activeBuddy" :fallback-src="activeBuddy.static_img" embedded progress-position="right" />
             <p v-else :role="buddySection?.status === 'error' ? 'alert' : 'status'">{{ buddySection?.message }}</p>
           </div>
         </header>
@@ -270,7 +268,7 @@ onUnmounted(() => {
           <section class="dashboard-panel topic-panel" aria-labelledby="subject-progress-title">
             <div class="panel-heading"><div class="topic-heading-main"><div class="topic-heading-copy"><span class="eyebrow">EXPLORE · PRACTISE · COMPLETE</span><h2 id="subject-progress-title"><span class="sd-subject-name">{{ subject?.name || 'Subject' }}</span> Topic Progress</h2><p>Reach 80% in your latest quiz to complete a topic.</p></div><div v-if="readable(catalogue) && subjects.length" class="subject-picker">
               <label for="progress-subject">Subject</label>
-              <select id="progress-subject" v-model="selectedSubjectId"><option v-for="option in subjects" :key="option.id" :value="option.id"><span class="sd-subject-name">{{ option.name }}</span></option></select>
+              <select id="progress-subject" v-model="selectedSubjectId"><option v-for="option in subjects" :key="option.id" :value="option.id">{{ option.name }}</option></select>
             </div></div></div>
             <p v-if="!readable(catalogue)" role="status">{{ catalogue?.message }}</p>
             <template v-else>
@@ -483,7 +481,7 @@ summary:focus-visible,
 /* STATISTICS */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 22px;
 }
@@ -1201,89 +1199,27 @@ summary:focus-visible,
   text-align: center;
 }
 
-.dashboard-buddy :deep(.pokemon-buddy) {
-  display: grid;
-  grid-template-columns: 90px minmax(0, 1fr);
-  align-items: center;
-  gap: 4px 12px;
+.dashboard-pokemon-buddy {
+  height: auto;
   padding: 0;
-  text-align: left;
-}
-
-.dashboard-buddy :deep(.pokemon-buddy > h2) {
-  display: none;
-}
-
-.dashboard-buddy :deep(.buddy-image-container) {
-  grid-column: 1;
-  grid-row: 1 / 4;
-  width: 90px;
-  height: 110px;
-}
-
-.dashboard-buddy :deep(.buddy-sprite) {
-  width: auto;
-  height: 75px;
-  max-width: 100%;
-}
-
-.dashboard-buddy :deep(.pokemon-buddy > h3),
-.dashboard-buddy :deep(.buddy-details > h3) {
-  grid-column: 2;
-  grid-row: 1;
-  align-self: end;
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.3;
-}
-
-.dashboard-buddy :deep(.buddy-level) {
-  grid-column: 2;
-  grid-row: 2;
-  margin: 0;
-  font-size: 16px;
-}
-
-/* Allow XP text to wrap without overlapping. */
-.dashboard-buddy :deep(.buddy-xp) {
-  grid-column: 2;
-  grid-row: 3;
-  align-self: start;
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  width: 100%;
-  max-width: none;
-  margin-top: 4px;
 }
 
-.dashboard-buddy :deep(.buddy-xp > p) {
-  margin: 0;
-  color: #647394;
-  font-size: 14px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
+.dashboard-pokemon-buddy :deep(.buddy-stage) {
+  height: 110px;
+  min-height: 0;
+  flex: none;
 }
 
-.dashboard-buddy :deep(.buddy-xp .xp-track) {
-  width: 100%;
-  height: 9px;
-  margin: 0;
-  border-radius: 999px;
-  background: #e5e9df;
+.dashboard-pokemon-buddy :deep(.buddy-sprite) {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
 }
 
-.dashboard-buddy :deep(.buddy-xp .xp-fill) {
-  background: #78c98b;
-  border-radius: inherit;
-}
-
-.dashboard-buddy :deep(.buddy-message),
-.dashboard-buddy :deep(.buddy-error),
-.dashboard-buddy :deep(.buddy-status) {
-  grid-column: 1 / -1;
-  font-size: 14px;
-  text-align: center;
+.dashboard-pokemon-buddy :deep(h3) {
+  display: none;
 }
 
 /* RESPONSIVE LAYOUT */

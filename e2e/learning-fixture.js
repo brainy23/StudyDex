@@ -17,16 +17,22 @@ export async function learningFixture(page) {
   const level = (await db.query('SELECT * FROM levels WHERE level_number=3')).rows[0]
   evidence.state.schoolLevel = level
   await db.query('INSERT INTO auth.users VALUES($1,$2,$3)', [uid, 'browser@example.invalid', { display_name: 'Fixture Trainer', school_level_number: 3 }])
+  // Most journeys represent a returning student; dedicated coverage exercises null.
+  await db.query('UPDATE profiles SET device_loc=false WHERE id=$1', [uid])
   await db.query("SELECT set_config('request.jwt.claim.sub',$1,false)", [uid])
   await db.exec('SET ROLE authenticated')
   await db.query('SELECT claim_starter(4)')
+  const species = (await db.query('SELECT name FROM pokemon WHERE pokeapi_id BETWEEN 1 AND 151 ORDER BY pokeapi_id')).rows
+  await page.route('https://pokeapi.co/api/v2/pokemon?limit=151', route => route.fulfill({
+    json: { results: species.map(row => ({ name:row.name.toLowerCase() })) },
+  }))
   const tables = new Set(['subjects','topics','topic_learning_goals','topic_concepts','questions','question_options','flashcards','user_pokemon','studydex_xp_events','study_sessions','pomodoro_blocks','quiz_attempts','quiz_attempt_answers','topic_completions','todos'])
-  const rpcs = new Set(['start_learning_quiz','submit_learning_quiz','study_session_action','get_daily_learning_progress','save_learning_todo','select_user_pokemon'])
+  const rpcs = new Set(['start_learning_quiz','submit_learning_quiz','prepare_learning_quiz_progression','submit_learning_quiz_progression','study_session_action','get_daily_learning_progress','save_learning_todo','select_user_pokemon','get_device_location_preference','set_device_location_preference','get_reward_inventory'])
   const failures = new Set(), requests = []
   await page.route('https://studydex-fixture.invalid/rest/v1/**', async route => {
     const request = route.request(), url = new URL(request.url()), name = url.pathname.split('/').at(-1)
     if (name === 'profiles' || name === 'levels' || url.pathname.includes('/rpc/') && !rpcs.has(name)) return route.fallback()
-    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers':'*', 'access-control-allow-methods':'GET,POST,OPTIONS' }
+    const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers':'*', 'access-control-allow-methods':'GET,HEAD,POST,OPTIONS', 'access-control-expose-headers':'content-range' }
     if (request.method() === 'OPTIONS') return route.fulfill({ status:204, headers })
     requests.push(name)
     try {
@@ -44,6 +50,9 @@ export async function learningFixture(page) {
       for (const [key,value] of url.searchParams) {
         if (!cols.has(key)) continue
         if (value.startsWith('eq.')) { params.push(value.slice(3)); clauses.push(`t."${key}"::text=$${params.length}`) }
+        for (const [prefix, op] of [['gte.', '>='], ['lt.', '<']]) {
+          if (value.startsWith(prefix)) { params.push(value.slice(prefix.length)); clauses.push(`t."${key}"${op}$${params.length}`) }
+        }
         if (value.startsWith('in.(')) { params.push(value.slice(4,-1).split(',').map(id => id.replaceAll('"',''))); clauses.push(`t."${key}"::text=ANY($${params.length}::text[])`) }
       }
       let sql = name === 'user_pokemon'
@@ -51,6 +60,8 @@ export async function learningFixture(page) {
         : `SELECT t.* FROM public.${name} t`
       if (clauses.length) sql += ` WHERE ${clauses.join(' AND ')}`
       const result = await db.query(sql, params)
+      headers['content-range'] = `0-${Math.max(0,result.rows.length-1)}/${result.rows.length}`
+      if (request.method() === 'HEAD') return route.fulfill({ headers, status:200 })
       const offset = Number(url.searchParams.get('offset') || 0), limit = Number(url.searchParams.get('limit') || result.rows.length)
       return route.fulfill({ headers, json: result.rows.slice(offset, offset+limit) })
     } catch (error) { return route.fulfill({ status:400, headers, json:{ code:error.code || 'TEST_ERROR', message:error.message } }) }

@@ -1,192 +1,308 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-
+import { RouterLink, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getOwnedStudyPokemon } from '../services/studyService'
 import { checkedRpc } from '../services/backendClient'
 import playSound from '../../scripts/soundEffect'
-let leaving = false
+
+const router = useRouter()
+const leaving = ref(false)
+const navigationError = ref('')
+
 function goBack() {
-  if (leaving) return
-  leaving = true
-  history.back()
+  if (leaving.value) return
+
+  leaving.value = true
+  navigationError.value = ''
+
+  // Go back exactly one entry. Direct visits return to town.
+  if (window.history.state?.back) {
+    router.back()
+  } else {
+    router.replace('/home').catch(() => {
+      leaving.value = false
+      navigationError.value = 'Could not return to town. Please try again.'
+    })
+  }
 }
+
+// Allow retry if a route guard prevents navigation.
+const removeAfterEach = router.afterEach((_to, _from, failure) => {
+  if (failure) leaving.value = false
+})
+const removeRouterError = router.onError(() => {
+  leaving.value = false
+  navigationError.value = 'Could not go back. Please try again.'
+})
+
 const collection = ref([])
 const ownedRecords = ref([])
 const loading = ref(true)
-const selectedRow = computed(() => ownedRecords.value.find(row => row.pokemon.pokeapi_id === selectedId.value))
-const sorted = computed(() => [...collection.value].sort((a,b) => a-b))
 const activeId = ref(null)
 const selectedId = ref(null)
 const owner = ref(null)
 const saving = ref(false)
 const collectionError = ref('')
 let alive = true
+
+const selectedRow = computed(() =>
+  ownedRecords.value.find(
+    row => row.pokemon?.pokeapi_id === selectedId.value,
+  ),
+)
+
+const sorted = computed(() =>
+  [...new Set(collection.value)].sort((a, b) => a - b),
+)
+
 async function loadCollection() {
   loading.value = true
+
   try {
     const profile = await getCurrentProfile()
     const records = await getOwnedStudyPokemon(profile.id)
+
     if (!alive) return
+
     owner.value = profile.id
     ownedRecords.value = records
-    collection.value = records.map(row => row.pokemon.pokeapi_id)
-    activeId.value = records.find(row => row.is_selected)?.pokemon.pokeapi_id || null
-    selectedId.value = sorted.value.includes(selectedId.value) ? selectedId.value : activeId.value || sorted.value[0]
+    collection.value = records
+      .map(row => row.pokemon?.pokeapi_id)
+      .filter(id => id != null)
+
+    activeId.value =
+      records.find(row => row.is_selected)?.pokemon?.pokeapi_id || null
+
+    selectedId.value = sorted.value.includes(selectedId.value)
+      ? selectedId.value
+      : activeId.value || sorted.value[0] || null
+
     collectionError.value = ''
-  } catch (cause) { if (alive) collectionError.value = cause.message }
-  finally { if (alive) loading.value = false }
+  } catch (cause) {
+    if (alive) {
+      collectionError.value =
+        cause.message || 'Your Pokémon could not be loaded.'
+    }
+  } finally {
+    if (alive) loading.value = false
+  }
 }
 
-const SCALE = window.innerWidth < 800 ? 2 : 4 // whole numbers keep the pixel art crisp
+const SCALE = window.innerWidth < 800 ? 2 : 4
 
 const TYPE_COLORS = {
-    normal: '168 167 122',
-    fire: '238 129 48',
-    water: '99 144 240',
-    electric: '247 208 44',
-    grass: '122 199 76',
-    ice: '150 217 214',
-    fighting: '194 46 40',
-    poison: '163 62 161',
-    ground: '226 191 101',
-    flying: '169 143 243',
-    psychic: '249 85 135',
-    bug: '166 185 26',
-    rock: '182 161 54',
-    ghost: '115 87 151',
-    dragon: '111 53 252',
-    dark: '112 87 70',
-    steel: '183 183 206',
-    fairy: '214 133 173',
+  normal: '168 167 122',
+  fire: '238 129 48',
+  water: '99 144 240',
+  electric: '247 208 44',
+  grass: '122 199 76',
+  ice: '150 217 214',
+  fighting: '194 46 40',
+  poison: '163 62 161',
+  ground: '226 191 101',
+  flying: '169 143 243',
+  psychic: '249 85 135',
+  bug: '166 185 26',
+  rock: '182 161 54',
+  ghost: '115 87 151',
+  dragon: '111 53 252',
+  dark: '112 87 70',
+  steel: '183 183 206',
+  fairy: '214 133 173',
 }
 
 function prettyName(name) {
-    if (name === 'nidoran-f') return 'Nidoran ♀'
-    if (name === 'nidoran-m') return 'Nidoran ♂'
-    if (name === 'mr-mime') return 'Mr. Mime'
-    if (name === 'farfetchd') return "Farfetch'd"
-    return name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
+  if (name === 'nidoran-f') return 'Nidoran ♀'
+  if (name === 'nidoran-m') return 'Nidoran ♂'
+  if (name === 'mr-mime') return 'Mr. Mime'
+  if (name === 'farfetchd') return "Farfetch'd"
+
+  return name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
 }
 
-const SPRITES = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'
-const tileSprite = (id) => SPRITES + id + '.png'
+const SPRITES =
+  'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'
 
-// ---------- names (one request for all 151) ----------
+const tileSprite = id => `${SPRITES}${id}.png`
 const names = ref({})
-const nameOf = (id) => names.value[id] || '#' + id
+const nameOf = id => names.value[id] || `#${id}`
 
 async function loadNames() {
-    try {
-        const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151')
-        const data = await res.json()
-        const map = {}
-        data.results.forEach((p, i) => {
-            map[i + 1] = prettyName(p.name)
-        })
-        names.value = map
-    } catch (e) {
-        console.error('Could not load Pokemon names', e)
-    }
+  try {
+    const response = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151')
+    if (!response.ok) throw new Error('Could not load Pokémon names')
+
+    const data = await response.json()
+    if (!alive) return
+
+    const map = {}
+    data.results.forEach((pokemon, index) => {
+      map[index + 1] = prettyName(pokemon.name)
+    })
+    names.value = map
+  } catch (error) {
+    console.error('Could not load Pokémon names', error)
+  }
 }
 
-// ---------- details of the selected Pokemon ----------
 const detail = ref(null)
+const detailError = ref('')
 const spriteW = ref(0)
 const cache = new Map()
 let token = 0
 
 async function loadDetail(id) {
-    if (!id) return
-    const myToken = ++token
-    spriteW.value = 0
-    if (cache.has(id)) {
-        detail.value = cache.get(id)
-        return
+  const myToken = ++token
+  spriteW.value = 0
+  detailError.value = ''
+  detail.value = null
+
+  if (!id) return
+
+  if (cache.has(id)) {
+    detail.value = cache.get(id)
+    return
+  }
+
+  try {
+    const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${id}`)
+    if (!response.ok) throw new Error('Could not load this Pokémon')
+
+    const data = await response.json()
+    const result = {
+      id,
+      types: data.types.map(item => item.type.name),
+      sprite:
+        data.sprites.versions?.['generation-v']?.['black-white']
+          ?.animated?.front_default ||
+        data.sprites.front_default,
     }
-    detail.value = null
-    try {
-        const res = await fetch('https://pokeapi.co/api/v2/pokemon/' + id)
-        const data = await res.json()
-        const d = {
-            id,
-            types: data.types.map((t) => t.type.name),
-            sprite:
-                data.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-                data.sprites.front_default,
-        }
-        cache.set(id, d)
-        if (myToken === token) detail.value = d
-    } catch (e) {
-        console.error('Could not load Pokemon details', e)
+
+    cache.set(id, result)
+
+    if (alive && myToken === token) {
+      detail.value = result
     }
+  } catch {
+    if (alive && myToken === token) {
+      detailError.value = 'This Pokémon could not load.'
+    }
+  }
 }
 
 watch(selectedId, loadDetail, { immediate: true })
 
 const theme = computed(() => {
-    const types = detail.value ? detail.value.types : []
-    return {
-        '--c1': TYPE_COLORS[types[0]] || '167 139 232',
-        '--c2': TYPE_COLORS[types[1]] || '255 214 90',
-    }
+  const types = detail.value?.types || []
+
+  return {
+    '--c1': TYPE_COLORS[types[0]] || '167 139 232',
+    '--c2': TYPE_COLORS[types[1]] || '255 214 90',
+  }
 })
 
-// ---------- selecting and keyboard ----------
 const grid = ref(null)
 
 function select(id) {
-    selectedId.value = id
+  selectedId.value = id
 }
 
 function columns() {
-    if (!grid.value) return 1
-    return getComputedStyle(grid.value).gridTemplateColumns.split(' ').length
+  if (!grid.value) return 1
+  return getComputedStyle(grid.value).gridTemplateColumns.split(' ').length
 }
 
-function onKey(e) {
-    const cols = columns()
-    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key]
-    if (!step) return
-    e.preventDefault()
-    const i = sorted.value.indexOf(selectedId.value)
-    const next = Math.max(0, Math.min(sorted.value.length - 1, i + step))
-    selectedId.value = sorted.value[next]
-    nextTick(() => grid.value?.children[next]?.focus())
+function onKey(event) {
+  const columnCount = columns()
+  const step = {
+    ArrowRight: 1,
+    ArrowLeft: -1,
+    ArrowDown: columnCount,
+    ArrowUp: -columnCount,
+  }[event.key]
+
+  if (!step || !sorted.value.length) return
+
+  event.preventDefault()
+
+  const index = sorted.value.indexOf(selectedId.value)
+  const next = Math.max(
+    0,
+    Math.min(sorted.value.length - 1, index + step),
+  )
+
+  selectedId.value = sorted.value[next]
+  nextTick(() => grid.value?.children[next]?.focus())
 }
 
-// ---------- make active ----------
 const toast = ref('')
 const celebrating = ref(false)
 let toastTimer = 0
 let celebrateTimer = 0
 
 async function makeActive() {
-    if (!selectedId.value || selectedId.value === activeId.value) return
-    if (saving.value) return
-    saving.value = true
-    try {
-      const record = ownedRecords.value.find(row => row.pokemon.pokeapi_id === selectedId.value)
-      await checkedRpc('select_user_pokemon', { p_owned_id: record.id }, owner.value)
-      if (!alive) return
-      await loadCollection()
-    } catch (cause) { collectionError.value = cause.message; return }
-    finally { saving.value = false }
+  if (
+    !selectedId.value ||
+    selectedId.value === activeId.value ||
+    saving.value
+  ) return
 
-    toast.value = nameOf(activeId.value) + ' is now your active Pokémon!'
+  saving.value = true
+
+  try {
+    const record = ownedRecords.value.find(
+      row => row.pokemon?.pokeapi_id === selectedId.value,
+    )
+
+    if (!record) throw new Error('This Pokémon could not be found.')
+
+    await checkedRpc(
+      'select_user_pokemon',
+      { p_owned_id: record.id },
+      owner.value,
+    )
+
+    if (!alive) return
+
+    await loadCollection()
+    if (!alive || collectionError.value) return
+
+    playSound('selectedPokemon')
+
+    toast.value = `${nameOf(activeId.value)} is now your active Pokémon!`
     clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => (toast.value = ''), 2400)
+    toastTimer = setTimeout(() => {
+      toast.value = ''
+    }, 2400)
 
     celebrating.value = true
     clearTimeout(celebrateTimer)
-    celebrateTimer = setTimeout(() => (celebrating.value = false), 900)
+    celebrateTimer = setTimeout(() => {
+      celebrating.value = false
+    }, 900)
+  } catch (cause) {
+    if (alive) {
+      collectionError.value =
+        cause.message || 'Your active Pokémon could not be changed.'
+    }
+  } finally {
+    if (alive) saving.value = false
+  }
 }
 
-onMounted(() => { void loadNames(); void loadCollection() })
+onMounted(() => {
+  void loadNames()
+  void loadCollection()
+})
+
 onUnmounted(() => {
-    alive = false
-    clearTimeout(toastTimer)
-    clearTimeout(celebrateTimer)
+  alive = false
+  token++
+  clearTimeout(toastTimer)
+  clearTimeout(celebrateTimer)
+  removeAfterEach()
+  removeRouterError()
 })
 </script>
 
@@ -201,9 +317,10 @@ onUnmounted(() => {
     </header>
 
     <div style="background: rgba(255, 255, 255, 0.78); padding-bottom:15px; padding-left:28px">
-      <button type="button" class="back" @click="goBack">Back</button>
+      <button type="button" class="back" :disabled="leaving" @click.stop="goBack">Back</button>
     </div>
 
+    <p v-if="navigationError" role="alert">{{ navigationError }}</p>
     <div class="body">
       <section class="list-panel" aria-label="Your Pokémon">
         <div v-if="collectionError" role="alert">{{ collectionError }} <button @click="loadCollection">Retry</button></div>
@@ -243,6 +360,7 @@ onUnmounted(() => {
                 :style="spriteW ? { width: spriteW * SCALE + 'px' } : {}"
                 @load="spriteW = $event.target.naturalWidth"
               />
+              <div v-else-if="detailError" class="loading" role="alert">{{ detailError }} <button type="button" @click="loadDetail(selectedId)">Retry</button></div>
               <div v-else class="loading">Loading…</div>
             </div>
             <span v-if="selectedId === activeId" class="badge">★ Active</span>
@@ -262,8 +380,8 @@ onUnmounted(() => {
             >{{ t }}</span>
           </div>
 
-          <button class="activate" :disabled="saving || selectedId === activeId" @click="makeActive(); playSound('selectedPokemon')">
-            {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
+          <button class="activate" :disabled="saving || selectedId === activeId" @click="makeActive">
+            {{ saving ? 'Saving…' : selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
           </button>
         </template>
       </aside>

@@ -16,10 +16,7 @@ onMounted(() => {
     const next = session?.user?.id || null
     if (authReady.value && next !== accountId.value) {
       usePokemonTransition().cancel()
-      weather.beginLocationRequest()
-      weather.savedLocation.value = null
-      weather.locationBusy.value = false
-      weather.locationNotice.value = ''
+      weather.resetLocationState()
       clearTimeout(redirect)
       redirect = setTimeout(() => { void router.replace({ name: next ? 'landing' : 'login' }) }, 0)
     }

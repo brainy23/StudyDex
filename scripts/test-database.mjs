@@ -3,6 +3,9 @@ import { readFile, readdir } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import process from 'node:process'
 import { PGlite } from '@electric-sql/pglite'
+import { calculateQuizReward } from '../src/utils/quizRewards.js'
+import { planPokemonXp } from '../src/services/pokemonProgression.js'
+import { pokemonFetch } from '../src/test/pokemonFixtures.js'
 
 // PostgreSQL in an isolated WASM process. Never connects to the live project.
 const db = new PGlite()
@@ -134,6 +137,101 @@ try {
     }
     assert.equal((await db.query('SELECT count(*)::int n FROM pomodoro_blocks')).rows[0].n, 0)
     assert.equal((await db.query('SELECT count(*)::int n FROM quiz_attempt_answers')).rows[0].n, 0)
+  })
+  await check('quiz XP matches all score bands, rounds percentages, and applies each attempt once', async () => {
+    const student = randomUUID()
+    await db.query('INSERT INTO auth.users VALUES($1,$2,$3)', [student, `${student}@example.invalid`, { display_name: 'Quiz rewards fixture', school_level_number: 3 }])
+    await call(student, 'SELECT public.claim_starter(4) AS result')
+    const recipient = (await db.query('SELECT id FROM user_pokemon WHERE user_id=$1', [student])).rows[0].id
+    const bank = (await db.query(`SELECT q.id,a.correct_option_id,
+      (SELECT o.id FROM question_options o WHERE o.question_id=q.id AND o.id<>a.correct_option_id ORDER BY o.id LIMIT 1) AS wrong_option_id
+      FROM questions q JOIN question_answers a ON a.question_id=q.id
+      WHERE q.question_purpose='quiz' ORDER BY q.id LIMIT 200`)).rows
+    assert.equal(bank.length, 200)
+    const scores = [...Array.from({ length: 101 }, (_, n) => [n,100]), [1,200], [199,200], [1,3], [2,3]]
+    for (const [index, [correctCount, totalCount]] of scores.entries()) {
+      const items = bank.slice(0,totalCount)
+      const id = randomUUID()
+      const questions = items.map(q => ({ id:q.id, options:[{ id:q.correct_option_id },{ id:q.wrong_option_id }] }))
+      const keys = Object.fromEntries(items.map(q => [q.id,{ correct_option_id:q.correct_option_id }]))
+      const choices = Object.fromEntries(items.map((q,i) => [q.id,i<correctCount ? q.correct_option_id : q.wrong_option_id]))
+      // Trusted question snapshots normally come from start_learning_quiz.
+      // Construct longer fixture attempts to exercise percentage rounding and
+      // interior band values beyond the production five-question sample.
+      await db.query(`INSERT INTO private.learning_quiz_runs(id,user_id,topic_id,buddy_id,quiz_day,attempt_number,questions,answer_key)
+        VALUES($1,$2,$3,$4,date '2000-01-01'+$5::integer,1,$6,$7)`, [id,student,topic,recipient,index,questions,keys])
+      const result = await call(student,'SELECT submit_learning_quiz($1,$2) AS result',[id,choices])
+      const expected = calculateQuizReward(correctCount,totalCount)
+      assert.equal(result.scorePercent,expected.scorePercent,`${correctCount}/${totalCount} percentage`)
+      assert.equal(result.delta,expected.xp,`${correctCount}/${totalCount} reward`)
+      const repeated = await call(student,'SELECT submit_learning_quiz($1,$2) AS result',[id,choices])
+      assert.equal(repeated.duplicate,true)
+      assert.equal(repeated.xp,result.xp)
+    }
+    const events = (await db.query('SELECT count(*)::int n FROM studydex_xp_events WHERE user_id=$1 AND reward_type=\'quiz\'',[student])).rows[0].n
+    assert.equal(events,scores.length)
+    const attempts = (await db.query('SELECT count(*)::int n FROM quiz_attempts WHERE user_id=$1',[student])).rows[0].n
+    assert.equal(attempts,scores.length)
+  })
+  await check('Vue-planned quiz evolution updates only the owner’s Pokémon and is saved once', async () => {
+    const student = randomUUID()
+    await db.query('INSERT INTO auth.users VALUES($1,$2,$3)', [student,`${student}@example.invalid`,{ display_name:'Evolution fixture',school_level_number:3 }])
+    await call(student,'SELECT public.claim_starter(4) AS result')
+    const recipient = (await db.query('SELECT id,pokemon_id FROM user_pokemon WHERE user_id=$1',[student])).rows[0]
+    await db.query('UPDATE user_pokemon SET xp=190,level=1 WHERE id=$1',[recipient.id])
+    const run = await call(student,'SELECT start_learning_quiz($1,$2) AS result',[topic,randomUUID()])
+    const answers = {}
+    for (const q of run.questions) answers[q.id]=(await db.query('SELECT correct_option_id FROM question_answers WHERE question_id=$1',[q.id])).rows[0].correct_option_id
+    const graded = await call(student,'SELECT prepare_learning_quiz_progression($1,$2) AS result',[run.run_id,answers])
+    assert.equal(graded.delta,50)
+    assert.equal((await db.query('SELECT xp FROM user_pokemon WHERE id=$1',[recipient.id])).rows[0].xp,190)
+    assert.equal((await db.query('SELECT count(*)::int n FROM studydex_xp_events WHERE user_id=$1',[student])).rows[0].n,0)
+    const originalFetch = globalThis.fetch
+    let plan
+    try {
+      globalThis.fetch=pokemonFetch
+      plan=await planPokemonXp(graded.originalPokemon,{ delta:graded.delta })
+    } finally { globalThis.fetch=originalFetch }
+    const progression = { pokemonRecordId:recipient.id,pokemonName:plan.result.name,rewardType:'quiz',
+      delta:graded.delta,appliedDelta:plan.appliedDelta,xp:plan.result.xp,level:plan.result.level,
+      originalPokemon:graded.originalPokemon,pokemon:plan.result,evolutions:plan.evolutions,evolved:plan.evolved }
+    const sql='SELECT submit_learning_quiz_progression($1,$2,$3,$4) AS result'
+    const args=[run.run_id,answers,graded.expected,progression]
+    await assert.rejects(call(other,sql,args))
+    const saved=await call(student,sql,args)
+    assert.equal(saved.pokemonName,'Charmeleon')
+    assert.equal(saved.evolutions[0].from,'charmander')
+    assert.equal(saved.evolutions[0].to,'charmeleon')
+    const row=(await db.query('SELECT u.id,u.user_id,u.pokemon_id,u.xp,u.level,p.name FROM user_pokemon u JOIN pokemon p ON p.id=u.pokemon_id WHERE u.id=$1',[recipient.id])).rows[0]
+    assert.equal(row.user_id,student); assert.equal(row.xp,40); assert.equal(row.level,2)
+    assert.equal(row.name.toLowerCase(),'charmeleon'); assert.notEqual(row.pokemon_id,recipient.pokemon_id)
+    assert.equal((await call(student,sql,args)).duplicate,true)
+    assert.equal((await call(student,'SELECT prepare_learning_quiz_progression($1,$2) AS result',[run.run_id,answers])).duplicate,true)
+    assert.equal((await db.query('SELECT xp FROM user_pokemon WHERE id=$1',[recipient.id])).rows[0].xp,40)
+    assert.equal((await db.query('SELECT count(*)::int n FROM studydex_xp_events WHERE event_id=$1',[run.run_id])).rows[0].n,1)
+    assert.equal((await db.query('SELECT count(*)::int n FROM user_pokemon WHERE user_id=$1',[student])).rows[0].n,1)
+    const next=await call(student,'SELECT start_learning_quiz($1,$2) AS result',[topic,randomUUID()])
+    const nextAnswers={}
+    for (const q of next.questions) nextAnswers[q.id]=(await db.query('SELECT correct_option_id FROM question_answers WHERE question_id=$1',[q.id])).rows[0].correct_option_id
+    const current=await call(student,'SELECT prepare_learning_quiz_progression($1,$2) AS result',[next.run_id,nextAnswers])
+    await assert.rejects(call(student,sql,[next.run_id,nextAnswers,graded.expected,progression]),/Pokémon changed/)
+    await assert.rejects(call(student,sql,[next.run_id,nextAnswers,current.expected,{ ...progression,pokemonRecordId:randomUUID() }]),/Invalid quiz Pokémon/)
+    assert.equal((await db.query('SELECT submitted_at FROM private.learning_quiz_runs WHERE id=$1',[next.run_id])).rows[0].submitted_at,null)
+    assert.equal((await db.query('SELECT count(*)::int n FROM studydex_xp_events WHERE event_id=$1',[next.run_id])).rows[0].n,0)
+    assert.equal((await db.query('SELECT xp FROM user_pokemon WHERE id=$1',[recipient.id])).rows[0].xp,40)
+  })
+  await check('profile device location starts null and persists only the current user’s boolean choice', async () => {
+    const student=randomUUID()
+    await db.query('INSERT INTO auth.users VALUES($1,$2,$3)',[student,`${student}@example.invalid`,{ display_name:'Location fixture',school_level_number:3 }])
+    assert.equal((await call(student,'SELECT get_device_location_preference() AS result')).device_loc,null)
+    assert.equal((await call(student,'SELECT set_device_location_preference(false) AS result')).device_loc,false)
+    assert.equal((await call(student,'SELECT get_device_location_preference() AS result')).device_loc,false)
+    assert.equal((await call(other,'SELECT get_device_location_preference() AS result')).device_loc,null)
+    assert.equal((await call(student,'SELECT set_device_location_preference(true) AS result')).device_loc,true)
+    assert.equal((await db.query('SELECT device_loc FROM profiles WHERE id=$1',[student])).rows[0].device_loc,true)
+    await assert.rejects(call(student,'SELECT set_device_location_preference(NULL) AS result'),/Choose whether/)
+    await assert.rejects(call('','SELECT get_device_location_preference() AS result'),/Sign in/)
+    assert.equal((await call(student,'SELECT get_device_location_preference() AS result')).device_loc,true)
   })
   console.log(`${checks} database integration checks passed`)
 } catch (error) { console.error('FAIL', error.message); process.exitCode = 1 }
