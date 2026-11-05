@@ -95,7 +95,7 @@ async function selectTopic(item) {
 <template>
   <LoadingScreen :show="loading" message="Opening your Topics…" />
 <main v-if="!loading" class="sd-picker sd-topics sd-colour-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
-  <nav class="sd-top-nav"><GoBackBtn /></nav>
+  <nav class="sd-top-nav"><GoBackBtn :to="{ name: 'selection-subjects', query: { flow } }" /></nav>
   <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ selectedSubject?.name || 'STUDY' }}</p><h1>Your {{ selectedSubject?.name || 'study' }} adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
   <p v-if="navigationError" class="sd-page-state" role="alert">{{ navigationError }}</p>
     <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
