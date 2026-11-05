@@ -1,4 +1,5 @@
 <script setup>
+import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
@@ -547,11 +548,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
       <button type="button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="openLearn">Learn</button>
     </nav>
     <header class="study-header">
-      <nav class="study-navigation" aria-label="Study navigation">
-        <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-
-        <button type="button" class="home-link" @click="returnToSelection">Topics</button>
-      </nav>
+      <StudyPageNavigation @topics="returnToSelection" />
       <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
     </header>
     <div class="study-content">

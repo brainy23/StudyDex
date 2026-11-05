@@ -1,4 +1,5 @@
 <script setup>
+import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
@@ -312,10 +313,7 @@ async function backToFlashcards() {
       <button type="button" class="is-current" aria-current="page" disabled>Learn</button>
     </nav>
     <header class="study-header">
-      <nav class="study-navigation" aria-label="Study navigation">
-        <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
-        <button type="button" class="home-link" @click="returnToSelection">Topics</button>
-      </nav>
+      <StudyPageNavigation @topics="returnToSelection" />
       <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
     </header>
     <div class="study-content">

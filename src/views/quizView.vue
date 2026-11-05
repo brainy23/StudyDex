@@ -1,4 +1,5 @@
 <script setup>
+import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import BattleAnswerPanel from '../components/common/BattleAnswerPanel.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
@@ -485,20 +486,7 @@ const battleOptions = computed(() =>
 
     <!-- CLOCK / EXIT -->
     <header class="arena-hud">
-      <nav class="arena-navigation" aria-label="Quiz navigation">
-        <RouterLink to="/home" class="home-link">
-          ‹ Back to town
-        </RouterLink>
-
-        <button
-          v-if="enteredArena"
-          type="button"
-          class="home-link change-topic"
-          @click="returnToSelection"
-        >
-          Topics
-        </button>
-      </nav>
+      <StudyPageNavigation :show-topics="enteredArena" @topics="returnToSelection" />
 
       <div v-show="enteredArena" class="quiz-clock-weather">
         <ClockWeather />
@@ -986,50 +974,4 @@ input:focus-visible {
 
 .arena-image { transform: none; }
 
-.arena-navigation {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  max-width: 100%;
-  pointer-events: auto;
-}
-
-.arena-hud .arena-navigation .home-link {
-  position: static;
-  margin: 0;
-  padding: 10px 16px;
-  border: 1px solid #ffffff66;
-  border-radius: 14px;
-  background: #203956;
-  color: #fff;
-  font: inherit;
-  font-weight: 750;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.arena-hud .arena-navigation .home-link:hover {
-  background: #31547a;
-  color: #fff;
-}
-
-.arena-navigation .home-link:focus-visible {
-  outline: 3px solid #ffe194;
-  outline-offset: 3px;
-}
-
-.arena-hud .quiz-clock-weather {
-  position: static;
-  align-self: flex-start;
-  margin: 0;
-  pointer-events: auto;
-}
-
-@media (max-width: 600px) {
-  .arena-hud .arena-navigation .home-link {
-    padding: 8px 12px;
-    font-size: 13px;
-  }
-}
 </style>
