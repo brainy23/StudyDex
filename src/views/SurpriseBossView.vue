@@ -1,6 +1,6 @@
 <script setup>
-import ExpriencePrompt from '../components/common/xpPrompt.vue/index.js'
-import { useExperiencePrompt } from '../composables/useExperiencePrompt'
+import ExpriencePrompt from '../components/common/xpPrompt.vue'
+import { useExperiencePrompt } from '../composables/useExperiencePrompt.js'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
 
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
