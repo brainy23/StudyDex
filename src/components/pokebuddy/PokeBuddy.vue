@@ -1,7 +1,6 @@
 <script setup>
 import axios from 'axios'
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import NavBar from '../common/NavBar.vue'
 import PokemonBuddy from './PokemonBuddy.vue'
 
 const API = 'https://pokeapi.co/api/v2'
