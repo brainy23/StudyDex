@@ -6,6 +6,7 @@ import { usePokemonTransition } from './composables/usePokemonTransition'
 import { provideWeatherLocation } from './composables/useWeatherLocation'
 import PokemonTransition from './components/common/PokemonTransition.vue'
 
+
 const weather = provideWeatherLocation()
 const router = useRouter()
 const accountId = ref(null)
