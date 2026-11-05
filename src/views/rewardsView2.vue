@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onMounted } from 'vue'
 import PokemonBuddy from '@/components/pokebuddy/PokemonBuddy.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
@@ -67,6 +67,8 @@ async function loadRewardsBuddy() {
 onMounted(loadRewardsBuddy)
 onUnmounted(() => { buddyActive = false; buddyRequest++; buddyController?.abort() })
 
+import { getSupabase } from '../lib/supabase'
+import { uuidFromDex, dexFromUuid, loadPokemonMap } from '../lib/pokemon'
 
 // stages: browse > idle > zoom > ready > tear > rise > flip > revealed
 const stage = ref('browse')
@@ -111,7 +113,24 @@ const packMessage = computed(() =>
 )
 
 // Pokemon the user already owns (replace with a Supabase fetch)
-const owned = ref(new Set([4, 25]))
+const owned = ref(new Set())
+
+async function loadOwned() {
+  const supabase = getSupabase()
+  await loadPokemonMap()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data, error } = await supabase
+    .from('user_pokemon')
+    .select('pokemon_id')
+    .eq('user_id', user.id)
+
+  if (error) { console.error(error); return }
+  owned.value = new Set(data.map(r => dexFromUuid(r.pokemon_id)))
+}
+
+onMounted(loadOwned)
 
 // Only base forms can be pulled: every Pokemon in #1-151 that does not evolve
 // from another Pokemon in #1-151. Delete IDs to trim the pool.
@@ -383,12 +402,44 @@ function completeTear(ms) {
     dragging.value = false
     animateTear(1, ms, tear)
 }
+async function saveCard(card) {
+  const supabase = getSupabase()
+  await loadPokemonMap()
+
+  const pokemonUuid = uuidFromDex(card.id)
+  if (!pokemonUuid) {
+    console.error('No row in the pokemon table for dex #' + card.id)
+    return
+  }
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  if (card.isNew) {
+    const { error } = await supabase.from('user_pokemon').insert({
+      user_id: user.id,
+      pokemon_id: pokemonUuid,
+      xp: 0,
+      level: 1,
+      is_selected: false,
+      is_defeated: false,
+    })
+    if (error) console.error('Could not save Pokémon', error)
+  } else {
+    const { error } = await supabase.rpc('add_duplicate_xp', {
+      p_pokemon_id: pokemonUuid,
+      p_xp: 25,
+    })
+    if (error) console.error('Could not add XP', error)
+  }
+}
 
 function tear() {
     if (stage.value !== 'ready' || !card.value) return
     packCount.value--
     owned.value.add(card.value.id)
     // TODO: save the card to Supabase and mark one pack as opened.
+    saveCard({ ...card.value })
     // Duplicates (card.isNew === false) should give bonus XP.
     burst()
     makeConfetti()
@@ -642,7 +693,7 @@ function backToPacks() {
     .back{
         font-family: inherit;
         font-size: 24px;
-        padding: 8px 20px;
+        padding: 4px 20px;
         border: 3px solid rgb(200, 160, 0);
         border-radius: 12px;
         background-color: rgb(255, 215, 37);

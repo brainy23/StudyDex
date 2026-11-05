@@ -1,167 +1,213 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import playSound from '../../scripts/soundEffect';
+import { getSupabase } from '../lib/supabase'
+import { useActivePokemon } from '../composables/useActivePokemon'
+import { dexFromUuid, loadPokemonMap } from '../lib/pokemon'
 
-// Pokemon the user owns (replace with a Supabase fetch of the user's collection)
-const collection = ref([
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 
-    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 
-    60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 
-    79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 
-    98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 
-    114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 
-    130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 
-    146, 147, 148, 149, 150, 151
-])
-const sorted = computed(() => [...collection.value].sort((a, b) => a - b))
+// ---------- shared active Pokémon ----------
+const { activeId, setActive } = useActivePokemon()
 
-// the user's current buddy (replace with the value saved in Supabase)
-const activeId = ref(Number(localStorage.getItem('activePokemonId')) || 4)
-const selectedId = ref(sorted.value.includes(activeId.value) ? activeId.value : sorted.value[0])
-
-const SCALE = window.innerWidth < 800 ? 2 : 4 // whole numbers keep the pixel art crisp
+// ---------- constants ----------
+const SCALE = window.innerWidth < 800 ? 2 : 4
 
 const TYPE_COLORS = {
-    normal: '168 167 122',
-    fire: '238 129 48',
-    water: '99 144 240',
-    electric: '247 208 44',
-    grass: '122 199 76',
-    ice: '150 217 214',
-    fighting: '194 46 40',
-    poison: '163 62 161',
-    ground: '226 191 101',
-    flying: '169 143 243',
-    psychic: '249 85 135',
-    bug: '166 185 26',
-    rock: '182 161 54',
-    ghost: '115 87 151',
-    dragon: '111 53 252',
-    dark: '112 87 70',
-    steel: '183 183 206',
-    fairy: '214 133 173',
-}
-
-function prettyName(name) {
-    if (name === 'nidoran-f') return 'Nidoran ♀'
-    if (name === 'nidoran-m') return 'Nidoran ♂'
-    if (name === 'mr-mime') return 'Mr. Mime'
-    if (name === 'farfetchd') return "Farfetch'd"
-    return name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
+  normal: '168 167 122',
+  fire: '238 129 48',
+  water: '99 144 240',
+  electric: '247 208 44',
+  grass: '122 199 76',
+  ice: '150 217 214',
+  fighting: '194 46 40',
+  poison: '163 62 161',
+  ground: '226 191 101',
+  flying: '169 143 243',
+  psychic: '249 85 135',
+  bug: '166 185 26',
+  rock: '182 161 54',
+  ghost: '115 87 151',
+  dragon: '111 53 252',
+  dark: '112 87 70',
+  steel: '183 183 206',
+  fairy: '214 133 173',
 }
 
 const SPRITES = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'
 const tileSprite = (id) => SPRITES + id + '.png'
+
+function prettyName(name) {
+  if (name === 'nidoran-f') return 'Nidoran ♀'
+  if (name === 'nidoran-m') return 'Nidoran ♂'
+  if (name === 'mr-mime') return 'Mr. Mime'
+  if (name === 'farfetchd') return "Farfetch'd"
+  return name.charAt(0).toUpperCase() + name.slice(1).replace(/-/g, ' ')
+}
+
+// ---------- state ----------
+const rows = ref([])          // user_pokemon rows, each with an added `dex` field
+const loading = ref(true)
+const selectedId = ref(null)  // dex number being previewed
+
+const toast = ref('')
+const celebrating = ref(false)
+let toastTimer = 0
+let celebrateTimer = 0
+
+const collection = computed(() => [...new Set(rows.value.map(r => r.dex))])
+const sorted = computed(() => [...collection.value].sort((a, b) => a - b))
+
+const selectedRow = computed(() =>
+  rows.value.find(r => r.dex === selectedId.value)
+)
+
+// ---------- load the user's collection ----------
+async function loadCollection() {
+    const supabase = getSupabase()
+    await loadPokemonMap()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) { loading.value = false; return }
+
+  const { data, error } = await supabase
+    .from('user_pokemon')
+    .select('id, pokemon_id, xp, level, is_selected, is_defeated, obtained_at')
+    .eq('user_id', user.id)
+
+  if (error) {
+    console.error('Could not load collection', error)
+    loading.value = false
+    return
+  }
+
+  rows.value = data
+    .map(r => ({ ...r, dex: dexFromUuid(r.pokemon_id) }))
+    .filter(r => Number.isInteger(r.dex) && r.dex > 0)
+
+  const selected = rows.value.find(r => r.is_selected)
+  if (selected) setActive(selected.dex)
+
+  selectedId.value = sorted.value.includes(activeId.value)
+    ? activeId.value
+    : sorted.value[0] ?? null
+
+  loading.value = false
+}
 
 // ---------- names (one request for all 151) ----------
 const names = ref({})
 const nameOf = (id) => names.value[id] || '#' + id
 
 async function loadNames() {
-    try {
-        const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151')
-        const data = await res.json()
-        const map = {}
-        data.results.forEach((p, i) => {
-            map[i + 1] = prettyName(p.name)
-        })
-        names.value = map
-    } catch (e) {
-        console.error('Could not load Pokemon names', e)
-    }
+  try {
+    const res = await fetch('https://pokeapi.co/api/v2/pokemon?limit=151')
+    const data = await res.json()
+    const map = {}
+    data.results.forEach((p, i) => {
+      map[i + 1] = prettyName(p.name)
+    })
+    names.value = map
+  } catch (e) {
+    console.error('Could not load Pokemon names', e)
+  }
 }
 
-// ---------- details of the selected Pokemon ----------
+// ---------- details of the selected Pokémon ----------
 const detail = ref(null)
 const spriteW = ref(0)
 const cache = new Map()
 let token = 0
 
 async function loadDetail(id) {
-    if (!id) return
-    const myToken = ++token
-    spriteW.value = 0
-    if (cache.has(id)) {
-        detail.value = cache.get(id)
-        return
+  if (!id) return
+  const myToken = ++token
+  spriteW.value = 0
+  if (cache.has(id)) {
+    detail.value = cache.get(id)
+    return
+  }
+  detail.value = null
+  try {
+    const res = await fetch('https://pokeapi.co/api/v2/pokemon/' + id)
+    const data = await res.json()
+    const d = {
+      id,
+      types: data.types.map((t) => t.type.name),
+      sprite:
+        data.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
+        data.sprites.front_default,
     }
-    detail.value = null
-    try {
-        const res = await fetch('https://pokeapi.co/api/v2/pokemon/' + id)
-        const data = await res.json()
-        const d = {
-            id,
-            types: data.types.map((t) => t.type.name),
-            sprite:
-                data.sprites.versions?.['generation-v']?.['black-white']?.animated?.front_default ||
-                data.sprites.front_default,
-        }
-        cache.set(id, d)
-        if (myToken === token) detail.value = d
-    } catch (e) {
-        console.error('Could not load Pokemon details', e)
-    }
+    cache.set(id, d)
+    if (myToken === token) detail.value = d
+  } catch (e) {
+    console.error('Could not load Pokemon details', e)
+  }
 }
 
 watch(selectedId, loadDetail, { immediate: true })
 
 const theme = computed(() => {
-    const types = detail.value ? detail.value.types : []
-    return {
-        '--c1': TYPE_COLORS[types[0]] || '167 139 232',
-        '--c2': TYPE_COLORS[types[1]] || '255 214 90',
-    }
+  const types = detail.value ? detail.value.types : []
+  return {
+    '--c1': TYPE_COLORS[types[0]] || '167 139 232',
+    '--c2': TYPE_COLORS[types[1]] || '255 214 90',
+  }
 })
 
 // ---------- selecting and keyboard ----------
 const grid = ref(null)
 
 function select(id) {
-    selectedId.value = id
+  selectedId.value = id
 }
 
 function columns() {
-    if (!grid.value) return 1
-    return getComputedStyle(grid.value).gridTemplateColumns.split(' ').length
+  if (!grid.value) return 1
+  return getComputedStyle(grid.value).gridTemplateColumns.split(' ').length
 }
 
 function onKey(e) {
-    const cols = columns()
-    const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key]
-    if (!step) return
-    e.preventDefault()
-    const i = sorted.value.indexOf(selectedId.value)
-    const next = Math.max(0, Math.min(sorted.value.length - 1, i + step))
-    selectedId.value = sorted.value[next]
-    nextTick(() => grid.value?.children[next]?.focus())
+  const cols = columns()
+  const step = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: cols, ArrowUp: -cols }[e.key]
+  if (!step) return
+  e.preventDefault()
+  const i = sorted.value.indexOf(selectedId.value)
+  const next = Math.max(0, Math.min(sorted.value.length - 1, i + step))
+  selectedId.value = sorted.value[next]
+  nextTick(() => grid.value?.children[next]?.focus())
 }
 
 // ---------- make active ----------
-const toast = ref('')
-const celebrating = ref(false)
-let toastTimer = 0
-let celebrateTimer = 0
+async function makeActive() {
+    const supabase = getSupabase()  
+  if (!selectedId.value || selectedId.value === activeId.value) return
+  const row = selectedRow.value
+  if (!row) return
 
-function makeActive() {
-    if (!selectedId.value || selectedId.value === activeId.value) return
-    activeId.value = selectedId.value
-    localStorage.setItem('activePokemonId', String(activeId.value))
-    // TODO: save to Supabase, e.g. update user_buddy set pokemon_id = activeId.value
+  const { error } = await supabase.rpc('set_active_pokemon', { p_row_id: row.id })
+  if (error) {
+    console.error('Could not set active Pokémon', error)
+    return
+  }
 
-    toast.value = nameOf(activeId.value) + ' is now your active Pokémon!'
-    clearTimeout(toastTimer)
-    toastTimer = setTimeout(() => (toast.value = ''), 2400)
+  rows.value.forEach(r => (r.is_selected = r.id === row.id))
+  setActive(row.dex)
 
-    celebrating.value = true
-    clearTimeout(celebrateTimer)
-    celebrateTimer = setTimeout(() => (celebrating.value = false), 900)
+  toast.value = nameOf(row.dex) + ' is now your active Pokémon!'
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => (toast.value = ''), 2400)
+
+  celebrating.value = true
+  clearTimeout(celebrateTimer)
+  celebrateTimer = setTimeout(() => (celebrating.value = false), 900)
 }
 
-onMounted(loadNames)
+// ---------- lifecycle ----------
+onMounted(() => {
+  loadNames()
+  loadCollection()
+})
+
 onUnmounted(() => {
-    clearTimeout(toastTimer)
-    clearTimeout(celebrateTimer)
+  clearTimeout(toastTimer)
+  clearTimeout(celebrateTimer)
 })
 </script>
 
@@ -174,13 +220,16 @@ onUnmounted(() => {
         Number registered: <strong>{{ sorted.length }}</strong>
       </div>
     </header>
+
     <div style="background: rgba(255, 255, 255, 0.78); padding-bottom:15px; padding-left:28px">
-        <button onclick="history.back()" class="back">Back</button> 
+      <button type="button" class="back" @click="$router.back()">Back</button>
     </div>
-  
+
     <div class="body">
       <section class="list-panel" aria-label="Your Pokémon">
-        <div v-if="sorted.length" ref="grid" class="grid" @keydown="onKey">
+        <div v-if="loading" class="empty">Loading…</div>
+
+        <div v-else-if="sorted.length" ref="grid" class="grid" @keydown="onKey">
           <button
             v-for="id in sorted"
             :key="id"
@@ -195,6 +244,7 @@ onUnmounted(() => {
             <span v-if="id === activeId" class="star" aria-label="Active Pokémon">★</span>
           </button>
         </div>
+
         <div v-else class="empty">
           <p>No Pokémon yet. Open a pack to start your collection!</p>
           <RouterLink to="/rewards" class="activate link">Open a pack</RouterLink>
@@ -220,10 +270,16 @@ onUnmounted(() => {
 
           <div class="plate">
             <div class="no">{{ nameOf(selectedId) }}</div>
-            <div class="name">[fetch XP bar]</div>
+            <div class="name">Lv {{ selectedRow?.level }} · {{ selectedRow?.xp }} XP</div>
           </div>
+
           <div v-if="detail" class="types">
-            <span v-for="t in detail.types" :key="t" class="chip" :style="{ '--tc': TYPE_COLORS[t] }">{{ t }}</span>
+            <span
+              v-for="t in detail.types"
+              :key="t"
+              class="chip"
+              :style="{ '--tc': TYPE_COLORS[t] }"
+            >{{ t }}</span>
           </div>
 
           <button class="activate" :disabled="selectedId === activeId" @click="makeActive; playSound('selectedPokemon');">
