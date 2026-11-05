@@ -105,7 +105,8 @@ watch(
 
 // The buttons and generated gifts below are DEV PREVIEWS only.
 // Do not treat changes here as persisted XP or newly owned Pokémon.
-const showXpTestButtons = import.meta.env.DEV
+// if want to use (showXpTestButtons = import.meta.env.DEV)
+const showXpTestButtons = false
 
 const selectedBuddyRecord = ref(null)
 const buddyLoadError = ref('')
