@@ -490,7 +490,7 @@ const battleOptions = computed(() =>
 
       <!-- The question stays on the arena's built-in screen. -->
       <section v-if="enteredArena" class="quiz-content demo-board" aria-label="Graded quiz">
-        <div class="demo-caption"><span>{{ previewSubject?.name }} · {{ selectedPreviewTopic?.name }}</span><span>{{ previewFinished ? 'Complete' : `${previewIndex + 1} / ${previewQuestions.length}` }}</span></div>
+        <div class="demo-caption"><span><span class="sd-subject-name">{{ previewSubject?.name }}</span> · {{ selectedPreviewTopic?.name }}</span><span>{{ previewFinished ? 'Complete' : `${previewIndex + 1} / ${previewQuestions.length}` }}</span></div>
         <h2 id="arena-question">{{ previewFinished ? 'Quiz complete, trainer!' : previewQuestion?.question_text }}</h2>
         <p v-if="previewFinished">{{ quizResult.correct }} / {{ quizResult.total }} correct · {{ quizResult.scorePercent }}% · {{ quizResult.appliedDelta }} XP saved</p>
       </section>

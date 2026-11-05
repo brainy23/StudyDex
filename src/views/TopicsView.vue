@@ -81,12 +81,12 @@ async function selectTopic(item) {
   <LoadingScreen :show="loading" message="Opening your Topics…" />
 <main v-if="!loading" class="sd-picker sd-topics sd-colour-topics" :class="`sd-theme-${subjectTheme}`" :style="{ '--page-art': `url(${pageArt})` }">
   <nav class="sd-top-nav"><RouterLink to="/home">‹ Back to town</RouterLink><RouterLink :to="{ name:'selection-subjects', query:{ flow } }">← All subjects</RouterLink></nav>
-  <header class="sd-picker-heading"><p class="sd-eyebrow">STUDYDEX · {{ selectedSubject?.name || 'STUDY' }}</p><h1>Your {{ selectedSubject?.name || 'study' }} adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
+  <header class="sd-picker-heading"><p class="sd-eyebrow">{{ flow === 'quiz' ? 'Poké Arena' : 'Poké Lab' }}</p><h1>Your <span class="sd-subject-name">{{ selectedSubject?.name || 'study' }}</span> adventure</h1><p>Pick a topic. Make your next discovery.</p></header>
   <p v-if="navigationError" class="sd-page-state" role="alert">{{ navigationError }}</p>
     <div v-if="error" class="sd-page-state" role="alert"><p>{{ error }}</p><button @click="load">Try again</button></div>
     <div v-else-if="!profile?.school_level_id" class="sd-page-state"><p>Set your school level to see the right topics.</p><RouterLink to="/account">Account settings</RouterLink></div>
   <section v-else class="sd-topic-panel" :aria-label="`${selectedSubject?.name || 'Study'} topics`">
-    <div class="sd-topic-toolbar"><span class="sd-level">{{ selectedSubject?.name || 'STUDY' }} · {{ profile.school_level?.name }}</span><span class="sd-count">{{ topics.length }} topics</span></div>
+    <div class="sd-topic-toolbar"><span class="sd-level"><span class="sd-subject-name">{{ selectedSubject?.name || 'STUDY' }}</span> · {{ profile.school_level?.name }}</span><span class="sd-count">{{ topics.length }} topics</span></div>
     <label class="sd-search"><span>Find a topic</span><input v-model="search" type="search" :placeholder="`Search ${selectedSubject?.name || 'study'} topics…`" /></label>
     <div class="sd-topic-list">
       <button v-for="item in shownTopics" :key="item.id" class="sd-topic-card" :disabled="disabled(item)" @click="selectTopic(item)">
@@ -100,7 +100,7 @@ async function selectTopic(item) {
         </svg><b>{{ String(topics.findIndex(t => t.id === item.id) + 1).padStart(2,'0') }}</b></span><span v-if="topicCompletion.isComplete(item.id)" class="sd-done-badge"><span aria-hidden="true">✓</span> Done</span><span v-else class="sd-topic-chevron" aria-hidden="true">›</span></span>
       </button>
     </div>
-    <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : `No ${selectedSubject?.name || 'study'} topics are available for your school level yet.` }}</p>
+    <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : `No ${(selectedSubject?.name || 'study').toLowerCase()} topics are available for your school level yet.` }}</p>
     <p v-if="flow === 'quiz'" class="sd-footnote">Three attempts per topic per Singapore day. Scores and XP are saved to Study History.</p>
     <p v-if="!topicCompletion.savedInBrowser.value" class="sd-footnote" role="status">Completion badges could not load. <button @click="topicCompletion.refresh">Retry</button></p>
   </section>

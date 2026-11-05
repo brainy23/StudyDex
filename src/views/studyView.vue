@@ -703,7 +703,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
       <p v-if="learningNavigationError" class="learn-navigation-error" role="alert">{{ learningNavigationError }}</p>
       <footer v-if="enteredLab" class="lab-footer">
         <span role="status">{{ ratingMessage }}</span>
-        <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
+        <span>{{ profile.school_level?.name }}<template v-if="subject"> · <span class="sd-subject-name">{{ subject.name }}</span></template></span>
         <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
         <p v-if="!savedInBrowser" role="status">Saved topic progress could not be loaded. Please retry.</p>
         <p v-if="backgroundFailed" role="alert">Room image missing. Put poke-lab-interior.png in public/poke-lab/.</p>

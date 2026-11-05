@@ -2213,8 +2213,8 @@ watch(
 
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: center;
+  gap: var(--sd-space-2);
 
   pointer-events: none;
 }
@@ -2458,13 +2458,29 @@ watch(
   .sd-hud {
     top: 12px;
     left: 12px;
-    gap: 6px;
+    gap: var(--sd-space-1);
   }
 
   .sd-logo {
     width: 145px;
   }
 
+}
+
+@media (max-height: 520px) {
+  .sd-hud {
+    flex-direction: row;
+    gap: var(--sd-space-3);
+  }
+
+  .sd-logo {
+    width: clamp(100px, 12vw, 150px);
+  }
+
+  .sd-clock-weather {
+    flex-direction: row;
+    gap: var(--sd-space-2);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2805,12 +2821,12 @@ watch(
 }
 .sd-clock-weather {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   pointer-events: auto;
 }
 
 .sd-clock-weather :deep(.clock-weather-widget) {
-  align-items: flex-start;
+  align-items: center;
 }
 
 .trainer-hud,

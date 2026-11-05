@@ -70,7 +70,7 @@ const locationLabel = computed(() => {
   }
 
   if (savedLocation.value) {
-    return 'Singapore (default)'
+    return 'Singapore'
   }
 
   return 'Choose location'
@@ -1005,23 +1005,23 @@ onUnmounted(() => {
 .clock-weather-widget {
   display: inline-flex;
   flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   max-width: 100%;
   padding: 0;
 }
 .clock-weather-widget > .clock-weather {
-  align-self: flex-start;
+  align-self: center;
   margin: 0;
   box-sizing: border-box;
 }
 .weather-location-badge {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  gap: 8px;
+  align-self: center;
+  gap: var(--sd-space-2);
   max-width: 100%;
   box-sizing: border-box;
-  margin: 8px 0 0;
+  margin: var(--sd-space-2) 0 0;
   padding: 4px 5px 4px 11px;
   border: 1px solid #eadbb6;
   border-radius: 999px;
@@ -1090,6 +1090,22 @@ onUnmounted(() => {
   .location-change-button svg {
     width: clamp(14px, calc(12.095px + 0.595vw), 18px);
     height: clamp(14px, calc(12.095px + 0.595vw), 18px);
+  }
+}
+
+@media (max-height: 520px) {
+  .clock-weather-widget {
+    flex-direction: row;
+    gap: var(--sd-space-2);
+  }
+
+  .clock-weather-widget > .clock-weather {
+    align-self: center;
+  }
+
+  .weather-location-badge {
+    align-self: center;
+    margin: 0;
   }
 }
 </style>

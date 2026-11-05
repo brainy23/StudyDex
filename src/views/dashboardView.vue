@@ -268,16 +268,16 @@ onUnmounted(() => {
         </section>
         <div class="main-grid">
           <section class="dashboard-panel topic-panel" aria-labelledby="subject-progress-title">
-            <div class="panel-heading"><div class="topic-heading-main"><div class="topic-heading-copy"><span class="eyebrow">EXPLORE · PRACTISE · COMPLETE</span><h2 id="subject-progress-title">{{ subject?.name || 'Subject' }} Topic Progress</h2><p>Reach 80% in your latest quiz to complete a topic.</p></div><div v-if="readable(catalogue) && subjects.length" class="subject-picker">
+            <div class="panel-heading"><div class="topic-heading-main"><div class="topic-heading-copy"><span class="eyebrow">EXPLORE · PRACTISE · COMPLETE</span><h2 id="subject-progress-title"><span class="sd-subject-name">{{ subject?.name || 'Subject' }}</span> Topic Progress</h2><p>Reach 80% in your latest quiz to complete a topic.</p></div><div v-if="readable(catalogue) && subjects.length" class="subject-picker">
               <label for="progress-subject">Subject</label>
-              <select id="progress-subject" v-model="selectedSubjectId"><option v-for="option in subjects" :key="option.id" :value="option.id">{{ option.name }}</option></select>
+              <select id="progress-subject" v-model="selectedSubjectId"><option v-for="option in subjects" :key="option.id" :value="option.id"><span class="sd-subject-name">{{ option.name }}</span></option></select>
             </div></div></div>
             <p v-if="!readable(catalogue)" role="status">{{ catalogue?.message }}</p>
             <template v-else>
               <div v-if="quizAvailable && topicProgress.length" class="completion-summary"><div class="completion-heading"><div><strong>{{ completedTopics }}</strong><span>of {{ topicProgress.length }} topics completed</span></div><span>{{ completionPercent }}%</span></div><div class="completion-track" role="progressbar" aria-label="Topics completed" :aria-valuenow="completedTopics" :aria-valuemax="topicProgress.length" aria-valuemin="0"><div class="completion-fill" :style="{ width: `${completionPercent}%` }"></div></div></div>
               <p v-else-if="!quizAvailable" class="section-notice">{{ quizSection?.message }}</p>
               <aside v-if="nextChallenge" class="next-challenge"><span class="challenge-icon" aria-hidden="true">💡</span><div class="challenge-copy"><span class="eyebrow">YOUR NEXT CHALLENGE</span><h3>{{ nextChallenge.name }}</h3><p>{{ nextChallenge.score === null ? 'Give this topic your first try!' : `Your latest score is ${nextChallenge.score}%. Keep practising!` }}</p></div><RouterLink :to="quizLink(nextChallenge)" class="button button-primary">Open Quiz Arena →</RouterLink></aside>
-              <p v-if="!topicProgress.length" class="simple-empty">No topics are available{{ subject ? ` for ${subject.name}` : '' }} at your school level.</p>
+              <p v-if="!topicProgress.length" class="simple-empty">No topics are available<template v-if="subject"> for <span class="sd-subject-name">{{ subject.name }}</span></template> at your school level.</p>
               <div class="topic-list">
                 <article v-for="topic in topicProgress" :key="topic.id" class="topic-item" :class="`topic-${topic.color}`">
                   <button class="topic-toggle" :aria-expanded="expandedTopic === topic.id" :aria-controls="`topic-${topic.id}`" @click="expandedTopic = expandedTopic === topic.id ? null : topic.id"><span class="topic-icon" aria-hidden="true">📖</span><span class="topic-name">{{ topic.name }}</span><span class="topic-status">{{ topic.status }}</span><span class="topic-score">{{ topic.score === null ? '—' : `${topic.score}%` }}</span><span class="topic-chevron">{{ expandedTopic === topic.id ? '−' : '+' }}</span></button>
@@ -1457,7 +1457,7 @@ summary:focus-visible,
 .topic-heading-copy { flex: 1 1 250px; min-width: 0; }
 .subject-picker { display: flex; flex: 0 1 250px; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0; }
 .subject-picker label { font-size: 16px; font-weight: 600; }
-.subject-picker select { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #dde3ec; border-radius: 10px; background: white; color: #172c50; font: inherit; }
+.subject-picker select { flex: 1; min-width: 0; min-height: 44px; padding: 8px 12px; border: 1px solid #dde3ec; border-radius: 10px; background: white; color: #172c50; font: inherit; text-transform: capitalize; }
 .data-notices, .section-notice { padding: 14px 16px; border-radius: 12px; background: #fff8df; color: #715823; margin-bottom: 18px; }
 .data-notices p { margin: 0 0 6px; }
 
