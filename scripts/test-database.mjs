@@ -175,6 +175,18 @@ try {
     await db.query('UPDATE pomodoro_blocks SET active_ms=1500000 WHERE id=$1',[b])
     const result = await call(uid, "SELECT study_session_action($1,$2,'flashcards','complete_block',NULL) AS result", [s,topic])
     assert.equal(result.xp.delta,0)
+    assert.equal(result.block.focus_seconds,1500)
+    assert(result.block.focus_completed_at)
+    // These are the same saved completion/duration fields consumed by the
+    // dashboard, including the fifth block which earns no additional XP.
+    const activity = (await user(uid, `SELECT count(*)::int AS blocks,
+      (sum(b.focus_seconds)/60)::int AS minutes
+      FROM public.pomodoro_blocks b JOIN public.study_sessions s ON s.id=b.session_id
+      WHERE s.user_id=$1 AND b.focus_completed_at IS NOT NULL
+      AND (b.focus_completed_at AT TIME ZONE 'Asia/Singapore')::date
+        = (now() AT TIME ZONE 'Asia/Singapore')::date`, [uid]))[0]
+    assert.equal(activity.blocks,5)
+    assert.equal(activity.minutes,125)
     assert.equal((await call(uid, 'SELECT get_daily_learning_progress() AS result')).timer_rewards,4)
   })
   await check('account deletion cascades all new private/public activity', async () => {

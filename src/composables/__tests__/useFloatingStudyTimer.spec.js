@@ -163,3 +163,11 @@ it('clears the old account’s countdown, pending rewards and reward popup on ac
   expect(controller.savedReward.prompt.value).toBeNull()
   expect(wrapper.find('.floating-study-timer').exists()).toBe(false)
 })
+
+it('refuses to start a focus block while the Pokémon is sleeping', async () => {
+  await open()
+  vi.setSystemTime(new Date('2026-11-05T16:00:00Z'))
+  await controller.start()
+  expect(controller.timer.running.value).toBe(false)
+  expect(studyAction.mock.calls.some(([request]) => request.action === 'start')).toBe(false)
+})

@@ -20,6 +20,7 @@ import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import TownBackground from '@/components/common/TownBackground.vue'
 import playSound from '../../scripts/soundEffect'
+import { useBuddySleep } from '../composables/useBuddySleep'
 
 const router = useRouter()
 const buildingNavigationError = ref('')
@@ -117,7 +118,12 @@ const buildingButtons = [
   },
 ]
 
+function isBuildingLocked(building) {
+  return buddySleeping.value && building.id !== 'trainer'
+}
+
 async function selectBuilding(building) {
+  if (isBuildingLocked(building)) return
   buildingNavigationError.value = ''
   try {
     const failure = await router.push(building.path)
@@ -130,7 +136,7 @@ async function selectBuilding(building) {
 // Component outputs used by the town's interactions.
 // ClockWeather owns weather/location; TownBackground owns time/lighting.
 const rainActive = ref(false)
-const buddySleeping = ref(false)
+const { isSleeping: buddySleeping } = useBuddySleep()
 
 // ==========================================
 // RAIN + UMBRELLA
@@ -1291,6 +1297,7 @@ watch(
        STUDYDEX HOME — VISIBLE PAGE AND WORLD LAYERS
        ================================================= -->
   <div class="world-page">
+    <p v-if="buddySleeping" class="sleep-hours-notice" role="status">Your Pokémon is sleeping. Learning opens at 7am Singapore time.</p>
     <p v-if="buildingNavigationError" class="building-navigation-error" role="alert">{{ buildingNavigationError }}</p>
 
   <!-- tutorial -->
@@ -1467,7 +1474,7 @@ watch(
       <div class="world-scene">
         <TownBackground
           :rain-active="rainActive"
-          @sleep-change="buddySleeping = $event"
+          :buddy-sleeping="buddySleeping"
         />
 
         <!-- Darken the town while raining -->
@@ -1596,6 +1603,8 @@ watch(
             :key="building.id"
             type="button"
             class="building-button"
+            :disabled="isBuildingLocked(building)"
+            :title="isBuildingLocked(building) ? 'Your Pokémon is sleeping until 7am Singapore time.' : building.title"
             :style="{
               left: building.left,
               top: building.top,
@@ -1909,6 +1918,7 @@ watch(
 </template>
 
 <style scoped>
+.sleep-hours-notice { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 1050; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 14px; background: #fff6dc; color: #303557; text-align: center; }
 .building-navigation-error {
   position: fixed;
   z-index: 2000;

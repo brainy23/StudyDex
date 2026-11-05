@@ -6,7 +6,8 @@ export async function studyAction({ sessionId, topicId, mode, action, blockId, u
   const result = await checkedRpc('study_session_action', {
     p_session_id: sessionId, p_topic_id: topicId, p_mode: mode, p_action: action, p_block_id: blockId || null,
   }, userId)
-  if (result.xp || ['complete', 'abandon'].includes(action)) activityChanged(result)
+  const completedFocusBlock = action === 'complete_block' && result.block?.focus_completed_at
+  if (result.xp || completedFocusBlock || ['complete', 'abandon'].includes(action)) activityChanged(result)
   return result
 }
 export async function getTopicCompletions(userId, flow = 'study') {

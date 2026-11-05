@@ -1,5 +1,6 @@
 <script setup>
 import { computed, reactive, ref, toRef, watch } from 'vue'
+import { useBuddySleep } from '@/composables/useBuddySleep'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 
 const props = defineProps({
@@ -21,8 +22,8 @@ const { hour, lighting } = useTimeOfDay({
   previewHour: toRef(props, 'previewHour')
 })
 
-// One time source for the background and the HomeView sleeping signal.
-const sleepingByTime = computed(() => hour.value >= 0 && hour.value < 7)
+// Sleep access always follows real Singapore time, even during visual previews.
+const { isSleeping: sleepingByTime } = useBuddySleep()
 const isSleeping = computed(() => props.buddySleeping ?? sleepingByTime.value)
 watch(sleepingByTime, sleeping => emit('sleep-change', sleeping), { immediate: true })
 

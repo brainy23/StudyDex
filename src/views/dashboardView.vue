@@ -5,12 +5,15 @@ import VueApexCharts from 'vue3-apexcharts'
 import GoBackBtn from '../components/common/goBackbtn.vue'
 import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { pokemonUrl } from '@/lib/pokeapi'
+import { useBuddySleep } from '../composables/useBuddySleep'
+import LearningLink from '../components/common/LearningLink.vue'
 import { getDashboardData } from '@/services/dashboardService'
 import QuizReviewModal from '@/components/common/QuizReviewModal.vue'
 import { getQuizReview } from '@/services/quizReviewService'
 import { studyErrorMessage, resolveStudyImage } from '@/services/studyService'
 import { getSupabase } from '@/lib/supabase'
 
+const { isSleeping } = useBuddySleep()
 const loading = ref(true)
 const errorMessage = ref('')
 const dashboard = ref(null)
@@ -284,6 +287,7 @@ onUnmounted(() => {
         <RouterLink class="button button-secondary" to="/login">Log in</RouterLink>
       </div>
       <template v-else-if="dashboard">
+        <p v-if="isSleeping" class="section-notice" role="status">Your Pokémon is sleeping. New quizzes and study topics unlock at 7am Singapore time. You can still review your progress.</p>
         <header class="dashboard-header">
           <div class="header-main welcome-copy">
             <div class="dashboard-back-navigation"><GoBackBtn /></div>
@@ -319,13 +323,13 @@ onUnmounted(() => {
             <template v-else>
               <div v-if="quizAvailable && topicProgress.length" class="completion-summary"><div class="completion-heading"><div><strong>{{ completedTopics }}</strong><span>of {{ topicProgress.length }} topics completed</span></div><span>{{ completionPercent }}%</span></div><div class="completion-track" role="progressbar" aria-label="Topics completed" :aria-valuenow="completedTopics" :aria-valuemax="topicProgress.length" aria-valuemin="0"><div class="completion-fill" :style="{ width: `${completionPercent}%` }"></div></div></div>
               <p v-else-if="!quizAvailable" class="section-notice">{{ quizSection?.message }}</p>
-              <aside v-if="nextChallenge" class="next-challenge"><span class="challenge-icon" aria-hidden="true">💡</span><div class="challenge-copy"><span class="eyebrow">YOUR NEXT CHALLENGE</span><h3>{{ nextChallenge.name }}</h3><p>{{ nextChallenge.score === null ? 'Give this topic your first try!' : `Your latest score is ${nextChallenge.score}%. Keep practising!` }}</p></div><RouterLink :to="quizLink(nextChallenge)" class="button button-primary">Open Quiz Arena →</RouterLink></aside>
+              <aside v-if="nextChallenge" class="next-challenge"><span class="challenge-icon" aria-hidden="true">💡</span><div class="challenge-copy"><span class="eyebrow">YOUR NEXT CHALLENGE</span><h3>{{ nextChallenge.name }}</h3><p>{{ nextChallenge.score === null ? 'Give this topic your first try!' : `Your latest score is ${nextChallenge.score}%. Keep practising!` }}</p></div><LearningLink :to="quizLink(nextChallenge)" class="button button-primary">Open Quiz Arena →</LearningLink></aside>
               <p v-if="!topicProgress.length" class="simple-empty">No topics are available<template v-if="subject"> for <span class="sd-subject-name">{{ subject.name }}</span></template> at your school level.</p>
               <div class="topic-list">
                 <article v-for="topic in topicProgress" :key="topic.id" class="topic-item" :class="`topic-${topic.color}`">
                   <button class="topic-toggle" :aria-expanded="expandedTopic === topic.id" :aria-controls="`topic-${topic.id}`" @click="expandedTopic = expandedTopic === topic.id ? null : topic.id"><span class="topic-icon" aria-hidden="true">📖</span><span class="topic-name">{{ topic.name }}</span><span class="topic-status">{{ topic.status }}</span><span class="topic-score">{{ topic.score === null ? '—' : `${topic.score}%` }}</span><span class="topic-chevron">{{ expandedTopic === topic.id ? '−' : '+' }}</span></button>
-                  <RouterLink :to="studyLink(topic)" class="button button-secondary topic-study-link" :aria-label="`Go to topic: ${topic.name}`">Go to topic →</RouterLink>
-                  <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><RouterLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</RouterLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span><button type="button" class="review-link" :aria-label="`Review ${topic.name} quiz completed ${formatDate(attempt.completed_at)}`" @click="openQuizReview(attempt.id)">Review answers</button></li></ul></div>
+                  <LearningLink :to="studyLink(topic)" class="button button-secondary topic-study-link" :aria-label="`Go to topic: ${topic.name}`">Go to topic →</LearningLink>
+                  <div v-if="expandedTopic === topic.id" :id="`topic-${topic.id}`" class="topic-details"><div class="topic-detail-heading"><h3>Your quiz attempts</h3><LearningLink :to="quizLink(topic)" class="button button-secondary">Open Quiz Arena →</LearningLink></div><p v-if="!quizAvailable">{{ quizSection?.message }}</p><p v-else-if="!topic.attempts.length">No quiz attempts yet.</p><ul v-else class="attempt-list"><li v-for="attempt in topic.attempts" :key="attempt.id" class="attempt-row"><strong>{{ percentage(attempt) }}% · {{ attempt.score }}/{{ attempt.total_questions }}</strong><span class="attempt-date">{{ formatDate(attempt.completed_at) }}</span><span class="attempt-xp">{{ signed(attempt.xp_change) }} XP</span><button type="button" class="review-link" :aria-label="`Review ${topic.name} quiz completed ${formatDate(attempt.completed_at)}`" @click="openQuizReview(attempt.id)">Review answers</button></li></ul></div>
                 </article>
               </div>
             </template>
@@ -334,7 +338,7 @@ onUnmounted(() => {
             <div class="panel-heading"><div><span class="eyebrow">BUILD YOUR STUDY HABIT</span><h2 id="activity-title">🎯 Learning Activity</h2><p>Recorded focus and break time.</p></div><select v-model="selectedPeriod" class="period-select" aria-label="Activity date range"><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select></div>
             <p v-if="!blocksAvailable" role="status">{{ !sessionsAvailable ? sessionSection?.message : blockSection?.message }}</p>
             <template v-else-if="minutesInPeriod > 0"><div class="activity-total"><strong>{{ minutesInPeriod }}</strong><span>minutes in the last {{ selectedPeriod }} days</span></div><div class="activity-chart"><VueApexCharts type="area" height="260" width="100%" :options="chartOptions" :series="chartSeries" /></div><p class="chart-note">Completed focus and break intervals · Singapore time.</p></template>
-            <div v-else class="activity-empty"><span class="empty-icon">🌱</span><h3>Ready for your next study session?</h3><p>No recorded completed intervals in this date range.</p><RouterLink to="/study-decks" class="button button-primary">Explore study decks →</RouterLink></div>
+            <div v-else class="activity-empty"><span class="empty-icon">🌱</span><h3>Ready for your next study session?</h3><p>No recorded completed intervals in this date range.</p><LearningLink to="/study-decks" class="button button-primary">Explore study decks →</LearningLink></div>
           </section>
         </div>
         <section class="dashboard-panel history-panel" aria-labelledby="history-title">
@@ -349,6 +353,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+button:disabled { cursor: not-allowed; opacity: .55; filter: grayscale(1); }
 .review-link { border: 0; background: none; padding: 4px 0; color: #285d94; font: inherit; text-align: left; text-decoration: underline; cursor: pointer; }
 /* BASE */
 .trainer-dashboard,

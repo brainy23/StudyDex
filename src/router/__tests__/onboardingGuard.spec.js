@@ -1,4 +1,4 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 import { createAppRouter } from '../index'
 const { getSession, getOnboardingStatus } = vi.hoisted(() => ({
@@ -7,7 +7,9 @@ const { getSession, getOnboardingStatus } = vi.hoisted(() => ({
 }))
 vi.mock('../../lib/supabase', () => ({ getSupabase: () => ({ auth: { getSession } }) }))
 vi.mock('../../services/onboardingService', () => ({ getOnboardingStatus }))
+afterEach(() => vi.useRealTimers())
 beforeEach(() => {
+  vi.setSystemTime(new Date('2026-11-06T04:00:00Z'))
   getSession.mockResolvedValue({ data: { session: { access_token: 'fixture' } }, error: null })
   getOnboardingStatus.mockResolvedValue({ onboarding_complete: false })
 })
@@ -49,4 +51,21 @@ it('requires login for the avatar room even with the old development bypass flag
   } finally {
     vi.unstubAllEnvs()
   }
+})
+
+it.each(['/subjects?flow=study', '/subjects/science/topics?flow=quiz', '/study-mode', '/learn', '/study-decks', '/quiz', '/quiz-battle', '/surprise-boss', '/timer'])(
+  'blocks direct learning URL %s while the Pokémon sleeps', async path => {
+    vi.setSystemTime(new Date('2026-11-05T16:00:00Z'))
+    getOnboardingStatus.mockResolvedValue({ onboarding_complete: true })
+    const router = createAppRouter(createMemoryHistory())
+    await router.push(path)
+    expect(router.currentRoute.value.name).toBe('home')
+  },
+)
+it('reopens learning routes at 7am Singapore time', async () => {
+  vi.setSystemTime(new Date('2026-11-05T23:00:00Z'))
+  getOnboardingStatus.mockResolvedValue({ onboarding_complete: true })
+  const router = createAppRouter(createMemoryHistory())
+  await router.push('/subjects?flow=study')
+  expect(router.currentRoute.value.name).toBe('selection-subjects')
 })

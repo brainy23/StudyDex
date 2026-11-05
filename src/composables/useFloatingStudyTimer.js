@@ -3,6 +3,7 @@ import { useFocusTimer } from './useFocusTimer'
 import { useStudySession } from './useStudySession'
 import { useExperiencePrompt } from './useExperiencePrompt'
 import { getRewardedTimerCount, newExperienceId } from '../services/experienceService'
+import { isBuddySleepTime } from '../utils/buddySleep'
 import { getCurrentProfile } from '../services/profileService'
 
 const timerKey = Symbol('floating-study-timer')
@@ -67,7 +68,7 @@ export function createFloatingStudyTimer() {
     rewardedToday.value = 0
   }
   async function start() {
-    if (!session.ready.value || session.busy.value || timer.running.value) return
+    if (isBuddySleepTime() || !session.ready.value || session.busy.value || timer.running.value) return
     const request = version
     try {
       const block = session.state.value?.block

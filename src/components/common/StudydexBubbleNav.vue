@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useBuddySleep } from '../../composables/useBuddySleep'
 import { useRoute, useRouter } from 'vue-router'
 
 const props = defineProps({
@@ -7,6 +8,8 @@ const props = defineProps({
   sleeping: { type: Boolean, default: false },
   routes: { type: Object, default: () => ({ town: '/home', study: '/study-decks', quiz: '/quiz', pokedex: '/collection' }) },
 })
+const { isSleeping } = useBuddySleep()
+const locked = computed(() => isSleeping.value || props.sleeping)
 const router = useRouter()
 const route = useRoute()
 const opened = ref(false)
@@ -22,7 +25,8 @@ const items = [
   { id: 'pokedex', label: 'PokeDex', x: 1, y: 0, color: '#d8bdff' },
 ]
 const selected = computed(() => props.current || items.find(item => props.routes[item.id] === route.path)?.id)
-const unavailable = item => selected.value === item.id || (props.sleeping && ['study', 'quiz'].includes(item.id))
+const sleepLocked = item => locked.value && ['study', 'quiz'].includes(item.id)
+const unavailable = item => selected.value === item.id || sleepLocked(item)
 function close(restoreFocus = false) {
   opened.value = false
   if (restoreFocus) toggle.value?.focus()
@@ -99,7 +103,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
         :style="{ '--x': item.x, '--y': item.y, '--tint': item.color, '--delay': `${index * 35}ms` }"
         :disabled="unavailable(item) || busy" :tabindex="opened ? 0 : -1"
         :aria-hidden="!opened" :aria-current="selected === item.id ? 'page' : undefined"
-        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleeping && ['study','quiz'].includes(item.id) ? ', buddy sleeping' : ''}`"
+        :aria-label="`${item.label}${selected === item.id ? ', current page' : ''}${sleepLocked(item) ? ', buddy sleeping' : ''}`"
         @click="navigate(item)">
 
         <span v-if="item.id === 'town'" class="sd-pokeball" aria-hidden="true"></span>
@@ -149,6 +153,8 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif;
 }
 .bubble-nav *, .bubble-nav *::before, .bubble-nav *::after { box-sizing: border-box; }
+
+.bubble-nav button:disabled { cursor: not-allowed; filter: grayscale(1); opacity: .6; }
 
 .bubble-nav button {
   appearance: none; margin: 0; width: var(--size); height: var(--size); border-radius: 50%;

@@ -26,6 +26,7 @@ import AdminAddDeck from '@/views/admin/AdminAddDeck.vue'
 import AdminEducationDetails from '@/views/admin/AdminEducationDetails.vue'
 
 import { getSupabase } from '../lib/supabase'
+import { sleepRouteGuard } from '../utils/buddySleep'
 import { selectionRoutes } from './selectionRoutes'
 import { getOnboardingStatus } from '../services/onboardingService'
 
@@ -222,6 +223,8 @@ export function createAppRouter(
       },
     ],
   })
+
+  router.beforeEach(sleepRouteGuard)
 
   router.beforeEach(async to => {
     // Support older study-deck links to the learning page.

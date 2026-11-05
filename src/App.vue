@@ -6,18 +6,27 @@ import { usePokemonTransition } from './composables/usePokemonTransition'
 import { provideWeatherLocation } from './composables/useWeatherLocation'
 import PokemonTransition from './components/common/PokemonTransition.vue'
 import FloatingStudyTimer from './components/common/FloatingStudyTimer.vue'
+import { useBuddySleep } from './composables/useBuddySleep'
+import { isLearningRoute } from './utils/buddySleep'
 import { provideFloatingStudyTimer } from './composables/useFloatingStudyTimer'
 
 
 const weather = provideWeatherLocation()
 const router = useRouter()
 const studyTimer = provideFloatingStudyTimer()
-const showStudyTimer = computed(() => ['learn', 'study-decks'].includes(router.currentRoute.value.name))
+const { isSleeping } = useBuddySleep()
+const showStudyTimer = computed(() => !isSleeping.value && ['learn', 'study-decks'].includes(router.currentRoute.value.name))
 watch([showStudyTimer, studyTimer.session.ready], ([shown]) => {
   if (!shown) void studyTimer.pause()
 })
 const accountId = ref(null)
 const authReady = ref(false)
+watch([isSleeping, () => router.currentRoute.value.fullPath, authReady], ([sleeping]) => {
+  if (!sleeping || !authReady.value || !isLearningRoute(router.currentRoute.value)) return
+  void studyTimer.pause()
+  usePokemonTransition().cancel()
+  void router.replace({ name: 'home' }).catch(() => {})
+}, { immediate: true })
 let subscription, redirect
 onMounted(() => {
   const { data } = getSupabase().auth.onAuthStateChange((_event, session) => {
