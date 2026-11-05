@@ -221,6 +221,14 @@ onMounted(() => {
           <div class="feature-cards">
 
             <div class="feature-card">
+              <img src="/landing/todo.png" alt="todo" class="screenshot" />
+              <h3>To-Do List</h3>
+              <p>
+                Record what you have to do for the day!
+              </p>
+            </div>
+
+            <div class="feature-card">
               <img src="/landing/timer.png" alt="timer" class="screenshot" />
               <h3>Study Timer</h3>
               <p>
