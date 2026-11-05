@@ -1142,4 +1142,48 @@ input:focus-visible {
 
 .arena-image { transform: none; }
 
+/* =====================================================
+   RESPONSIVE FIXES (375px iPhone 6 → 1200px Bootstrap xl)
+   Placed last so they override the rules above.
+   ===================================================== */
+
+/* No visible text below 14px. */
+.arena-scene .demo-caption,
+.arena-topic-caption,
+.picker-eyebrow,
+.picker-footnote,
+.bubble-card > span:last-child,
+.science-filters p,
+.science-detail,
+.science-theme,
+.fighter-unavailable,
+.picker-course { font-size: var(--text-sm); }
+.science-theme,
+.picker-eyebrow { letter-spacing: .06em; }
+
+/* The question counter ("1 / 5") never splits across lines. */
+.demo-caption > span:last-child { flex-shrink: 0; white-space: nowrap; }
+
+/* Previous and Next share one row; long labels wrap inside the 44px buttons,
+   so the battle dialogue box doesn't need its own scrollbar. */
+.quiz-question-navigation { flex-wrap: nowrap; }
+.quiz-question-navigation .battle-next { flex: 1 1 0; min-width: 0; line-height: 1.2; }
+
+/* Small laptops and tablets in landscape: the battle panel is short, so the
+   dialogue column gets more width and tighter spacing to fit without scrolling. */
+@media (min-width: 701px) and (max-width: 991.98px) {
+  .arena-scene .battle-dock { grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); }
+  .arena-scene .battle-dock :deep(.battle-dialogue) { padding: 8px 12px; }
+  .battle-dock .battle-explanation { margin: 0 0 4px; }
+  .battle-dock small { display: block; line-height: 1.3; }
+  .quiz-question-navigation { margin-top: 6px; }
+}
+
+/* Bottom strip for the Menu bubble. From 701px the battle fills the screen,
+   so the whole scene ends above the bubble instead of running under it.
+   (701px matches this view's existing phone/desktop layout switch.) */
+@media (min-width: 701px) {
+  .arena-with-preview { padding-bottom: var(--bubble-nav-reserve); }
+}
+
 </style>

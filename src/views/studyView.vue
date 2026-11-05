@@ -1537,4 +1537,11 @@ input:focus-visible {
   .timer-screen .focus-actions { order: 4; }
   .timer-screen .focus-finished { order: 5; flex-basis: 100%; text-align: center; }
 }
+
+/* Bottom strip for the Menu bubble: when the room stacks and scrolls, the last
+   panel can scroll clear of the bubble. (1000px is this view's existing
+   stacked-layout switch.) */
+@media (max-width: 1000px) {
+  .poke-lab-page:not(.is-selecting) .lab-footer { padding-bottom: var(--bubble-nav-reserve); }
+}
 </style>

@@ -91,6 +91,11 @@
   --navy-900: var(--sd-royal);
   --gold-500: var(--sd-gold);
 
+  /* Bottom strip kept clear for the floating Menu bubble (StudydexBubbleNav):
+     its 20px offset + 72px button + 20px gap. Pages that show the bubble end
+     their content this far above the bottom of the screen. */
+  --bubble-nav-reserve: 112px;
+
   /* Depth: the game's chunky edge + one soft lift */
   --sd-edge: 0 4px 0 var(--sd-gold-edge);
   --sd-edge-wood: 0 6px 0 rgb(70 45 28 / 0.3);
@@ -104,6 +109,12 @@
   --sd-z-hub: 120;
   --sd-z-guide: 900;
   --sd-z-modal: 1050; /* Bootstrap modal = 1055 */
+}
+
+/* Matches StudydexBubbleNav's small size: 12px offset + 60px button + 24px gap
+   (room for the iPhone home-indicator inset). */
+@media (max-width: 575.98px), (max-height: 500px) {
+  :root { --bubble-nav-reserve: 96px; }
 }
 
 body {
