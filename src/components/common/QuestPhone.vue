@@ -3,6 +3,31 @@ import { ref, computed, watch, onUnmounted } from 'vue'
 import VueTyper from 'vue3-typer'
 import 'vue3-typer/dist/vue-typer.css'
 import playSound from '../../../scripts/soundEffect'
+import { useTimeOfDay, useTimePreview } from '@/composables/useTimeOfDay'
+
+// Testing controls share the same override as every background.
+// Do not reset on unmount: the chosen time must survive page navigation.
+const showTimePreview = import.meta.env.DEV
+const { hour: previewClockHour } = useTimeOfDay()
+const { isPreview, setPreviewHour, resetPreview } = useTimePreview()
+const timePresets = [
+  { label: 'Morning', hour: 8 },
+  { label: 'Day', hour: 12 },
+  { label: 'Sunset', hour: 18.5 },
+  { label: 'Night', hour: 22 },
+  { label: 'Midnight', hour: 0 },
+]
+const previewTimeValue = computed(() => {
+  const total = Math.floor(previewClockHour.value * 60)
+  return String(Math.floor(total / 60)).padStart(2, '0') + ':' +
+    String(total % 60).padStart(2, '0')
+})
+function updatePreviewTime(event) {
+  if (!event.target.value) return
+  const [hours, minutes] = event.target.value.split(':').map(Number)
+  setPreviewHour(hours + minutes / 60)
+}
+
 
 // Home owns shared data and persistence. This component only emits changes.
 const props = defineProps({
@@ -131,6 +156,42 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
           </header>
 
+
+          <!-- Development-only controls, hidden inside the phone. -->
+          <details v-if="showTimePreview" class="quest-time-preview">
+            <summary>Time preview · {{ isPreview ? previewTimeValue : 'Live' }}</summary>
+            <div class="quest-time-controls">
+              <input
+                type="time"
+                aria-label="Preview time"
+                :value="previewTimeValue"
+                @input="updatePreviewTime"
+              />
+              <button type="button" :aria-pressed="!isPreview" @click="resetPreview">
+                Live
+              </button>
+            </div>
+            <input
+              class="quest-time-slider"
+              type="range"
+              min="0"
+              max="1439"
+              step="1"
+              :value="Math.floor(previewClockHour * 60)"
+              :aria-valuetext="previewTimeValue"
+              aria-label="Preview time of day"
+              @input="setPreviewHour(Number($event.target.value) / 60)"
+            />
+            <div class="quest-time-presets">
+              <button
+                v-for="preset in timePresets"
+                :key="preset.label"
+                type="button"
+                @click="setPreviewHour(preset.hour)"
+              >{{ preset.label }}</button>
+            </div>
+            <p>Applies across pages. Choose Live to restore normal time.</p>
+          </details>
 
           <!-- SECTION BUTTONS -->
           <nav class="quest-tabs" aria-label="Trainer hub sections">
@@ -1376,5 +1437,47 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .quest-manage-todos:focus-visible {
   outline: 3px solid #6489ed;
   outline-offset: 3px;
+}
+
+/* Kept in normal flow so controls stay inside the scrollable phone screen. */
+.quest-time-preview {
+  margin: 12px 0;
+  padding: 9px;
+  border: 1px solid #b9c5cf;
+  border-radius: 10px;
+  background: #e8eef5;
+  color: #263955;
+  font: 12px/1.5 system-ui, sans-serif;
+}
+.quest-time-preview summary { cursor: pointer; font-weight: 800; }
+.quest-time-controls { display: flex; gap: 6px; margin-top: 10px; }
+.quest-time-controls input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+  padding: 5px;
+  border: 1px solid #9aabc0;
+  border-radius: 7px;
+  background: #fff;
+  color: #263955;
+  font: inherit;
+}
+.quest-time-preview button {
+  padding: 6px 8px;
+  border: 1px solid #9aabc0;
+  border-radius: 7px;
+  background: #fff;
+  color: #263955;
+  font: inherit;
+  cursor: pointer;
+}
+.quest-time-preview button:hover,
+.quest-time-preview button[aria-pressed="true"] { background: #ffe08a; }
+.quest-time-slider { display: block; width: 100%; margin: 12px 0; accent-color: #bd8b13; }
+.quest-time-presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.quest-time-preview p { margin: 9px 0 0; font-size: 11px; }
+.quest-time-preview :is(button, input, summary):focus-visible {
+  outline: 2px solid #315b95;
+  outline-offset: 2px;
 }
 </style>
