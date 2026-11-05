@@ -4,6 +4,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { getCurrentProfile } from '../services/profileService'
 import { getStudentStudyCatalogue, studyErrorMessage } from '../services/studyService'
 import { getStudentQuizCatalogue } from '../services/quizPreviewService'
+import { useTopicCompletion } from '../composables/useTopicCompletion'
 import { enterRoom } from '../composables/useRoomTransition'
 import LoadingScreen from '../components/common/LoadingScreen.vue'
 import '../assets/selection-pages.css'
@@ -11,6 +12,7 @@ const route = useRoute()
 const router = useRouter()
 const flow = computed(() => route.query.flow === 'quiz' ? 'quiz' : 'study')
 const asset = name => `${import.meta.env.BASE_URL}selection/${name}`
+const topicCompletion = useTopicCompletion()
 const profile = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
 const loading = ref(true)
@@ -19,15 +21,18 @@ let active = true
 let requestId = 0
 async function load() {
   const request = ++requestId
+  const requestedFlow = flow.value
+  topicCompletion.bindStudent(null, null)
   loading.value = true
   error.value = ''
   try {
     const student = await getCurrentProfile()
     if (!active || request !== requestId) return
     profile.value = student
+    topicCompletion.bindStudent(student.id, student.school_level_id, requestedFlow)
     catalogue.value = { subjects: [], topics: [] }
     if (student.school_level_id) {
-      const data = await (flow.value === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student)
+      const data = await (requestedFlow === 'quiz' ? getStudentQuizCatalogue : getStudentStudyCatalogue)(student)
       if (active && request === requestId) catalogue.value = data
     }
   } catch (cause) { if (active && request === requestId) error.value = studyErrorMessage(cause, 'Your subjects') }
@@ -58,7 +63,7 @@ const topics = computed(() => catalogue.value.topics
   .map(t => ({ ...t, theme:selectedSubject.value?.name })))
 const shownTopics = computed(() => topics.value.filter(t => `${t.name} ${t.description || ''} ${t.theme || ''}`.toLowerCase().includes(search.value.trim().toLowerCase())))
 function disabled(item) { return flow.value === 'quiz' && !item.quiz_question_count }
-function actionText() { return flow.value === 'quiz' ? 'Preview questions →' : 'Choose Learn or Study →' }
+function actionText() { return flow.value === 'quiz' ? 'Start quiz →' : 'Choose Learn or Study →' }
 const navigationError = ref('')
 async function selectTopic(item) {
   if (disabled(item)) return
@@ -86,22 +91,41 @@ async function selectTopic(item) {
     <div class="sd-topic-list">
       <button v-for="item in shownTopics" :key="item.id" class="sd-topic-card" :disabled="disabled(item)" @click="selectTopic(item)">
         <span class="sd-topic-copy"><small>{{ item.theme || selectedSubject?.name || 'Study' }}</small><strong>{{ item.name }}</strong><span>{{ item.description }}</span><em>{{ actionText(item) }}</em></span>
-        <span class="sd-topic-art" aria-hidden="true"><span class="sd-topic-ring"><svg class="topic-pokeball" viewBox="0 0 100 100" focusable="false" aria-hidden="true">
+        <span class="sd-topic-art"><span class="sd-topic-ring" aria-hidden="true"><svg class="topic-pokeball" viewBox="0 0 100 100" focusable="false" aria-hidden="true">
           <circle cx="50" cy="50" r="46" fill="white" />
           <path d="M4 50a46 46 0 0 1 92 0Z" fill="var(--topic-accent)" />
           <path d="M5 50h90" stroke="var(--topic-deep)" stroke-width="6" />
           <circle cx="50" cy="50" r="46" fill="none" stroke="var(--topic-deep)" stroke-width="5" />
           <circle cx="50" cy="50" r="22" fill="white" stroke="var(--topic-deep)" stroke-width="5" />
-        </svg><b>{{ String(topics.findIndex(t => t.id === item.id) + 1).padStart(2,'0') }}</b></span><span class="sd-topic-chevron">›</span></span>
+        </svg><b>{{ String(topics.findIndex(t => t.id === item.id) + 1).padStart(2,'0') }}</b></span><span v-if="topicCompletion.isComplete(item.id)" class="sd-done-badge"><span aria-hidden="true">✓</span> Done</span><span v-else class="sd-topic-chevron" aria-hidden="true">›</span></span>
       </button>
     </div>
     <p v-if="!shownTopics.length" class="sd-empty">{{ topics.length ? 'No matching topics. Try another search.' : `No ${selectedSubject?.name || 'study'} topics are available for your school level yet.` }}</p>
-    <p v-if="flow === 'quiz'" class="sd-footnote">Question previews are not graded. Answers, scores and EXP are not saved.</p>
+    <p v-if="flow === 'quiz'" class="sd-footnote">Three attempts per topic per Singapore day. Scores and XP are saved to Study History.</p>
+    <p v-if="!topicCompletion.savedInBrowser.value" class="sd-footnote" role="status">Completion badges could not load. <button @click="topicCompletion.refresh">Retry</button></p>
   </section>
 </main>
 </template>
 
 <style scoped>
+.sd-colour-topics .sd-done-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid #ffe16b;
+  border-radius: 999px;
+  background: #203f2e;
+  color: #ffe16b;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.sd-theme-purple .sd-done-badge { background: #412858; }
+
 /* One white image, tinted by the selected subject's palette. */
 .sd-picker.sd-topics.sd-colour-topics {
   --topic-accent: #ae77cf;

@@ -137,7 +137,7 @@ function selectSubject(item) {
 
     <header class="sd-picker-heading">
       <p class="sd-eyebrow">
-        STUDYDEX · {{ flow === 'quiz' ? 'POKÉ ARENA' : 'POKÉ LAB' }}
+        {{ flow === 'quiz' ? 'Poké Arena' : 'Poké Lab' }}
       </p>
       <h1>Choose your next adventure</h1>
       <p>What will you master today?</p>
@@ -205,6 +205,6 @@ function selectSubject(item) {
       No subjects are available for your school level yet.
     </p>
 
-    
+
   </main>
 </template>

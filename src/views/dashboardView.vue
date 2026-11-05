@@ -60,7 +60,11 @@ const sessionsAvailable = computed(() => readable(sessionSection.value))
 const blocksAvailable = computed(() => readable(blockSection.value) && sessionsAvailable.value)
 const attempts = computed(() => quizAvailable.value ? quizSection.value.data ?? [] : [])
 const sessions = computed(() => sessionsAvailable.value ? sessionSection.value.data ?? [] : [])
-const completedSessions = computed(() => sessions.value.filter(row => row.status === 'completed' && row.completed_at))
+const completedSessions = computed(() => sessions.value.flatMap(row => {
+  if (row.status === 'completed' && row.completed_at) return [row]
+  const dates = blocks.value.filter(block => block.session_id === row.id && block.focus_completed_at).map(block => block.focus_completed_at).sort()
+  return dates.length ? [{ ...row, completed_at: dates.at(-1) }] : []
+}))
 const blocks = computed(() => blocksAvailable.value ? blockSection.value.data ?? [] : [])
 const buddySection = computed(() => dashboard.value?.buddy)
 const buddy = computed(() => buddySection.value?.data)
@@ -159,7 +163,7 @@ const nextChallenge = computed(() => {
 })
 const quizLink = topic => ({ name: 'quiz', query: { subject: topic.subject_id, topic: topic.id } })
 const quizXP = computed(() => attempts.value.reduce((sum, row) => sum + row.xp_change, 0))
-const studyXP = computed(() => blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
+const studyXP = computed(() => sessions.value.reduce((sum, row) => sum + (row.xp_change || 0), 0) + blocks.value.filter(row => row.xp_awarded_at).reduce((sum, row) => sum + row.xp_earned, 0))
 const average = computed(() => regularAttempts.value.length ? Math.round(regularAttempts.value.reduce((sum, row) => sum + percentage(row), 0) / regularAttempts.value.length) : null)
 const streak = computed(() => {
   const days = new Set(completedSessions.value.map(row => dayKey(row.completed_at)))
@@ -196,13 +200,15 @@ const history = computed(() => {
   const topicName = id => topics.value.find(topic => topic.id === id)?.name ?? 'Topic unavailable'
   return [
     ...attempts.value.map(row => ({ id: `quiz-${row.id}`, title: topicName(row.topic_id), type: row.attempt_type === 'boss_battle' ? 'Boss battle' : 'Quiz', badge: 'quiz', score: percentage(row), xp: row.xp_change, date: row.completed_at })),
-    ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
+    ...completedSessions.value.map(row => ({ id: `session-${row.id}`, title: row.topic_id ? topicName(row.topic_id) : 'General study', type: row.mode === 'learn' ? 'Learn' : 'Study', badge: 'study', score: null, xp: blocksAvailable.value ? (row.xp_change || 0) + blocks.value.filter(block => block.session_id === row.id && block.xp_awarded_at).reduce((sum, block) => sum + block.xp_earned, 0) : null, date: row.completed_at })),
   ].sort((a, b) => Date.parse(b.date) - Date.parse(a.date) || a.id.localeCompare(b.id))
 })
 const visibleHistory = computed(() => showAllProgress.value ? history.value : history.value.slice(0, 5))
 const signed = value => value === null ? '—' : `${value >= 0 ? '+' : ''}${value}`
 onMounted(() => {
   loadDashboard()
+  window.addEventListener('focus', loadDashboard)
+  window.addEventListener('studydex:activity', loadDashboard)
   clockInterval = setInterval(() => { now.value = new Date() }, 60000)
   try {
     // Defer service calls outside the Supabase auth callback.
@@ -221,6 +227,8 @@ onUnmounted(() => {
   requestId++
   subscription?.unsubscribe()
   clearInterval(clockInterval)
+  window.removeEventListener('focus', loadDashboard)
+  window.removeEventListener('studydex:activity', loadDashboard)
 })
 </script>
 

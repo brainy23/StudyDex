@@ -1,24 +1,42 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
-import playSound from '../../scripts/soundEffect';
 
-// Pokemon the user owns (replace with a Supabase fetch of the user's collection)
-const collection = ref([
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 
-    22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 
-    41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 
-    60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 
-    79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 
-    98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 
-    114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 
-    130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 
-    146, 147, 148, 149, 150, 151
-])
-const sorted = computed(() => [...collection.value].sort((a, b) => a - b))
-
-// the user's current buddy (replace with the value saved in Supabase)
-const activeId = ref(Number(localStorage.getItem('activePokemonId')) || 4)
-const selectedId = ref(sorted.value.includes(activeId.value) ? activeId.value : sorted.value[0])
+import { getCurrentProfile } from '../services/profileService'
+import { getOwnedStudyPokemon } from '../services/studyService'
+import { checkedRpc } from '../services/backendClient'
+import playSound from '../../scripts/soundEffect'
+let leaving = false
+function goBack() {
+  if (leaving) return
+  leaving = true
+  history.back()
+}
+const collection = ref([])
+const ownedRecords = ref([])
+const loading = ref(true)
+const selectedRow = computed(() => ownedRecords.value.find(row => row.pokemon.pokeapi_id === selectedId.value))
+const sorted = computed(() => [...collection.value].sort((a,b) => a-b))
+const activeId = ref(null)
+const selectedId = ref(null)
+const owner = ref(null)
+const saving = ref(false)
+const collectionError = ref('')
+let alive = true
+async function loadCollection() {
+  loading.value = true
+  try {
+    const profile = await getCurrentProfile()
+    const records = await getOwnedStudyPokemon(profile.id)
+    if (!alive) return
+    owner.value = profile.id
+    ownedRecords.value = records
+    collection.value = records.map(row => row.pokemon.pokeapi_id)
+    activeId.value = records.find(row => row.is_selected)?.pokemon.pokeapi_id || null
+    selectedId.value = sorted.value.includes(selectedId.value) ? selectedId.value : activeId.value || sorted.value[0]
+    collectionError.value = ''
+  } catch (cause) { if (alive) collectionError.value = cause.message }
+  finally { if (alive) loading.value = false }
+}
 
 const SCALE = window.innerWidth < 800 ? 2 : 4 // whole numbers keep the pixel art crisp
 
@@ -143,11 +161,17 @@ const celebrating = ref(false)
 let toastTimer = 0
 let celebrateTimer = 0
 
-function makeActive() {
+async function makeActive() {
     if (!selectedId.value || selectedId.value === activeId.value) return
-    activeId.value = selectedId.value
-    localStorage.setItem('activePokemonId', String(activeId.value))
-    // TODO: save to Supabase, e.g. update user_buddy set pokemon_id = activeId.value
+    if (saving.value) return
+    saving.value = true
+    try {
+      const record = ownedRecords.value.find(row => row.pokemon.pokeapi_id === selectedId.value)
+      await checkedRpc('select_user_pokemon', { p_owned_id: record.id }, owner.value)
+      if (!alive) return
+      await loadCollection()
+    } catch (cause) { collectionError.value = cause.message; return }
+    finally { saving.value = false }
 
     toast.value = nameOf(activeId.value) + ' is now your active Pokémon!'
     clearTimeout(toastTimer)
@@ -158,8 +182,9 @@ function makeActive() {
     celebrateTimer = setTimeout(() => (celebrating.value = false), 900)
 }
 
-onMounted(loadNames)
+onMounted(() => { void loadNames(); void loadCollection() })
 onUnmounted(() => {
+    alive = false
     clearTimeout(toastTimer)
     clearTimeout(celebrateTimer)
 })
@@ -174,13 +199,17 @@ onUnmounted(() => {
         Number registered: <strong>{{ sorted.length }}</strong>
       </div>
     </header>
+
     <div style="background: rgba(255, 255, 255, 0.78); padding-bottom:15px; padding-left:28px">
-        <button onclick="history.back()" class="back">Back</button> 
+      <button type="button" class="back" @click="goBack">Back</button>
     </div>
-  
+
     <div class="body">
       <section class="list-panel" aria-label="Your Pokémon">
-        <div v-if="sorted.length" ref="grid" class="grid" @keydown="onKey">
+        <div v-if="collectionError" role="alert">{{ collectionError }} <button @click="loadCollection">Retry</button></div>
+        <div v-if="loading" class="empty">Loading…</div>
+
+        <div v-else-if="sorted.length" ref="grid" class="grid" @keydown="onKey">
           <button
             v-for="id in sorted"
             :key="id"
@@ -195,6 +224,7 @@ onUnmounted(() => {
             <span v-if="id === activeId" class="star" aria-label="Active Pokémon">★</span>
           </button>
         </div>
+
         <div v-else class="empty">
           <p>No Pokémon yet. Open a pack to start your collection!</p>
           <RouterLink to="/rewards" class="activate link">Open a pack</RouterLink>
@@ -220,13 +250,19 @@ onUnmounted(() => {
 
           <div class="plate">
             <div class="no">{{ nameOf(selectedId) }}</div>
-            <div class="name">[fetch XP bar]</div>
-          </div>
-          <div v-if="detail" class="types">
-            <span v-for="t in detail.types" :key="t" class="chip" :style="{ '--tc': TYPE_COLORS[t] }">{{ t }}</span>
+            <div class="name">Lv {{ selectedRow?.level }} · {{ selectedRow?.xp }} XP</div>
           </div>
 
-          <button class="activate" :disabled="selectedId === activeId" @click="makeActive; playSound('selectedPokemon');">
+          <div v-if="detail" class="types">
+            <span
+              v-for="t in detail.types"
+              :key="t"
+              class="chip"
+              :style="{ '--tc': TYPE_COLORS[t] }"
+            >{{ t }}</span>
+          </div>
+
+          <button class="activate" :disabled="saving || selectedId === activeId" @click="makeActive(); playSound('selectedPokemon')">
             {{ selectedId === activeId ? '✓ Active Pokémon' : 'Make active Pokémon' }}
           </button>
         </template>

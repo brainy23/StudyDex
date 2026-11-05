@@ -748,7 +748,7 @@ watch([demoFinished,enteredArena],([finished,entered])=>{
   if(!finished || !entered || !encounter.value) return
   encounter.value.xpEventId ||= newExperienceId()
   if(!writeEncounter(encounter.value)) { encounterError.value='Could not save this battle’s reward reference. Please enable browser session storage and reload.'; return }
-  rewardExperience({id:encounter.value.xpEventId,type:'boss',health:bossHp.value})
+  rewardExperience({id:encounter.value.xpEventId,type:'boss',health:bossHp.value,sessionId:encounter.value.studySessionId})
 })
 async function finishEncounter() {
   toggleMute();

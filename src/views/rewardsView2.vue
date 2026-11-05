@@ -4,6 +4,13 @@ import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage } from '../services/studyService'
 
+let leaving = false
+
+function goBack() {
+  if (leaving) return
+  leaving = true
+  history.back()
+}
 const rewardsBuddy = ref(null)
 const buddyLoading = ref(true)
 const buddyError = ref('')
@@ -67,6 +74,8 @@ async function loadRewardsBuddy() {
 onMounted(loadRewardsBuddy)
 onUnmounted(() => { buddyActive = false; buddyRequest++; buddyController?.abort() })
 
+import { getSupabase } from '../lib/supabase'
+import { uuidFromDex, dexFromUuid, loadPokemonMap } from '../lib/pokemon'
 
 // stages: browse > idle > zoom > ready > tear > rise > flip > revealed
 const stage = ref('browse')
@@ -105,13 +114,49 @@ const tearVars = computed(() => {
 })
 
 // number of unopened packs the user owns (replace with a Supabase fetch)
-const packCount = ref(5)
+const packCount = ref(0)
 const packMessage = computed(() =>
     packCount.value > 0 ? "Let's rip some packs!" : 'Study to earn more packs!'
 )
+async function loadPacks() {
+    const supabase = getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { count, error } = await supabase
+        .from('user_packs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user.id)
+        .is('opened_at', null)
+
+    if (error) { console.error('Could not load packs', error); return }
+    packCount.value = count ?? 0
+}
+
+onMounted(() => {
+    loadOwned()
+    loadPacks()
+})
 
 // Pokemon the user already owns (replace with a Supabase fetch)
-const owned = ref(new Set([4, 25]))
+const owned = ref(new Set())
+
+async function loadOwned() {
+  const supabase = getSupabase()
+  await loadPokemonMap()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+
+  const { data, error } = await supabase
+    .from('user_pokemon')
+    .select('pokemon_id')
+    .eq('user_id', user.id)
+
+  if (error) { console.error(error); return }
+  owned.value = new Set(data.map(r => dexFromUuid(r.pokemon_id)))
+}
+
+onMounted(loadOwned)
 
 // Only base forms can be pulled: every Pokemon in #1-151 that does not evolve
 // from another Pokemon in #1-151. Delete IDs to trim the pool.
@@ -383,13 +428,31 @@ function completeTear(ms) {
     dragging.value = false
     animateTear(1, ms, tear)
 }
+async function recordOpen(card) {
+    const supabase = getSupabase()
+    await loadPokemonMap()
+
+    const pokemonUuid = uuidFromDex(card.id)
+    if (!pokemonUuid) {
+        console.error('No row in the pokemon table for dex #' + card.id)
+        loadPacks()
+        return
+    }
+
+    const { error } = await supabase.rpc('open_pack', { p_pokemon_id: pokemonUuid })
+    if (error) {
+        console.error('Could not open pack', error)
+        loadPacks()   // resync the count with the database
+    }
+}
 
 function tear() {
     if (stage.value !== 'ready' || !card.value) return
     packCount.value--
+    recordOpen({ ...card.value })
     owned.value.add(card.value.id)
     // TODO: save the card to Supabase and mark one pack as opened.
-    // Duplicates (card.isNew === false) should give bonus XP.
+        // Duplicates (card.isNew === false) should give bonus XP.
     burst()
     makeConfetti()
     rip()
@@ -436,7 +499,7 @@ function backToPacks() {
 <template>
   <main :class="{ browsing: stage === 'browse' }" :style="theme" @pointermove="onMove">
     <div>
-        <button onclick="history.back()" class="back">Back</button> 
+        <button type="button" class="back" @click="goBack">Back</button>
     </div>
     <div v-if="stage !== 'browse'" class="backdrop" :class="{ on: flipped }"></div>
 
@@ -645,7 +708,7 @@ function backToPacks() {
     .back{
         font-family: inherit;
         font-size: 24px;
-        padding: 8px 20px;
+        padding: 4px 20px;
         border: 3px solid rgb(200, 160, 0);
         border-radius: 12px;
         background-color: rgb(255, 215, 37);

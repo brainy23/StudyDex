@@ -3,6 +3,7 @@ import StudyPageNavigation from '@/components/common/StudyPageNavigation.vue'
 import xpPrompt from '../components/common/xpPrompt.vue'
 import { useExperiencePrompt } from '../composables/useExperiencePrompt'
 import { newExperienceId, getRewardedTimerCount } from '../services/experienceService'
+import { useStudySession } from '../composables/useStudySession'
 
 import { FAST_CARD_MS, FAST_CARD_STREAK, readEncounter, writeEncounter, makeQuestions } from '../composables/bossEncounter'
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
@@ -42,7 +43,7 @@ const topicCompletion = useTopicCompletion()
 const { savedInBrowser } = topicCompletion
 const profile = ref(null)
 const selectedBuddyRecord = ref(null)
-const { prompt:experiencePrompt, reward:rewardExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async result => {
+const { prompt:experiencePrompt, showSaved:showSavedExperience, dismiss:dismissExperience } = useExperiencePrompt(selectedBuddyRecord, async () => {
   completedFocusSessions.value = await getRewardedTimerCount(profile.value.id)
   selectedBuddyRecord.value = await getSelectedStudyBuddy(profile.value.id)
 })
@@ -69,6 +70,7 @@ const topic = computed(() =>
     : availableTopics.value[0] || null,
 )
 const currentResources = computed(() => resources[topic.value?.id])
+const persistedStudy = useStudySession(profile, topic, 'flashcards')
 async function initialise() {
   const request = ++generation
   loading.value = true
@@ -182,8 +184,11 @@ onMounted(() => {
   if (!route.query.topic) router.replace({ name:'selection-subjects', query:{ flow:'study' } })
   else initialise()
 })
-onBeforeRouteLeave(() => {
+onBeforeRouteLeave(async to => {
   pauseFocusTimer()
+  if (persistedStudy.ready.value) {
+    try { await persistedStudy.action(to.name === 'learn' || to.name === 'surprise-boss' ? 'pause' : 'abandon') } catch { /* last confirmed heartbeat remains saved */ }
+  }
 })
 onUnmounted(() => {
   alive = false
@@ -320,8 +325,19 @@ watch(() => profile.value?.id, async (id, _, onCleanup) => {
   try { const count=await getRewardedTimerCount(id); if(!cancelled) completedFocusSessions.value=count }
   catch { /* Saving a reward will show an actionable error if SQL is missing. */ }
 }, {immediate:true})
-function recordFocusCompletion() {
-  rewardExperience({ id:newExperienceId(), type:'timer' })
+async function recordFocusCompletion() {
+  try {
+    const saved = await persistedStudy.action('complete_block')
+    if (!saved) return
+    if (saved.block?.focus_completed_at) await showSavedExperience(saved.xp, 'Focus session complete!')
+    else if (saved.block?.running_since) {
+      focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+      timerFinished.value = false
+      timerDeadline = Date.now() + focusSeconds.value * 1000
+      timerRunning.value = true
+      focusInterval = setInterval(tickFocusTimer, 250)
+    }
+  } catch { /* persistedStudy.error offers retry */ }
 }
 
 // Paused/idle/completed is always red, even when fewer than two minutes remain.
@@ -344,20 +360,43 @@ function pauseFocusTimer() {
   tickFocusTimer()
   timerRunning.value = false
   clearInterval(focusInterval)
+  if (persistedStudy.state.value?.block?.running_since) void persistedStudy.action('pause').catch(() => {})
 }
-function startFocusTimer() {
-  if (timerRunning.value) return
-  if (!focusSeconds.value) focusSeconds.value = 25 * 60
+async function startFocusTimer() {
+  if (timerRunning.value || persistedStudy.busy.value || !persistedStudy.ready.value) return
+  try {
+    if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
+    const block = persistedStudy.state.value?.block
+    const saved = await persistedStudy.action(block && !block.focus_completed_at ? 'resume' : 'start', newExperienceId())
+    if (!saved?.block) return
+    focusSeconds.value = Math.ceil((1500000 - saved.block.active_ms) / 1000)
+  } catch { return }
   timerFinished.value = false
   timerDeadline = Date.now() + focusSeconds.value * 1000
   timerRunning.value = true
   focusInterval = setInterval(tickFocusTimer, 250)
 }
-function resetFocusTimer() {
+async function resetFocusTimer() {
   pauseFocusTimer()
+  if (persistedStudy.ready.value) {
+    try { await persistedStudy.action('reset') } catch { return }
+  }
   focusSeconds.value = 25 * 60
   timerFinished.value = false
 }
+watch(() => persistedStudy.state.value?.block, block => {
+  if (!block) return
+  focusSeconds.value = Math.max(0, Math.ceil((1500000 - block.active_ms) / 1000))
+  timerFinished.value = !!block.focus_completed_at
+  if (!block.running_since) { timerRunning.value = false; clearInterval(focusInterval) }
+})
+async function refreshDailySessions() {
+  if (!profile.value?.id) return
+  try { completedFocusSessions.value = await getRewardedTimerCount(profile.value.id) } catch { /* next save reports errors */ }
+}
+let dailyRefresh
+onMounted(() => { dailyRefresh = setInterval(refreshDailySessions, 30000); window.addEventListener('focus', refreshDailySessions) })
+onUnmounted(() => { clearInterval(dailyRefresh); window.removeEventListener('focus', refreshDailySessions) })
 // The uploaded page did not include StudyFlashcards.vue or studyService.
 // This adapter supports common card shapes; adjust here if your service differs.
 function cardRows(data) {
@@ -407,6 +446,10 @@ onUnmounted(() => document.removeEventListener('visibilitychange', resetRushOnVi
 async function startSurpriseBoss() {
   fastStreak = 0
   if (bossNavigating.value) return
+  if (!persistedStudy.ready.value) {
+    ratingMessage.value = 'Your study session is still saving. Please try again.'
+    return
+  }
   const availableQuestions = makeQuestions(cards.value)
   const questions = availableQuestions.length ? Array.from({length:5}, (_,i)=>availableQuestions[i % availableQuestions.length]) : []
   if (!questions.length) return // Image-only/one-answer decks cannot form a fair MCQ.
@@ -418,6 +461,7 @@ async function startSurpriseBoss() {
   const encounter = {
     id: globalThis.crypto?.randomUUID?.() || String(Date.now()),
     xpEventId:newExperienceId(),
+    studySessionId: persistedStudy.state.value?.session.id,
     createdAt: Date.now(), owner: profile.value?.id, topic: topic.value?.id,
     topicName: topic.value?.name, questions, status: 'pending',
     index: 0, choice: null, score: 0, finished: false,
@@ -506,13 +550,21 @@ async function rateCard(rating) {
     ratingMessage.value = rating === 'again' ? 'Again — this card will return soon.' : 'Hard — this card will return later in the round.'
   }
   reviewQueue.value = next
-  if (!next.length && cards.value.length) rewardExperience({ id:flashcardRoundId, type:'flashcards' })
+  if (!next.length && cards.value.length) {
+    try {
+      if (persistedStudy.state.value?.session.status !== 'in_progress') await persistedStudy.restart()
+      const saved = await persistedStudy.action('complete')
+      await showSavedExperience(saved?.xp)
+      await topicCompletion.refresh()
+    } catch { /* saved-state error remains retryable */ }
+  }
   answerVisible.value = false
   cardShownAt = performance.now()
   fastStreak = wasFast ? fastStreak + 1 : 0
   if (fastStreak >= FAST_CARD_STREAK) await startSurpriseBoss()
 }
 function restartCards() {
+  if (persistedStudy.ready.value && persistedStudy.state.value.session.status === 'completed') void persistedStudy.restart().catch(() => {})
   flashcardRoundId = newExperienceId()
   cardShownAt = performance.now()
   fastStreak = 0
@@ -543,10 +595,11 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
 />
   <xpPrompt :result="experiencePrompt" @close="dismissExperience" />
   <div class="study-page">
+  <p v-if="persistedStudy.error.value" class="lab-state" role="alert">{{ persistedStudy.error.value }} <button @click="persistedStudy.retry().then(result => showSavedExperience(result?.xp)).catch(() => {})">Retry saving</button></p>
   <main @dragstart.prevent class="poke-lab-page" :class="{ 'is-selecting': !enteredLab }">
     <nav class="study-mode-toggle" aria-label="Learning mode">
-      <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
       <button type="button" :disabled="!topic || bossNavigating || learningNavigationBusy" @click="openLearn">Learn</button>
+      <button type="button" class="is-current" aria-current="page" disabled>Flashcards</button>
     </nav>
     <header class="study-header">
       <StudyPageNavigation @topics="returnToSelection" />
@@ -655,7 +708,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
         <span role="status">{{ ratingMessage }}</span>
         <span>{{ profile.school_level?.name }}<template v-if="subject"> · {{ subject.name }}</template></span>
         <p v-if="spriteError" role="alert">{{ spriteError }} <button @click="spriteRetry++">Retry Pokémon</button></p>
-        <p v-if="!savedInBrowser" role="status">Progress can only be kept for this visit because browser storage is unavailable.</p>
+        <p v-if="!savedInBrowser" role="status">Saved topic progress could not be loaded. Please retry.</p>
         <p v-if="backgroundFailed" role="alert">Room image missing. Put poke-lab-interior.png in public/poke-lab/.</p>
       </footer>
     </template>
