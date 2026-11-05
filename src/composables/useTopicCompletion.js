@@ -19,9 +19,9 @@ export function useTopicCompletion() {
   const record = ref(null)
   let storageKey = null
 
-  function bindStudent(userId, levelId) {
+  function bindStudent(userId, levelId, flow = 'study') {
     storageKey = userId && levelId
-      ? `studydex:completed-topics:${encodeURIComponent(userId)}:${encodeURIComponent(levelId)}`
+      ? `studydex:completed-topics:${encodeURIComponent(userId)}:${encodeURIComponent(levelId)}${flow === 'quiz' ? ':quiz' : ''}`
       : null
     if (!storageKey) {
       record.value = null

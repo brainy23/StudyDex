@@ -21,6 +21,24 @@ import playSound from '../../scripts/soundEffect'
 
 const router = useRouter()
 const buildingNavigationError = ref('')
+async function openTownPage(to) {
+  buildingNavigationError.value = ''
+  try {
+    const target = router.resolve(to)
+    if (target.fullPath === router.currentRoute.value.fullPath) return
+    const failure = await router.push(to)
+    if (failure) throw new Error('Navigation was interrupted. Please try again.')
+  } catch (error) {
+    buildingNavigationError.value = error.message || 'This page could not open.'
+  }
+}
+const extraTownLinks = [
+  { label: 'Trainer House', to: '/trainer', icon: '⌂' },
+  { label: 'Progress', to: { name: 'studentdashboard' }, icon: '▥' },
+  { label: 'Poképacks', to: '/pokepacks', icon: '▣' },
+  { label: 'Account', to: { name: 'account' }, icon: '☺' },
+]
+
 
 
 // tutorial
@@ -1620,108 +1638,118 @@ watch(
       </div>
 
         <!-- TRAINER NAVBAR -->
-  <nav class="sd-navbar" aria-label="Main navigation">
+      <nav class="sd-navbar" aria-label="Main navigation">
+      <!-- STUDY -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        :disabled="buddySleeping"
+        @click="router.push('/subjects?flow=study')"
+      >
+        <span class="sd-icon-tile sd-icon-study">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path
+              d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
+                4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
+              fill="#fff9e8"
+            />
+            <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
+          </svg>
+        </span>
+        <span class="sd-nav-label">Study</span>
+      </button>
 
-    <!-- STUDY -->
-    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-      <span class="sd-icon-tile sd-icon-study">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path
-            d="M16 8C12 5 7 5 3 7v19c4-2 9-2 13 1
-              4-3 9-3 13-1V7c-4-2-9-2-13 1Z"
-            fill="#fff9e8"
-          />
-          <path d="M16 8v19M7 11l5 1M7 16l5 1M20 12l5-1M20 17l5-1" />
-        </svg>
-      </span>
-      <span class="sd-nav-label">Study</span>
-    </button>
+      <!-- QUIZ -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        :disabled="buddySleeping"
+        @click="router.push('/subjects?flow=quiz')"
+      >
+        <span class="sd-icon-tile sd-icon-quiz">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="m7 3 5 2 13 17-4 4L7 9Z" fill="#fff9e8" />
+            <path d="m25 3-5 2L7 22l4 4L25 9Z" fill="#fff9e8" />
+            <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
+          </svg>
+        </span>
+        <span class="sd-nav-label">Quiz</span>
+      </button>
 
-    <!-- QUIZ -->
-    <button type="button" class="sd-nav-button" :disabled="buddySleeping">
-      <span class="sd-icon-tile sd-icon-quiz">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path
-            d="m7 3 5 2 13 17-4 4L7 9Z"
-            fill="#fff9e8"
-          />
-          <path
-            d="m25 3-5 2L7 22l4 4L25 9Z"
-            fill="#fff9e8"
-          />
-          <path d="m4 20 8 8M20 28l8-8M5 28l3-3M24 25l3 3" />
-        </svg>
-      </span>
-      <span class="sd-nav-label">Quiz</span>
-    </button>
+      <!-- TOWN -->
+      <button
+        type="button"
+        class="sd-nav-button sd-town-button is-active"
+        aria-current="page"
+        @click="router.push('/home')"
+      >
+        <span class="sd-pokeball" aria-hidden="true"></span>
+        <span class="sd-nav-label">Town</span>
+      </button>
 
-    <!-- TOWN: ACTIVE ON HOMEVIEW2 -->
-    <button
-      type="button"
-      class="sd-nav-button sd-town-button is-active"
-      aria-current="page"
-    >
-      <span class="sd-pokeball" aria-hidden="true"></span>
-      <span class="sd-nav-label">Town</span>
-    </button>
+      <!-- TO-DO LIST -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        data-bs-toggle="modal"
+        data-bs-target="#todoModal"
+      >
+        <span class="sd-icon-tile sd-icon-todos">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <rect
+              x="6"
+              y="4"
+              width="21"
+              height="25"
+              rx="3"
+              fill="#fff9e8"
+            />
+            <path d="M11 2v5M22 2v5M16 13h7M16 19h7M16 25h7" />
+            <path d="m9 12 2 2 3-4m-5 8 2 2 3-4" />
+            <circle
+              cx="11"
+              cy="25"
+              r="1"
+              fill="currentColor"
+              stroke="none"
+            />
+          </svg>
+        </span>
+        <span class="sd-nav-label">To-Do List</span>
+      </button>
 
-    <!-- TO-DO LIST — available even while the buddy sleeps -->
-    <button
-      type="button"
-      class="sd-nav-button"
-      data-bs-toggle="modal"
-      data-bs-target="#todoModal"
-    >
-      <span class="sd-icon-tile sd-icon-todos">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <rect x="6" y="4" width="21" height="25" rx="3" fill="#fff9e8" />
-          <path d="M11 2v5M22 2v5M16 13h7M16 19h7M16 25h7" />
-          <path d="m9 12 2 2 3-4m-5 8 2 2 3-4" />
-          <circle cx="11" cy="25" r="1" fill="currentColor" stroke="none" />
-        </svg>
-      </span>
-      <span class="sd-nav-label">To-Do List</span>
-    </button>
-
-    <!-- POKEDEX -->
-    <!-- Available to view when buddy sleeps -->
-    <button
-      type="button"
-      class="sd-nav-button"
-      @click="router.push('/collection')"
-    >
-      <span class="sd-icon-tile sd-icon-bag">
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M12 7V5a4 4 0 0 1 8 0v2" />
-
-          <rect
-            x="6"
-            y="7"
-            width="20"
-            height="22"
-            rx="6"
-            fill="#ffcf65"
-          />
-
-          <path d="M6 15h20" />
-
-          <rect
-            x="10"
-            y="18"
-            width="12"
-            height="7"
-            rx="2"
-            fill="#fff0bb"
-          />
-
-          <path d="M16 13v4" />
-        </svg>
-      </span>
-
-      <span class="sd-nav-label">PokeDex</span>
-    </button>
-
-  </nav>
+      <!-- POKÉDEX -->
+      <button
+        type="button"
+        class="sd-nav-button"
+        @click="router.push('/collection')"
+      >
+        <span class="sd-icon-tile sd-icon-bag">
+          <svg viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M12 7V5a4 4 0 0 1 8 0v2" />
+            <rect
+              x="6"
+              y="7"
+              width="20"
+              height="22"
+              rx="6"
+              fill="#ffcf65"
+            />
+            <path d="M6 15h20" />
+            <rect
+              x="10"
+              y="18"
+              width="12"
+              height="7"
+              rx="2"
+              fill="#fff0bb"
+            />
+            <path d="M16 13v4" />
+          </svg>
+        </span>
+        <span class="sd-nav-label">PokeDex</span>
+      </button>
+    </nav>
 
       <!-- TO-DO MODAL -->
       <div
@@ -2225,11 +2253,14 @@ watch(
   z-index: 100;
 
   display: grid;
-  grid-template-columns: 1fr 1fr 1.1fr 1fr 1fr;
+  grid-template-columns: repeat(9, minmax(76px, 1fr));
+  overflow-x: auto;
+  scrollbar-width: thin;
   align-items: center;
   gap: calc(8 * var(--control-unit));
 
-  width: min(calc(480 * var(--control-unit)), calc(100% - 24px));
+  width: min(980px, calc(100% - 24px));
+  box-sizing: border-box;
   height: calc(94 * var(--control-unit));
   padding: calc(10 * var(--control-unit)) calc(14 * var(--control-unit));
 
@@ -2250,6 +2281,11 @@ watch(
     0 12px 28px rgba(6, 19, 44, 0.3),
     0 4px 0 rgba(15, 36, 70, 0.65),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
+
+  grid-template-columns: 1fr 1fr 1.1fr 1fr 1fr;
+  width: min(calc(480 * var(--control-unit)), calc(100% - 24px));
+  overflow: visible;
+
 }
 
 .sd-nav-button {

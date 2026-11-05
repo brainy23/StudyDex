@@ -506,7 +506,10 @@ async function rateCard(rating) {
     ratingMessage.value = rating === 'again' ? 'Again — this card will return soon.' : 'Hard — this card will return later in the round.'
   }
   reviewQueue.value = next
-  if (!next.length && cards.value.length) rewardExperience({ id:flashcardRoundId, type:'flashcards' })
+  if (!next.length && cards.value.length) {
+    topicCompletion.markComplete(topic.value?.id)
+    rewardExperience({ id:flashcardRoundId, type:'flashcards' })
+  }
   answerVisible.value = false
   cardShownAt = performance.now()
   fastStreak = wasFast ? fastStreak + 1 : 0
