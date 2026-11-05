@@ -686,6 +686,13 @@ onUnmounted(() => {
       />
 
       <div class="room-characters">
+        <div class="sleeping-cat" aria-hidden="true">
+        <img
+          src="/trainer-home/sleeping-cat.png"
+          alt=""
+          draggable="false"
+          />
+        </div>
 
         <div class="carpet-party">
           <div v-if="selectedTrainer" class="trainer-figure">
@@ -895,6 +902,14 @@ onUnmounted(() => {
           <p v-else-if="saveMessage" role="status">{{ saveMessage }}</p>
         </section>
       </div>
+     <header class="trainer-hud">
+      <div class="trainer-clock">
+        <ClockWeather
+          :use-device-location="true"
+          @rain-change="rainActive = $event"
+        />
+      </div>
+    </header>
     </div>
 
     <!-- Below md: one large button per room action, so nothing depends on
@@ -1358,6 +1373,41 @@ onUnmounted(() => {
   top: auto;
   bottom: 0;
   height: 100%;
+}
+
+.sleeping-cat {
+  position: absolute;
+  left: 81%;
+  top: 63%;
+  width: 10%;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  user-select: none;
+}
+
+.sleeping-cat img {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: pixelated;
+  transform-origin: center bottom;
+  filter: drop-shadow(0 4px 3px rgb(45 25 10 / 25%));
+  animation: sleeping-cat-breathe 3.5s ease-in-out infinite;
+}
+
+@keyframes sleeping-cat-breathe {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(1.035);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sleeping-cat img {
+    animation: none;
+  }
 }
 
 </style>
