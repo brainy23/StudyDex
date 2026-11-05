@@ -1,6 +1,6 @@
 // One pending encounter per browser tab. No backend rewards are awarded here.
-export const FAST_CARD_MS = 1000
-export const FAST_CARD_STREAK = 6
+export const FAST_CARD_MS = 5000
+export const FAST_CARD_STREAK = 3
 export const BOSS_COOLDOWN_MS = 0
 const KEY = 'studydex-boss-encounter-v1'
 export function readEncounter() {

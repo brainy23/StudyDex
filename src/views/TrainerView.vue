@@ -561,9 +561,9 @@ const roomLinks = [
     outline: 'M 2 2 L 98 2 L 98 98 L 2 98 Z'
   },
   {
-    id: 'studydecks',
-    label: 'Visit Poké Lab in town',
-    path: '/home',
+    id: 'pokedex',
+    label: 'Pokédex',
+    path: '/collection',
     left: '12%',
     top: '49.6%',
     width: '11.3%',
