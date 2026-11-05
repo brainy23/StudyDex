@@ -2,6 +2,7 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import VueTyper from 'vue3-typer'
 import 'vue3-typer/dist/vue-typer.css'
+import playSound from '../../../scripts/soundEffect'
 
 // Home owns shared data and persistence. This component only emits changes.
 const props = defineProps({
@@ -290,7 +291,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
       :class="{ 'quest-toggle-open': goalsOpen }"
       :aria-expanded="goalsOpen"
       aria-controls="daily-goals-panel"
-      @click="goalsOpen = !goalsOpen"
+      @click="goalsOpen = !goalsOpen; (goalsOpen?playSound('phoneOpenSound'):playSound('phoneCloseSound'))"
     >
       <svg
         class="quest-toggle-icon"
