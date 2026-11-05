@@ -1073,9 +1073,6 @@ input:focus-visible {
   width:max-content; max-width:100%;
   transform:none; pointer-events:auto;
 }
-@media(min-width:1001px) {
-  .poke-lab-page.is-learning .study-clock { zoom:.65; }
-}
 @media(max-width:600px) {
   .poke-lab-page .study-header > .study-clock {
     max-width:100%;
