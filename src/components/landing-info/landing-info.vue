@@ -97,7 +97,7 @@ onMounted(() => {
 
   <section class="features" id="features-section">
     <h2>
-      Over <span class="underline">7 ways</span> to study with your buddy
+      Over <span class="underline">700 flashcards</span> for you to study with your buddy!
     </h2>
 
     <div id="features" class="carousel slide">
@@ -121,6 +121,14 @@ onMounted(() => {
                 Earn packs by studying and collect new Pokémon.
               </p>
             </div>
+
+            <div class="feature-card">
+              <img src="/landing/collection.png" alt="Pokemoncollection" class="screenshot" />
+              <h3>Pokémon Collection</h3>
+              <p>
+                Over 150 Pokémons for you to collect!
+              </p>
+            </div>            
 
             <div class="feature-card">
               <div class="screenshot-placeholder">
