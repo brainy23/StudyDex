@@ -11,10 +11,13 @@ import {
 } from '../services/studyService'
 import ClockWeather from '@/components/common/ClockWeather.vue'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
+import { useRoomTransitionReady } from '../composables/useRoomTransition'
+import { usePokemonTransition } from '../composables/usePokemonTransition'
 import '../assets/study.css'
 
 const route = useRoute()
 const router = useRouter()
+const pokemonTransition = usePokemonTransition()
 const profile = ref(null)
 const activeBuddyRecord = ref(null)
 const catalogue = ref({ subjects: [], topics: [] })
@@ -115,6 +118,14 @@ const enteredLab = computed(() => !!topic.value)
 const POKE_API_BASE = 'https://pokeapi.co/api/v2'
 const activeBuddyName = computed(() => activeBuddyRecord.value?.pokemon?.name || 'your Pokémon')
 const lessonResource = computed(() => currentResources.value?.lesson)
+useRoomTransitionReady('learn', () => !loading.value && (
+  !!error.value || !topic.value || !profile.value?.school_level_id ||
+  !!lessonResource.value && !lessonResource.value.loading
+), cause => {
+  generation++
+  error.value = cause
+  loading.value = false
+})
 const lessonConcepts = computed(() => [...(lessonResource.value?.data?.concepts || [])]
   .sort((a, b) => (a.concept_order ?? Infinity) - (b.concept_order ?? Infinity)))
 const lessonGoals = computed(() => lessonResource.value?.data?.goals || [])
@@ -276,6 +287,7 @@ async function backToFlashcards() {
   } catch { learningNavigationError.value = 'Could not return to your flashcards. Please try again.' }
   finally { learningNavigationBusy.value = false }
 }
+
 </script>
 <template>
   <div class="study-page">
@@ -289,7 +301,7 @@ async function backToFlashcards() {
         <RouterLink to="/home" class="home-link">‹ Back to town</RouterLink>
         <button type="button" class="home-link" @click="returnToSelection">Topics</button>
       </nav>
-      <div v-show="enteredLab" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
@@ -1090,52 +1102,66 @@ input:focus-visible {
   .poke-lab-page .study-navigation .home-link { padding:8px 12px; font-size:13px; }
 }
 
-
-
-/* Matching capsule navigation on both pages. */
 .poke-lab-page .study-mode-toggle {
-  position: fixed; z-index: 40;
-  top: max(12px, env(safe-area-inset-top));
-  left: 50%; transform: translateX(-50%);
-  display: grid; grid-template-columns: 1fr 1fr;
-  width: min(232px, calc(100vw - 32px)); height: 40px;
-  overflow: hidden; border: 2px solid #26354b; border-radius: 999px;
-  background: #fffdf5; box-shadow: 0 2px 0 #132139, 0 4px 9px #07162b30;
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top, 0px));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   pointer-events: auto;
+  width: min(216px, calc(100vw - 32px));
+  height: 38px;
+  box-sizing: border-box;
+  padding: 3px;
+  gap: 3px;
+  border: 1px solid #b89556;
+  border-radius: 11px;
+  background: #182b43;
+  box-shadow:
+    inset 0 1px 0 #ffffff20,
+    0 2px 4px #101c2c40;
 }
-.poke-lab-page .study-mode-toggle button {
-  position: relative; display: grid; place-items: center;
-  min-width: 0; min-height: 0; margin: 0; padding: 0 14px;
-  border: 0; border-radius: 0; box-shadow: none;
-  background: linear-gradient(#fff, #e8e8df); color: #253550;
-  font: inherit; font-size: 12px; font-weight: 850;
-  line-height: 1.2; cursor: pointer; opacity: 1;
-  transform: none; text-shadow: none;
-}
-.poke-lab-page .study-mode-toggle button:first-child { padding-right: 20px; }
-.poke-lab-page .study-mode-toggle button:last-child { padding-left: 20px; }
-.poke-lab-page .study-mode-toggle::before {
-  content: ''; position: absolute; z-index: 2; top: 0; bottom: 0;
-  left: calc(50% - 2px); width: 4px; background: #26354b;
-  pointer-events: none;
-}
+
+/* Remove the Poké Ball seam and centre circle. */
+.poke-lab-page .study-mode-toggle::before,
 .poke-lab-page .study-mode-toggle::after {
-  content: ''; position: absolute; z-index: 3; top: 50%; left: 50%;
-  width: 18px; height: 18px; transform: translate(-50%, -50%);
-  border: 3px solid #26354b; border-radius: 50%; background: #fffdf5;
-  box-shadow: inset 0 0 0 2px #d9e0e9; pointer-events: none;
+  content: none;
 }
+
+.poke-lab-page .study-mode-toggle button,
+.poke-lab-page .study-mode-toggle button:first-child,
+.poke-lab-page .study-mode-toggle button:last-child {
+  padding: 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #f5efe3;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Gold follows the current page. */
 .poke-lab-page .study-mode-toggle button.is-current {
-  background: linear-gradient(#ff5d67 0%, #ed1730 45%, #ce1029 100%);
-  color: white; cursor: default;
+  background: linear-gradient(#fae9c2, #e5c78c);
+  color: #203149;
+  box-shadow: inset 0 1px 0 #fff6df;
+  opacity: 1;
 }
+
 .poke-lab-page .study-mode-toggle button:not(.is-current):hover:not(:disabled) {
-  background: #fff; color: #142d4e;
+  background: #304962;
+  color: #fff;
 }
-.poke-lab-page .study-mode-toggle button:disabled:not(.is-current) { opacity: .55; cursor: wait; }
+
 .poke-lab-page .study-mode-toggle button:focus-visible {
-  outline: 3px solid #153f72; outline-offset: -5px;
+  outline: 2px solid #ffe5a8;
+  outline-offset: -3px;
 }
+
+
 /* Reserve space above the room so the switch cannot cover either board. */
 .poke-lab-page > .study-content {
   inset: 0;

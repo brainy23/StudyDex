@@ -43,9 +43,10 @@
         outcome.value = 'Loading'
         controller
           .run({
+            animate: true,
             source: 'Town',
             destination,
-            title: destination === 'Poké Arena' ? 'A Challenge Awaits!' : 'A new adventure awaits!',
+            title: destination === 'Poké Arena' ? 'Time for Battle!' : 'A new adventure awaits!',
             description: `Get ready to explore ${destination}.`,
             task: () =>
               new Promise((resolve, reject) => {
