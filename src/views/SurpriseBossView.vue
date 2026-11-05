@@ -823,7 +823,7 @@ const battleOptions = computed(() =>
     </div>
 
     <header class="arena-hud">
-      <ClockWeather :use-device-location="true" @rain-change="rainActive = $event" />
+      <ClockWeather @rain-change="rainActive = $event" />
       <button @click="toggleMute()">{{isMuted?'Unmute':'Mute'}}</button>
     </header>
 

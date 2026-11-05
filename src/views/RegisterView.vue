@@ -782,7 +782,7 @@ fieldset {
 #email-input {
   width: 360px;
   max-width: 100%;
-  height: 35px;
+  height: var(--tap-min);
 
   border: 0;
   border-radius: 20px;
@@ -857,7 +857,7 @@ fieldset {
   appearance: none;
 
   width: 180px;
-  height: 40px;
+  height: var(--tap-min);
   padding: 0 36px 0 14px;
 
   font-size: 17px;
@@ -908,6 +908,14 @@ fieldset {
   paint-order: stroke fill;
 }
 
+/* Full-height tap target for the inline Sign In link. */
+.link-to-sign-in a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  padding: 0 4px;
+}
+
 .pw-not-fulfilled {
   color: rgb(234, 75, 75);
   font-size: 24px;
@@ -927,7 +935,7 @@ button:disabled {
   cursor: not-allowed;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 575.98px) {
   #username-input,
   #password-input,
   #confirm-password-input,
@@ -982,12 +990,24 @@ button:disabled {
   -webkit-backdrop-filter: blur(8px);
 }
 
+/* Pikachu sits in normal flow beside the card (lg and up) or above it
+   (below lg), so he can never cover a field or the Previous/Next buttons. */
 .signup-pikachu {
-  position: absolute;
-  left: 2%;
-  top: 42%;
+  position: static;
+  flex: none;
   width: 220px;
   text-align: center;
+}
+
+@media (min-width: 992px) {
+  .signup-form {
+    gap: 24px;
+  }
+
+  .signup-fields {
+    flex: 0 1 620px;
+    margin: 0;
+  }
 }
 
 /* SPEECH BUBBLE */
@@ -1033,15 +1053,15 @@ button:disabled {
   margin-bottom: 4px;
 
   color: #886317;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 900;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
 .pikachu-speech p {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.4;
 }
@@ -1102,6 +1122,7 @@ button:disabled {
 
 .pikachu-sparkles {
   position: absolute;
+  z-index: 2;
   top: 0;
   right: -10px;
   font-size: 36px;
@@ -1139,16 +1160,60 @@ button:disabled {
   }
 }
 
-/* PIKACHU ABOVE THE FORM ON SMALLER SCREENS */
-@media (max-width: 900px) {
+/* Below lg: a small Pikachu (about 72px) above the card, centred, with his
+   speech bubble beside him. The bubble carries role="status" errors, so it
+   must always be fully visible. */
+@media (max-width: 991.98px) {
   .signup-form {
     flex-direction: column;
-    gap: 16px;
+    justify-content: flex-start;
+    gap: 12px;
+    padding-top: 88px; /* clears the Back to StudyDex button */
   }
 
   .signup-pikachu {
+    display: flex;
+    flex-direction: row-reverse;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    width: min(100%, 460px);
+  }
+
+  .pikachu-speech {
+    flex: 1 1 auto;
+    width: auto;
+    max-width: 320px;
+    margin: 0;
+    text-align: left;
+  }
+
+  /* Tail points left, towards Pikachu. */
+  .pikachu-speech::after {
+    left: -8px;
+    top: 50%;
+    bottom: auto;
+    border-right: 0;
+    border-bottom: 2px solid #344f78;
+    border-left: 2px solid #344f78;
+    transform: translateY(-50%) rotate(45deg);
+  }
+
+  .pikachu-stage {
     flex: none;
-    width: 220px;
+    width: 72px;
+    height: 72px;
+  }
+
+  .pikachu-sprite {
+    width: 72px;
+    height: 72px;
+  }
+
+  .pikachu-shadow {
+    bottom: -2px;
+    width: 52px;
+    height: 8px;
   }
 
   .signup-fields {
@@ -1178,6 +1243,17 @@ button:disabled {
   box-sizing: border-box;
   padding-left: 44px;
   padding-right: 44px;
+}
+
+/* 44 × 44 tap area around the small eye icon. */
+.password-toggle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  transform: translate(-50%, -50%);
 }
 
 .password-toggle {

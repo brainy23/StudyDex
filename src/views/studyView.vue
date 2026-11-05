@@ -603,7 +603,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
     </nav>
     <header class="study-header">
       <StudyPageNavigation @topics="returnToSelection" />
-      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true"  /></div>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
@@ -749,7 +749,7 @@ watch([() => flashResource.value?.data, () => route.query.resume], restoreLearnP
 .answer-screen :deep(.study-button) { padding: 6px 10px; font-size: inherit; }
 .answer-screen :deep(h2) { font-size: clamp(14px, 1.5cqw, 25px); }
 .answer-screen :deep(h3) { font-size: clamp(13px, 1.2cqw, 21px); }
-.answer-screen :deep(p), .answer-screen :deep(li) { font-size: clamp(12px, 1cqw, 18px); }
+.answer-screen :deep(p), .answer-screen :deep(li) { font-size: clamp(14px, 1cqw, 18px); }
 .buddy-chamber { z-index: 2; position: absolute; left: 74.6%; top: 41.3%; width: 15.7%; height: 29.8%; overflow: hidden; contain: paint; padding: .4cqw .5cqw 0; display: flex; align-items: flex-end; justify-content: center; pointer-events: none; }
 .buddy-sprite { position: relative; z-index: 2; width: 92%; height: 92%; min-width: 0; min-height: 0; overflow: hidden; display: flex; align-items: flex-end; justify-content: center;  }
 .buddy-sprite :deep(img) { width: 100%; height: 100%; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; object-fit: contain; object-position: center bottom; image-rendering: pixelated; display: block; }
@@ -1531,4 +1531,66 @@ input:focus-visible {
   .poke-lab-page .inline-classroom { padding-top: 240px; }
 }
 
+/* =====================================================
+   RESPONSIVE FIXES (375px iPhone 6 → 1200px Bootstrap xl)
+   Placed last so they override the room rules above.
+   ===================================================== */
+
+/* Every tap target is at least 44px; rating buttons are 48px at every width. */
+.poke-lab-page .study-mode-toggle { height: calc(var(--tap-min) + 8px); }
+.poke-lab-page .study-mode-toggle button,
+.poke-lab-page .study-mode-toggle button:first-child,
+.poke-lab-page .study-mode-toggle button:last-child { min-height: var(--tap-min); font-size: var(--text-sm); }
+.poke-lab-page .study-navigation .home-link { min-height: var(--tap-min); font-size: var(--text-sm); }
+.poke-lab-page .lab-console .rating-actions button { min-height: 48px; font-size: var(--text-md) !important; }
+.poke-lab-page .screen-flip,
+.poke-lab-page .focus-actions button { min-height: var(--tap-min); font-size: var(--text-sm) !important; }
+
+/* No visible text below 14px. */
+.console-status,
+.focus-session-count,
+.focus-finished,
+.question-reminder,
+.chamber-status,
+.lab-footer { font-size: var(--text-sm); }
+.screen-eyebrow,
+.answer-screen .screen-eyebrow { font-size: var(--text-sm); letter-spacing: .04em; }
+
+/* Desktop room: the rating console grows upwards from the floor screen,
+   so 48px buttons never spill out of the painted room. */
+@media (min-width: 1001px) {
+  .lab-console { top: auto; bottom: 5.7%; height: auto; min-height: 12.2%; }
+}
+
+/* Below md: card first, ratings second, then the timer as a compact chip.
+   The card and ratings fit on a 375 × 667 screen without scrolling. */
+@media (max-width: 767.98px) {
+  .lab-stage { display: flex; flex-direction: column; }
+  /* Clock and location chip side by side, so the header stays inside the art strip. */
+  .poke-lab-page .study-header > .study-clock :deep(.clock-weather-widget) { flex-direction: row; gap: 8px; }
+  .poke-lab-page .study-header > .study-clock :deep(.weather-location-badge) { margin: 0; }
+  .lab-stage > .answer-screen { order: 1; }
+  .lab-stage > .lab-console { order: 2; }
+  .lab-stage > .timer-screen { order: 3; }
+
+  .lab-screen, .lab-console { margin: 8px 10px; padding: 14px; }
+  .answer-screen { min-height: 168px; }
+  .answer-copy { font-size: var(--text-lg); }
+  .lab-console { gap: 8px; }
+
+  /* Compact timer chip: one row, keeps its --timer-border colour. */
+  .timer-screen {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 12px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+  }
+  .timer-screen .focus-session-progress { order: 1; }
+  .timer-screen .focus-session-count { order: 2; }
+  .timer-screen .focus-digits { order: 3; font-size: 26px; }
+  .timer-screen .focus-actions { order: 4; }
+  .timer-screen .focus-finished { order: 5; flex-basis: 100%; text-align: center; }
+}
 </style>

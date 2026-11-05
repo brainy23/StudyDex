@@ -4,6 +4,8 @@ import axios from 'axios'
 import { useTimeOfDay } from '@/composables/useTimeOfDay'
 import {
   DEFAULT_WEATHER_LOCATION,
+  readSavedLocationSource,
+  saveLocationSource,
   useWeatherLocation
 } from '@/composables/useWeatherLocation'
 
@@ -20,8 +22,9 @@ const {
 // =====================================================
 
 const props = defineProps({
-  // true: offer the location chooser on the first visit.
-  // false: use Singapore without asking on the first visit.
+  // The location chooser never opens by itself; students open it with the pin button.
+  // true: reuse a device-location choice the student saved earlier.
+  // false: always start with Singapore.
   useDeviceLocation: {
     type: Boolean,
     default: true
@@ -172,11 +175,14 @@ function closeLocationDialog() {
 
 async function chooseDevice() {
   await useDeviceLoc()
+  // Remember the result of the student's choice ('default' if permission was denied).
+  saveLocationSource(savedLocation.value?.source)
   closeLocationDialog()
 }
 
 function chooseSingapore() {
   useSingaporeLocation()
+  saveLocationSource('default')
   closeLocationDialog()
 }
 
@@ -588,9 +594,11 @@ onMounted(() => {
   // INITIAL LOCATION CHOICE
   // -----------------------------------------------
 
+  // Never open the chooser by itself: default to Singapore, or quietly reuse
+  // a device-location choice saved on an earlier visit.
   if (!savedLocation.value && !locationBusy.value) {
-    if (props.useDeviceLocation) {
-      openLocationDialog()
+    if (props.useDeviceLocation && readSavedLocationSource() === 'device') {
+      useDeviceLoc()
     } else {
       useSingaporeLocation()
     }
@@ -660,7 +668,7 @@ onUnmounted(() => {
     <dialog ref="locationDialog" class="location-dialog" aria-label="Choose weather location"
       @cancel="cancelLocationDialog" @close="restoreLocationFocus">
       <div class="modal-content p-4">
-        <div class="location-header">STUDYDEX / TOWN SETUP</div>
+        <div class="location-header">Town setup</div>
         <div class="modal-body text-center px-0 pb-0">
           <div class="location-icon d-flex align-items-center justify-content-center mx-auto mb-3" aria-hidden="true">🗺️</div>
           <h2 class="mb-3">Find Your Town!</h2>
@@ -778,7 +786,7 @@ onUnmounted(() => {
 
 }
 
-.location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: 12px; }
+.location-feedback { max-width: 380px; margin: 6px 0 0; padding: 7px 10px; border-radius: 8px; background: #fff9e8; color: #293c60; font-size: var(--text-sm); }
 
 /* =========================================
    STUDYDEX LOCATION MODAL
@@ -815,11 +823,10 @@ onUnmounted(() => {
   color: #293c60;
 }
 
-/* Header */
+/* Header: a plain label, not tiny pixel caps */
 .location-header {
-  font-family: 'Silkscreen', monospace;
-  font-size: 10px;
-  letter-spacing: 1px;
+  font-size: var(--text-sm);
+  font-weight: 700;
   color: #8f7440;
 }
 
@@ -859,7 +866,7 @@ onUnmounted(() => {
   border-radius: 14px;
 
   color: #6c6046;
-  font-size: 13px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -892,7 +899,7 @@ onUnmounted(() => {
   border: 2px solid transparent;
   border-radius: 14px;
 
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 900;
   line-height: 1.3;
   text-align: center;
@@ -967,7 +974,7 @@ onUnmounted(() => {
 /* Footer text */
 .location-dialog .small-note {
   color: #7c8290;
-  font-size: 11px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -975,7 +982,7 @@ onUnmounted(() => {
    MOBILE RESPONSIVENESS
    ========================================= */
 
-@media (max-width: 420px) {
+@media (max-width: 575.98px) {
   .location-dialog {
     width: calc(100vw - 24px);
   }
@@ -992,7 +999,6 @@ onUnmounted(() => {
 
   .location-dialog .location-action {
     min-height: 52px;
-    font-size: 13px;
   }
 }
 
@@ -1029,7 +1035,7 @@ onUnmounted(() => {
   color: #665536;
   box-shadow: 0 3px 0 rgb(75 58 29 / 12%);
   font-family: inherit;
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 700;
   line-height: 1.4;
 }
@@ -1042,6 +1048,7 @@ onUnmounted(() => {
 .location-badge-icon { flex-shrink: 0; font-size: 15px; }
 .location-badge-label { overflow-wrap: anywhere; }
 .location-change-button {
+  position: relative;
   pointer-events: auto;
   display: inline-flex;
   align-items: center;
@@ -1061,6 +1068,18 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background-color 150ms ease;
 }
+/* Keep the small pencil, but give it a full 44 × 44 tap area. */
+.location-change-button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+.location-change-button:focus-visible { outline: 3px solid var(--sd-focus); outline-offset: 2px; }
 .location-change-button:hover { background: #ffedb5; }
 .location-change-button:active { background: #ffe28b; }
 @media (max-width: 991.98px) {
@@ -1071,7 +1090,7 @@ onUnmounted(() => {
       clamp(3px, calc(2.048px + 0.298vw), 5px)
       clamp(2px, calc(1.048px + 0.298vw), 4px)
       clamp(7px, calc(5.095px + 0.595vw), 11px);
-    font-size: clamp(9px, calc(8.048px + 0.298vw), 11px);
+    font-size: var(--text-sm);
   }
 
   .location-badge-status {
@@ -1079,7 +1098,7 @@ onUnmounted(() => {
   }
 
   .location-badge-icon {
-    font-size: clamp(12px, calc(10.571px + 0.446vw), 15px);
+    font-size: 15px;
   }
 
   .location-change-button {
@@ -1093,7 +1112,7 @@ onUnmounted(() => {
   }
 }
 
-@media (max-height: 520px) {
+@media (max-height: 500px) {
   .clock-weather-widget {
     flex-direction: row;
     gap: var(--sd-space-2);

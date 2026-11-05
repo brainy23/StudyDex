@@ -164,7 +164,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
 }
 
 .bubble-label {
-  font-size: 11px; font-weight: 800; line-height: 1.1; white-space: nowrap;
+  font-size: var(--text-sm); font-weight: 800; line-height: 1.1; white-space: nowrap;
   text-shadow: 0 2px 3px rgba(5, 20, 45, 0.6);
 }
 
@@ -241,16 +241,16 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', outside))
   position: absolute; bottom: 92px; left: 0; width: 230px; margin: 0; padding: 12px;
   border: 2px solid rgba(207, 234, 255, 0.78); border-radius: 16px;
   background: linear-gradient(180deg, rgba(81, 125, 179, 0.9), rgba(22, 48, 87, 0.95));
-  color: white; font: 700 13px/1.4 ui-rounded, system-ui, sans-serif;
+  color: white; font: 700 var(--text-sm)/1.4 var(--sd-font-body);
 }
 
-@media (max-width: 480px), (max-height: 480px) {
+@media (max-width: 575.98px), (max-height: 500px) {
   .bubble-nav { --size: 60px; --radius: 168px; left: max(12px, env(safe-area-inset-left)); bottom: max(12px, env(safe-area-inset-bottom)); }
   .icon-tile { width: 28px; height: 27px; border-radius: 8px; }
   .icon-tile svg { width: 21px; height: 21px; }
   .sd-pokeball { width: 26px; height: 26px; }
   .sd-pokeball::after { width: 9px; height: 9px; }
-  .bubble-label { font-size: 10px; }
+  .bubble-label { font-size: var(--text-sm); }
 }
 @media (prefers-reduced-motion: reduce) {
   .bubble-nav .bubble-item, .bubble-nav button, .bubble-toggle svg { transition: none; }

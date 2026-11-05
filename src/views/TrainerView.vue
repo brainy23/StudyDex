@@ -660,6 +660,19 @@ onUnmounted(() => {
 
     <StudydexBubbleNav current="bag" />
 
+    <!-- Overlays the room from md up; sits above the room in normal flow on phones. -->
+    <header class="trainer-hud">
+      <div class="title-card">
+        <h1>Trainer Home</h1>
+      </div>
+      <div class="trainer-clock">
+        <ClockWeather
+          :use-device-location="true"
+          @rain-change="rainActive = $event"
+        />
+      </div>
+    </header>
+
     <div class="trainer-scene">
 
       <TownBackground
@@ -866,20 +879,31 @@ onUnmounted(() => {
           <p v-else-if="saveMessage" role="status">{{ saveMessage }}</p>
         </section>
       </div>
-
-     <header class="trainer-hud">
-      <div class="title-card">
-        <span class="title-eyebrow">STUDYDEX</span>
-        <h1>Trainer Home</h1>
-      </div>
-      <div class="trainer-clock">
-        <ClockWeather
-          :use-device-location="true"
-          @rain-change="rainActive = $event"
-        />
-      </div>
-    </header>
     </div>
+
+    <!-- Below md: one large button per room action, so nothing depends on
+         small hotspots or labels squeezed into the phone-sized room. -->
+    <nav class="room-menu" aria-label="Room menu">
+      <button
+        v-for="link in roomLinks"
+        :key="`menu-${link.id}`"
+        type="button"
+        class="sd-btn room-menu-button"
+        @click="openRoomPage(link)"
+      >
+        {{ link.label }}
+      </button>
+      <button
+        type="button"
+        class="sd-btn room-menu-button"
+        :aria-expanded="openPanel === 'wardrobe'"
+        aria-controls="room-selection-panel"
+        @click="togglePanel('wardrobe')"
+      >
+        Change avatar
+      </button>
+      <BackToHome variant="button" class="room-menu-button" />
+    </nav>
 
     <p v-if="navigationMessage" class="page-message" role="status">
       {{ navigationMessage }}
@@ -912,7 +936,7 @@ onUnmounted(() => {
   border: 2px solid #b998d8; border-radius: 18px;
   background: #fffdf8; color: #303557; box-shadow: 0 8px 24px #15102540;
 }
-.xp-test-panel p { margin: 6px 0 10px; font-size: 12px; }
+.xp-test-panel p { margin: 6px 0 10px; font-size: var(--text-sm); }
 .xp-test-actions { display: flex; gap: 8px; }
 .xp-test-actions button {
   flex: 1; padding: 10px 14px; border: 0; border-radius: 10px;
@@ -926,7 +950,7 @@ onUnmounted(() => {
 .trainer-page,
 .trainer-page * { box-sizing: border-box; }
 
-.trainer-page { width: 100%; min-height: 100dvh; background: #101925; color: #fff; font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
+.trainer-page { position: relative; width: 100%; min-height: 100dvh; background: #101925; color: #fff; font-family: ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif; }
 
 .trainer-scene { position: relative; width: 100%; aspect-ratio: 1672 / 941; overflow: hidden; isolation: isolate; background: #17243b; }
 
@@ -934,25 +958,35 @@ onUnmounted(() => {
 
 .title-card { padding: 12px 18px; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 18px; background: rgba(22, 39, 62, 0.65); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: 0 5px 16px rgba(5, 15, 30, 0.18); }
 
-.title-eyebrow { color: #ffe29a; font-size: 9px; font-weight: 900; letter-spacing: 2px; }
+.title-card h1 { margin: 0; font-size: 21px; font-weight: 800; line-height: 1.2; }
 
-.title-card h1 { margin: 3px 0 0; font-size: 21px; font-weight: 800; line-height: 1.2; }
-
-.image-errors { margin: 16px; padding: 16px; border: 1px solid #f39b9b; border-radius: 12px; background: #482631; color: #ffe5e5; font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.image-errors { margin: 16px; padding: 16px; border: 1px solid #f39b9b; border-radius: 12px; background: #482631; color: #ffe5e5; font-size: var(--text-sm); line-height: 1.6; overflow-wrap: anywhere; }
 
 .image-errors ul { margin: 8px 0; padding-left: 20px; }
 
 .image-errors p { margin: 8px 0 0; }
 
-@media (max-width: 600px) {
-.trainer-hud { top: 10px; left: 10px; gap: 6px; }
+/* md to lg: clock beside the title, so the HUD clears the door and desk labels. */
+@media (min-width: 768px) and (max-width: 991.98px) {
+  .trainer-hud { flex-direction: row; align-items: flex-start; }
+}
 
-.title-card { padding: 7px 10px; border-radius: 12px; }
+/* Below md: the HUD leaves the room overlay and sits above it in normal flow,
+   so it can never cover a room button. */
+@media (max-width: 767.98px) {
+  .trainer-hud {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 16px;
+  }
 
-.title-eyebrow { font-size: 7px; }
+  .title-card { padding: 8px 14px; border-radius: var(--radius-md); }
 
-.title-card h1 { font-size: 14px; }
-
+  .title-card h1 { font-size: var(--text-lg); }
 }
 
 .room-characters { position: absolute; inset: 0; z-index: 6; pointer-events: none; --party-left: 51%; --party-feet: 85%;  }
@@ -976,21 +1010,21 @@ onUnmounted(() => {
   filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%));
 }
 
-.scene-message { display: block; padding: 6px; background: #fff6dd; border-radius: 8px; color: #493c2e; font-size: clamp(9px, 1vw, 13px); text-align: center; }
+.scene-message { display: block; padding: 6px; background: #fff6dd; border-radius: 8px; color: #493c2e; font-size: var(--text-sm); text-align: center; }
 
 .selection-panel { position: absolute; top: 6%; right: 3%; width: min(350px, 90%); max-height: 84%; overflow: auto; box-sizing: border-box; padding: 20px; border: 3px solid #624b38; border-radius: 20px; background: #fff8e9; color: #493b30; box-shadow: 0 9px 0 rgb(70 45 28 / 30%); pointer-events: auto; }
 
 .panel-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 18px; }
 
-.panel-header small { color: #776a51; font-size: 10px; font-weight: 800; letter-spacing: 2px; }
+.panel-header small { color: #776a51; font-size: var(--text-sm); font-weight: 800; letter-spacing: 1px; }
 
 .panel-header h2 { margin: 5px 0 0; font-size: 22px; }
 
-.close-button { width: 34px; height: 34px; flex-shrink: 0; border: 1px solid #cfbd99; border-radius: 10px; background: #eee3cc; color: #493b30; }
+.close-button { width: var(--tap-min); height: var(--tap-min); flex-shrink: 0; border: 1px solid #cfbd99; border-radius: 10px; background: #eee3cc; color: #493b30; }
 
 .gender-options { display: flex; gap: 8px; margin-bottom: 16px; }
 
-.gender-options button { flex: 1; padding: 10px; border: 2px solid #d9caa8; border-radius: 10px; background: #fffdf6; color: #493b30; text-transform: capitalize; }
+.gender-options button { flex: 1; min-height: var(--tap-min); padding: 10px; border: 2px solid #d9caa8; border-radius: 10px; background: #fffdf6; color: #493b30; text-transform: capitalize; }
 
 .variant-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
@@ -998,19 +1032,31 @@ onUnmounted(() => {
 
 .variant-card img { width: 75px; height: 110px; object-fit: contain; image-rendering: pixelated; }
 
-.variant-card strong { font-size: 13px; }
+.variant-card strong { font-size: var(--text-sm); }
 
-.variant-card small { font-size: 11px; }
+.variant-card small { font-size: var(--text-sm); }
 
 .selection-panel button[aria-pressed='true'] { border-color: #547555; background: #e4edda; }
 
-.save-error { font-size: 13px; line-height: 1.5; }
+.save-error { font-size: var(--text-sm); line-height: 1.5; }
 
 .save-error { color: #9a382a; }
 
-@media (max-width: 600px) {
-
-.selection-panel { top: 3%; right: 3%; max-height: 94%; padding: 14px; }
+/* Below md the wardrobe opens as a wood-framed bottom sheet over the page,
+   instead of a tiny scroll box inside the phone-sized room. */
+@media (max-width: 767.98px) {
+  .selection-panel {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 50;
+    width: 100%;
+    max-height: 75dvh;
+    padding: 16px;
+    border-radius: 20px 20px 0 0;
+  }
 }
 .page-message { margin: 0; padding: 16px; text-align: center; background: #142033; }
 
@@ -1055,24 +1101,42 @@ onUnmounted(() => {
   background: #fff4d9;
   box-shadow: 0 3px 0 #594334;
   white-space: nowrap;
-  font-size: clamp(10px, 1vw, 14px);
+  font-size: var(--text-sm);
   font-weight: 800;
   pointer-events: none;
   opacity: 1;
   transition: opacity 140ms ease;
 }
 .wardrobe-hotspot .hotspot-label { top: 60%; }
+/* Hotspots near the room's edges: pin the label inside the room. */
+.hotspot-studydecks .hotspot-label { left: 0; transform: none; }
+.hotspot-pokepacks .hotspot-label,
+.wardrobe-hotspot .hotspot-label { left: auto; right: 0; transform: none; }
 @media (hover: hover) {
   .room-hotspot:hover .hotspot-label { opacity: 0; }
   .room-hotspot:hover .object-outline { opacity: 1; }
 }
 .room-characters .room-hotspot:focus-visible { outline: none; }
-.room-hotspot:focus-visible .hotspot-label { opacity: 0; }
+.room-hotspot:focus-visible .hotspot-label { opacity: 1; }
 .room-hotspot:focus-visible .object-outline,
 .room-hotspot:active .object-outline { opacity: 1; }
 .room-hotspot:active .object-outline path { stroke: #fff2ab; stroke-width: 2.5px; }
-@media (max-width: 600px) {
-  .hotspot-label { padding: 3px 5px; border-width: 1px; }
+/* Below md the room menu carries the words, so labels can't be clipped. */
+@media (max-width: 767.98px) {
+  .hotspot-label { display: none; }
+
+  /* Phone-sized room: give each small hotspot a full 44 × 44 tap area
+     centred on its furniture (the outline and art stay the same size). */
+  .room-characters .room-hotspot:not(.wardrobe-hotspot)::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--tap-min));
+    height: max(100%, var(--tap-min));
+    transform: translate(-50%, -50%);
+    pointer-events: auto;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .object-outline, .hotspot-label { transition: none; }
@@ -1125,14 +1189,24 @@ onUnmounted(() => {
   transition: opacity 140ms ease;
 }
 .door-outline path { fill: none; stroke: #ffdc55; stroke-width: 1.7px; stroke-linejoin: round; }
-.exit-door .hotspot-label { top: 48%; bottom: auto; left: 50%; transform: translate(-50%, -50%); width: 88%; padding: 5px 3px; white-space: normal; text-align: center; line-height: 1.2; font-size: clamp(8px, 0.8vw, 13px); }
+.exit-door .hotspot-label { top: 48%; bottom: auto; left: 50%; transform: translate(-50%, -50%); width: max-content; padding: 5px 8px; white-space: nowrap; text-align: center; line-height: 1.2; font-size: var(--text-sm); }
+/* The door is narrow on small screens: keep a 44px-wide tap area on it. */
+.room-characters .exit-door::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: max(100%, var(--tap-min));
+  transform: translateX(-50%);
+}
 @media (hover: hover) {
   .exit-door:hover .door-outline { opacity: 1; }
   .exit-door:hover .hotspot-label { opacity: 0; }
 }
 .room-characters .exit-door:focus-visible { outline: none; }
 .exit-door:focus-visible .door-outline { opacity: 1; }
-.exit-door:focus-visible .hotspot-label { opacity: 0; }
+.exit-door:focus-visible .hotspot-label { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   .door-outline { transition: none; }
 }
@@ -1182,7 +1256,7 @@ onUnmounted(() => {
   width: 180px;
   margin: 0;
   color: #493c2e;
-  font-size: 12px;
+  font-size: var(--text-sm);
   text-align: center;
 }
 
@@ -1205,7 +1279,7 @@ onUnmounted(() => {
 .room-pokemon :deep(.buddy-xp > p) {
   margin: 0;
   color: #493c2e;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 
 .room-pokemon :deep(.buddy-xp > p:first-child) {
@@ -1260,15 +1334,15 @@ onUnmounted(() => {
   filter: drop-shadow(0 5px 2px rgb(35 28 24 / 28%));
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .room-pokemon :deep(h3) {
     width: 130px;
-    font-size: 14px;
+    font-size: var(--text-sm);
   }
 
   .room-pokemon :deep(.buddy-level) {
     width: 130px;
-    font-size: 11px;
+    font-size: var(--text-sm);
   }
 
   .room-pokemon :deep(.buddy-xp) {
@@ -1296,7 +1370,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .room-pokemon::before {
     width: 150px;
   }
@@ -1365,10 +1439,49 @@ onUnmounted(() => {
   z-index: 10;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .trainer-clock {
     max-width: calc(100vw - 24px);
   }
+}
+
+/* Room menu: hidden from md up, where the room's hotspots and labels fit. */
+.room-menu { display: none; }
+
+@media (max-width: 767.98px) {
+  .trainer-page {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: 104px; /* scroll clear of the Menu bubble */
+  }
+
+  /* Dev-only XP test panel: in the page flow after the room menu, not over it. */
+  .xp-test-panel {
+    position: static;
+    order: 10;
+    width: auto;
+    margin: 0 16px 16px;
+  }
+
+  .room-menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+    gap: 12px;
+    margin: 16px;
+    padding: 16px;
+    border: 3px solid var(--gold-500);
+    border-radius: var(--radius-md);
+    background: var(--navy-900);
+  }
+
+  .room-menu .room-menu-button {
+    width: 100%;
+    min-height: 56px;
+    font-size: var(--text-lg);
+    text-align: center;
+  }
+
+  .room-menu .room-menu-button:focus-visible { outline: 3px solid var(--sd-focus-on-dark); outline-offset: 3px; }
 }
 
 </style>

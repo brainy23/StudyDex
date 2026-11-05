@@ -3,6 +3,23 @@
  * Imported in src/main.js after Bootstrap and main.css.
  * Views opt in to these tokens batch by batch; nothing here restyles
  * existing view classes.
+ *
+ * BREAKPOINTS: Bootstrap's own scale, so custom CSS and Bootstrap classes
+ * switch at the same widths. CSS variables can't be used inside @media, so
+ * copy these exact values.
+ *   sm   576px  large phones     @media (max-width: 575.98px)  / (min-width: 576px)
+ *   md   768px  tablets          @media (max-width: 767.98px)  / (min-width: 768px)
+ *   lg   992px  small laptops    @media (max-width: 991.98px)  / (min-width: 992px)
+ *   xl  1200px  desktops         @media (max-width: 1199.98px) / (min-width: 1200px)
+ *   xxl 1400px  wide screens     @media (min-width: 1400px)
+ *   short       landscape phones, 200% zoom   @media (max-height: 500px)
+ * Graded range: every width from 375px (iPhone 6) to 1200px (Bootstrap xl)
+ * must lay out cleanly, not just the breakpoints themselves.
+ * Prefer fluid sizing before adding a query: clamp() for type and spacing
+ * (reading text never below 14px), min()/max() for widths, flex-wrap and
+ * grid auto-fit/minmax for card lists, container queries for reusable
+ * panels, dvh/svh instead of vh, aspect-ratio + object-fit for art.
+ * Game scenes keep the art's aspect ratio and place hotspots in % of the art.
  */
 :root {
   /* Fonts: one display, one pixel accent, one rounded body */
@@ -62,7 +79,17 @@
   --sd-wood-ink: #493b30; /* text on cream panels */
   --sd-night: #101925; /* scene backdrop / dark HUD */
   --sd-glass: rgb(22 39 62 / 0.72); /* HUD pills only */
-  --sd-focus: #2454bf; /* matches BackToHome; use --sd-gold-soft on dark */
+  --sd-focus: #2454bf; /* matches BackToHome; on light surfaces */
+  --sd-focus-on-dark: var(--sd-gold); /* focus ring on dark Town/HUD panels */
+
+  /* Short aliases used by the responsive fixes (same values as above) */
+  --text-sm: var(--sd-text-small); /* 14px: the smallest visible text */
+  --text-md: var(--sd-text-body); /* 16px */
+  --text-lg: var(--sd-text-lead); /* 18px */
+  --tap-min: var(--sd-tap); /* 44px */
+  --radius-md: var(--sd-radius-md);
+  --navy-900: var(--sd-royal);
+  --gold-500: var(--sd-gold);
 
   /* Depth: the game's chunky edge + one soft lift */
   --sd-edge: 0 4px 0 var(--sd-gold-edge);

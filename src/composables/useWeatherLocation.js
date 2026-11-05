@@ -8,6 +8,29 @@ export const DEFAULT_WEATHER_LOCATION = Object.freeze({
 
 const weatherLocationKey = Symbol('weatherLocation')
 
+// Only the choice is remembered ('device' or 'default'), never coordinates.
+const LOCATION_SOURCE_KEY = 'studydex-weather-location-source'
+
+export function readSavedLocationSource() {
+  try {
+    const source = globalThis.localStorage?.getItem(LOCATION_SOURCE_KEY)
+    return source === 'device' || source === 'default' ? source : null
+  } catch {
+    // Storage can be blocked (private mode, school policy): treat as no choice.
+    return null
+  }
+}
+
+export function saveLocationSource(source) {
+  if (source !== 'device' && source !== 'default') return
+
+  try {
+    globalThis.localStorage?.setItem(LOCATION_SOURCE_KEY, source)
+  } catch {
+    // Storage unavailable: the choice still lasts until the page is refreshed.
+  }
+}
+
 // Call once inside App.vue's <script setup>.
 export function provideWeatherLocation() {
   // Shared across pages; resets when the app is refreshed.

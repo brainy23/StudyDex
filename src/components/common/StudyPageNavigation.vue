@@ -53,10 +53,10 @@ defineEmits(['topics'])
   outline:3px solid #ffe194;
   outline-offset:3px;
 }
-@media(max-width:1000px) {
+@media(max-width:991.98px) {
   .study-page-navigation .study-page-button {
     padding:8px 12px;
-    font-size:13px;
+    font-size:var(--text-sm);
   }
 }
 </style>

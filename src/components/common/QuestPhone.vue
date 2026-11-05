@@ -250,7 +250,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
                 <span v-else class="pokedex-sprite-placeholder" aria-hidden="true">?</span>
 
                 <span class="pokedex-name">{{ pokemon.name }}</span>
-                <div class="small" style="font-size: 10px;">
+                <div class="small" style="font-size: var(--text-sm);">
                   Lv. {{ pokemon.level }}
                   <br/>
                   {{ pokemon.xp }} / {{ maxXp }} XP
@@ -341,6 +341,10 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
 }
 
+.quest-dock:has(#daily-goals-panel) {
+  z-index: 150; /* the open phone sits above the profile card */
+}
+
 .quest-dock,
 .quest-dock * {
   box-sizing: border-box;
@@ -376,7 +380,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
 .quest-device-name {
   color: #fff5f6;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 900;
   letter-spacing: 2.5px;
 }
@@ -436,7 +440,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
 .quest-eyebrow {
   color: #8d5d72;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 1.5px;
 }
@@ -453,7 +457,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .quest-heading p {
   margin: 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -473,7 +477,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   gap: 8px;
 
   margin-bottom: 9px;
-  font-size: 11px;
+  font-size: var(--text-sm);
   color: #526581;
 }
 
@@ -486,7 +490,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   display: block;
   margin-top: 6px;
   color: #657995;
-  font-size: 10px;
+  font-size: var(--text-sm);
 }
 
 .quest-progress {
@@ -558,7 +562,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
   background: #f0f4fa;
   color: var(--quest-accent);
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 900;
 }
 
@@ -585,14 +589,14 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
 .quest-subject {
   color: #65748b;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 700;
 }
 
 .quest-card h3 {
   margin: 4px 0 8px;
   color: #2a3d59;
-  font-size: 13px;
+  font-size: var(--text-sm);
   font-weight: 800;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -612,7 +616,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .quest-card-count {
   flex-shrink: 0;
   color: #65748b;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -621,7 +625,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   display: block;
   margin-top: 5px;
   color: #748196;
-  font-size: 10px;
+  font-size: var(--text-sm);
   line-height: 1.3;
 }
 
@@ -639,7 +643,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   border-radius: 999px;
   background: #dff3e8;
   color: #287b5f;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
@@ -651,7 +655,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
   margin-top: 15px;
   color: #718097;
-  font-size: 10px;
+  font-size: var(--text-sm);
   line-height: 1.4;
   text-align: center;
 }
@@ -676,7 +680,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .quest-empty {
   padding: 20px 5px;
   color: #65748b;
-  font-size: 13px;
+  font-size: var(--text-sm);
   text-align: center;
 }
 
@@ -695,7 +699,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
   color: #fff;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 800;
   cursor: pointer;
 
@@ -720,7 +724,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   padding: 4px 7px;
   border-radius: 8px;
   background: rgba(112, 24, 45, 0.25);
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
 }
 
@@ -761,7 +765,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   transform: translateY(24px) scale(0.96);
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 1199.98px) {
   .quest-dock {
     right: 14px;
     bottom: calc(136px + env(safe-area-inset-bottom, 0px));
@@ -774,23 +778,32 @@ onUnmounted(() => clearTimeout(questBootTimer))
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
+  /* Small phones: the bottom of the Town is full (dock, buddy, Trainer House),
+     so the hub sits in the open sky under the clock and opens downwards. */
   .quest-dock {
-    right: 12px;
-    bottom: calc(110px + env(safe-area-inset-bottom, 0px));
+    top: calc(186px + env(safe-area-inset-top, 0px));
+    right: auto;
+    bottom: auto;
+    left: 12px;
+    flex-direction: column-reverse;
+    align-items: flex-start;
     gap: 10px;
   }
 
   .quest-phone {
-    max-height: calc(
-      100dvh - 186px - env(safe-area-inset-bottom, 0px)
+    width: min(
+      400px,
+      calc(100vw - 24px),
+      calc((100dvh - 260px - env(safe-area-inset-bottom, 0px)) * 0.666667)
     );
+    max-height: none;
   }
 
   .quest-toggle {
     min-height: 44px;
     padding: 8px 11px;
-    font-size: 11px;
+    font-size: var(--text-sm);
   }
 }
 
@@ -881,11 +894,11 @@ onUnmounted(() => clearTimeout(questBootTimer))
 }
 
 .quest-heading p {
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .quest-eyebrow {
-  font-size: 8px;
+  font-size: var(--text-sm);
   letter-spacing: 1px;
 }
 
@@ -909,21 +922,21 @@ onUnmounted(() => clearTimeout(questBootTimer))
 }
 
 .quest-card h3 {
-  font-size: 12px;
+  font-size: var(--text-sm);
   margin: 3px 0 6px;
 }
 
 .quest-number {
   width: 25px;
   height: 28px;
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .quest-footer {
   margin-top: 10px;
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 1199.98px) {
   .quest-phone {
     width: min(
       400px,
@@ -935,7 +948,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .quest-phone {
     width: min(
       360px,
@@ -976,7 +989,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .quest-boot-title {
   color: #ffde59;
   font-family: "Silkscreen", monospace;
-  font-size: 13px;
+  font-size: var(--text-sm);
   letter-spacing: 2px;
 }
 
@@ -1092,7 +1105,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   gap: 5px;
 
   min-width: 0;
-  min-height: 36px;
+  min-height: var(--tap-min);
   padding: 7px 4px;
   border: 0;
   border-radius: 7px;
@@ -1100,7 +1113,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
   color: #626858;
   font-family: "Silkscreen", monospace;
-  font-size: 10px;
+  font-size: var(--text-sm);
   cursor: pointer;
 
   transition: background-color 0.15s ease, color 0.15s ease;
@@ -1120,7 +1133,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   padding: 2px 4px;
   border-radius: 4px;
   background: rgba(48, 48, 75, 0.09);
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .quest-section-title {
@@ -1146,7 +1159,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   background: #e9f5ec;
   color: #287b5f;
 
-  font-size: 11px;
+  font-size: var(--text-sm);
 }
 
 .pokedex-active-dot {
@@ -1200,7 +1213,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   align-self: flex-start;
   color: #737b87;
   font-family: "Silkscreen", monospace;
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .pokedex-sprite {
@@ -1224,7 +1237,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .pokedex-name {
   max-width: 100%;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 800;
   text-align: center;
 }
@@ -1232,7 +1245,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
 .pokedex-card-caption {
   margin-top: 5px;
   color: #737b87;
-  font-size: 9px;
+  font-size: var(--text-sm);
 }
 
 .pokedex-card.is-active .pokedex-card-caption {
@@ -1313,11 +1326,12 @@ onUnmounted(() => clearTimeout(questBootTimer))
 
 .todo-storage-note {
   margin: 10px 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: #9b482e;
 }
 
 .quest-manage-todos {
+  min-height: var(--tap-min);
   width: 100%;
   margin: 0 0 10px;
   padding: 9px;
@@ -1326,7 +1340,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   background: #ffed9b;
   color: #53451b;
   font: inherit;
-  font-size: 11px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -1346,7 +1360,7 @@ onUnmounted(() => clearTimeout(questBootTimer))
   flex: 1;
   min-width: 0;
   overflow-wrap: anywhere;
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 

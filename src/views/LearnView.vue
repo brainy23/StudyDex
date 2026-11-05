@@ -327,7 +327,7 @@ async function backToFlashcards() {
     </nav>
     <header class="study-header">
       <StudyPageNavigation @topics="returnToSelection" />
-      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather :use-device-location="true" @rain-change="rainActive = $event" /></div>
+      <div v-if="enteredLab && !pokemonTransition.state.active" class="study-clock"><ClockWeather @rain-change="rainActive = $event" /></div>
     </header>
     <div class="study-content">
     <div v-if="loading" class="lab-state" role="status">Opening your Poké Lab…</div>
@@ -1204,4 +1204,25 @@ input:focus-visible {
   .poke-lab-page .inline-classroom { padding-top: 240px; }
 }
 
+/* =====================================================
+   RESPONSIVE FIXES (375px iPhone 6 → 1200px Bootstrap xl)
+   Same Lab header as Flashcards: 44px taps, no text below 14px.
+   ===================================================== */
+.poke-lab-page .study-mode-toggle { height: calc(var(--tap-min) + 8px); }
+.poke-lab-page .study-mode-toggle button,
+.poke-lab-page .study-mode-toggle button:first-child,
+.poke-lab-page .study-mode-toggle button:last-child { min-height: var(--tap-min); font-size: var(--text-sm); }
+.learn-eyebrow { font-size: max(.7em, var(--text-sm)); letter-spacing: .06em; }
+
+/* The movable stool keeps its pixel size but gets a 44 × 44 tap area.
+   (Doubled class beats the reset that removes button pseudo-elements.) */
+.poke-lab-page button.pixel-stool.pixel-stool::after {
+  content: '' !important;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max(100%, var(--tap-min));
+  height: max(100%, var(--tap-min));
+  transform: translate(-50%, -50%);
+}
 </style>

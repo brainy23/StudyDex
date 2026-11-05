@@ -1341,7 +1341,6 @@ watch(
         </span>
 
         <span class="trainer-identity">
-          <span class="trainer-caption">TRAINER PROFILE</span>
           <span class="trainer-name">{{ trainerProfile.name }}</span>
         </span>
 
@@ -1675,6 +1674,7 @@ watch(
         class="sd-nav-button"
         data-bs-toggle="modal"
         data-bs-target="#todoModal"
+        aria-label="To-Do List"
       >
         <span class="sd-icon-tile sd-icon-todos">
           <svg viewBox="0 0 32 32" aria-hidden="true">
@@ -1697,7 +1697,7 @@ watch(
             />
           </svg>
         </span>
-        <span class="sd-nav-label">To-Do List</span>
+        <span class="sd-nav-label" aria-hidden="true">To-Dos</span>
       </button>
 
       <!-- POKÉDEX -->
@@ -1748,7 +1748,7 @@ watch(
             <!-- HEADER -->
             <div class="modal-header todo-modal-header">
               <div>
-                <span class="todo-kicker">STUDYDEX / MY NOTES</span>
+                <span class="todo-kicker">My notes</span>
                 <h2 id="todo-modal-title">My To-Do List</h2>
                 <p aria-live="polite">{{ remainingTodoLabel }}</p>
               </div>
@@ -2003,14 +2003,14 @@ watch(
 }
 
 .building-button-title {
-  font-size: calc(14 * var(--control-unit));
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.2;
 }
 
 .building-button-subtitle {
   color: #647394;
-  font-size: calc(10 * var(--control-unit));
+  font-size: var(--text-sm);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -2035,9 +2035,36 @@ watch(
   box-shadow: none;
 }
 
-@media (max-width: 600px) {
+/* Keep the side signs on screen: a sign only moves inwards when it would
+   cross the screen edge (no effect when there is room). */
+.building-navigation .building-button:nth-of-type(1) { translate: max(0px, calc(8px - 21vw + 50%)) 0; }
+.building-navigation .building-button:nth-of-type(3) { translate: min(0px, calc(17vw - 8px - 50%)) 0; }
+
+/* Below md: drop the subtitle and let titles wrap, instead of shrinking type. */
+@media (max-width: 767.98px) {
   .building-button-subtitle {
     display: none;
+  }
+
+  .building-button {
+    white-space: normal;
+  }
+
+  .building-button-text {
+    max-width: 4.2em; /* one word per line: POKÉ / ARENA, POKÉ / LAB, TRAINER / HOUSE */
+    font-size: var(--text-md);
+  }
+
+  .building-button-title {
+    line-height: 1.1;
+  }
+}
+
+/* Small phones: slightly tighter signs so all three fit side by side. */
+@media (max-width: 575.98px) {
+  .building-button {
+    gap: 6px;
+    padding: 7px 10px 7px 7px;
   }
 }
 
@@ -2299,11 +2326,24 @@ watch(
 }
 
 .sd-nav-label {
-  font-size: calc(13 * var(--control-unit));
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.2;
   white-space: nowrap;
   text-shadow: 0 2px 3px rgba(5, 20, 45, 0.6);
+}
+
+/* Small phones: use the full width so 16px labels fit in five columns. */
+@media (max-width: 575.98px) {
+  .sd-navbar {
+    width: calc(100% - 12px);
+    gap: 2px;
+    padding: calc(8 * var(--control-unit)) 4px;
+  }
+
+  .sd-nav-button {
+    padding: 2px 0;
+  }
 }
 
 .sd-icon-tile {
@@ -2454,7 +2494,7 @@ watch(
   outline-offset: 5px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .sd-hud {
     top: 12px;
     left: 12px;
@@ -2467,7 +2507,7 @@ watch(
 
 }
 
-@media (max-height: 520px) {
+@media (max-height: 500px) {
   .sd-hud {
     flex-direction: row;
     gap: var(--sd-space-3);
@@ -2554,16 +2594,16 @@ watch(
   margin-bottom: 4px;
 
   color: #886317;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 900;
-  letter-spacing: 1.5px;
+  letter-spacing: 0.5px;
   text-transform: uppercase;
 }
 
 .buddy-speech p {
   margin: 0;
 
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 800;
   line-height: 1.4;
 }
@@ -2604,24 +2644,24 @@ watch(
   filter: blur(3px);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .town-buddy {
     width: clamp(44px, 12vw, 70px);
   }
 
   .buddy-speech {
-    width: 155px;
-    padding: 7px 9px;
+    width: min(200px, 56vw);
+    padding: 7px 10px;
     border-radius: 13px;
   }
 
   .buddy-speaker {
-    font-size: 7px;
+    font-size: var(--text-sm);
     margin-bottom: 2px;
   }
 
   .buddy-speech p {
-    font-size: 10px;
+    font-size: var(--text-sm);
   }
 }
 
@@ -2726,8 +2766,7 @@ watch(
 
   background: linear-gradient(150deg, #ff7180, #dc304d);
   color: #fff;
-
-  font-size: 11px;
+  font-size: var(--text-sm);
   font-weight: 900;
   line-height: 1;
   font-variant-numeric: tabular-nums;
@@ -2772,16 +2811,14 @@ watch(
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .sd-pack-badge {
     top: -7px;
     right: -9px;
 
-    min-width: 20px;
-    height: 20px;
+    min-width: 22px;
+    height: 22px;
     padding: 0 4px;
-
-    font-size: 10px;
   }
 }
 
@@ -2903,12 +2940,7 @@ watch(
   gap: 4px;
 }
 
-.trainer-caption {
-  color: #c7dbf1;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 1.2px;
-}
+/* (The 8px "TRAINER PROFILE" caption was removed; the aside's aria-label names the card.) */
 
 .trainer-name {
   overflow: hidden;
@@ -2982,14 +3014,14 @@ watch(
   white-space: nowrap;
 
   color: #fff;
-  font-size: 12px;
+  font-size: var(--text-sm);
   font-weight: 800;
 }
 
 .trainer-buddy-level {
   flex-shrink: 0;
   color: #ffe19a;
-  font-size: 10px;
+  font-size: var(--text-sm);
   font-weight: 900;
 }
 
@@ -3029,7 +3061,7 @@ watch(
   margin-top: 4px;
 
   color: #c7dbef;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -3054,7 +3086,7 @@ watch(
   padding: 5px 10px 8px;
 
   color: #75849a;
-  font-size: 9px;
+  font-size: var(--text-sm);
   font-weight: 800;
   letter-spacing: 1.2px;
 }
@@ -3074,7 +3106,7 @@ watch(
 
   color: #30476a;
   font: inherit;
-  font-size: 13px;
+  font-size: var(--text-md);
   font-weight: 700;
   text-align: left;
   cursor: pointer;
@@ -3119,7 +3151,7 @@ watch(
   color: #30476a;
   box-shadow: 0 8px 20px rgba(14, 31, 58, 0.2);
 
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1.5;
 }
 
@@ -3138,6 +3170,17 @@ watch(
   cursor: pointer;
 }
 
+/* 44px tap area for the small dismiss cross. */
+.trainer-notice button::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  transform: translate(-50%, -50%);
+}
+
 .trainer-menu-enter-active,
 .trainer-menu-leave-active {
   transition:
@@ -3151,11 +3194,11 @@ watch(
   transform: translateY(-6px);
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .trainer-hud {
     top: 12px;
     right: 12px;
-    width: 180px;
+    width: min(200px, 54vw);
   }
 
   .trainer-profile-card {
@@ -3173,13 +3216,8 @@ watch(
     gap: 7px;
   }
 
-  .trainer-caption {
-    font-size: 7px;
-    letter-spacing: 0.5px;
-  }
-
   .trainer-name {
-    font-size: 13px;
+    font-size: var(--text-md);
   }
 
   .trainer-buddy-icon {
@@ -3187,22 +3225,8 @@ watch(
     height: 33px;
   }
 
-  .trainer-buddy-name {
-    font-size: 11px;
-  }
-}
-
-@media (max-width: 380px) {
-  .trainer-hud {
-    width: 150px;
-  }
-
-  .trainer-caption {
-    display: none;
-  }
-
   .trainer-buddy-row {
-    gap: 5px;
+    gap: 6px;
   }
 }
 
@@ -3259,10 +3283,9 @@ watch(
 }
 
 .todo-kicker {
-  font-family: 'Silkscreen', monospace;
-  font-size: 10px;
+  font-size: var(--text-sm);
+  font-weight: 700;
   color: #887037;
-  letter-spacing: 1px;
 }
 
 .todo-modal-header h2 {
@@ -3422,9 +3445,10 @@ watch(
   border: 0;
   border-radius: 6px;
   background: transparent;
+  min-height: var(--tap-min);
   color: #536e87;
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-sm);
   cursor: pointer;
 }
 
@@ -3467,7 +3491,7 @@ watch(
   margin: 0;
   padding: 24px 30px 30px;
   border-top: 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: #707887;
 }
 
@@ -3484,7 +3508,7 @@ watch(
 
 .todo-storage-note {
   margin: 10px 0;
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: #9b482e;
 }
 
@@ -3495,7 +3519,7 @@ watch(
   outline-offset: 3px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .todo-modal-header {
     padding: 20px 16px 0;
   }
@@ -3526,7 +3550,7 @@ watch(
   }
 }
 @keyframes todo-modal-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
-@media (max-width: 600px) {
+@media (max-width: 575.98px) {
   .todo-paper { padding: 20px 16px; }
   .todo-notepad-row { flex-wrap: wrap; gap: 9px; }
   .todo-title-button { flex-basis: calc(100% - 40px); }
