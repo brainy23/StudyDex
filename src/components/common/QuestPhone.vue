@@ -32,6 +32,7 @@ watch(goalsOpen, (isOpen) => {
   if (isOpen) {
     questBootTimer = setTimeout(() => {
       questReady.value = true
+      playSound('phoneTypingSound');
     }, 2100)
   }
 })

@@ -3,6 +3,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { getSupabase } from '../lib/supabase'
 import { useActivePokemon } from '../composables/useActivePokemon'
 import { dexFromUuid, loadPokemonMap } from '../lib/pokemon'
+import playSound from '../../scripts/soundEffect'
 
 let leaving = false
 
@@ -51,19 +52,7 @@ function prettyName(name) {
 }
 
 // ---------- sounds ----------
-// Put the files in public/sounds/ (adjust names/extensions to yours)
-const SOUND_FILES = {
-  selectingPokemon: '/sounds/selecting.mp3',
-  selectedPokemon: '/sounds/selected.mp3',
-}
 
-function playSound(name) {
-  const src = SOUND_FILES[name]
-  if (!src) return
-  const audio = new Audio(src)
-  audio.volume = 0.5
-  audio.play().catch(() => {})
-}
 
 // ---------- state ----------
 const rows = ref([])          // user_pokemon rows, each with an added `dex` field
@@ -220,6 +209,8 @@ async function makeActive() {
   celebrating.value = true
   clearTimeout(celebrateTimer)
   celebrateTimer = setTimeout(() => (celebrating.value = false), 900)
+
+  playSound('selectedPokemon')
 }
 
 // ---------- lifecycle ----------
