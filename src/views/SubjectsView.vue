@@ -131,7 +131,7 @@ function selectSubject(item) {
     }"
   >
     <nav class="sd-top-nav">
-      <GoBackBtn />
+      <GoBackBtn :to="{ name: 'home' }"/>
     </nav>
 
     <header class="sd-picker-heading">

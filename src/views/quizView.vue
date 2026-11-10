@@ -11,6 +11,7 @@ import ClockWeather from '../components/common/ClockWeather.vue'
 import { getCurrentProfile } from '../services/profileService'
 import { getSelectedStudyBuddy, resolveStudyImage, studyErrorMessage } from '../services/studyService'
 import PokeSprite from '@/components/pokebuddy/PokeSprite.vue'
+import PokedexRewardModal from '../components/pokebuddy/PokedexRewardModal.vue'
 
 
 
@@ -465,7 +466,16 @@ const battleOptions = computed(() =>
 </script>
 <template>
   <QuizReviewModal v-if="showQuizReview && previewFinished" :review="completedQuizReview" @close="showQuizReview = false" />
-  <XpPrompt :result="xpResult" @close="xpResult = null" @continue="returnToSelection" />
+  <XpPrompt
+    :result="xpResult"
+    @close="xpResult = null"
+  />
+
+  <PokedexRewardModal
+    v-if="previewFinished && !xpResult && profile?.id"
+    :user-id="profile.id"
+    @saved="loadSavedBuddy(profile.id, generation)"
+  />
   <div class="arena-with-preview">
   <main class="arena-page" :style="skyStyle">
     <div class="arena-scene" :class="{ 'selection-blur': !enteredArena }" :inert="!enteredArena">
@@ -1183,7 +1193,7 @@ input:focus-visible {
    so the whole scene ends above the bubble instead of running under it.
    (701px matches this view's existing phone/desktop layout switch.) */
 @media (min-width: 701px) {
-  .arena-with-preview { padding-bottom: var(--bubble-nav-reserve); }
+  .arena-with-preview { padding-bottom: 0; }
 }
 
 </style>

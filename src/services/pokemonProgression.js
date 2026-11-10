@@ -170,12 +170,6 @@ export async function planPokemonXp(pokemon, options = {}, maxXp = 200) {
     false
   )
 
-  if (isDefeated && delta < 0) {
-    throw new Error(
-      'A defeated Pokémon cannot lose XP.'
-    )
-  }
-
   let overflowXP = 0
   let reachedMaxEvolution = false
 
